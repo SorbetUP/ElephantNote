@@ -158,7 +158,7 @@ lacks('Elephant/frontend/app/components/shell/MainContent.vue', 'SigmaCanvas', '
 lacks('Elephant/frontend/app/components/shell/MainContent.vue', 'WikiView', 'core Wiki implementation')
 lacks('Elephant/frontend/app/components/shell/MainContent.vue', 'ModelsView', 'core model library implementation')
 lacks('Elephant/frontend/app/components/navigation/IconRail.vue', "id: 'dashboard', title: 'Dashboard'", 'core Dashboard rail item')
-has('Elephant/frontend/app/components/navigation/IconRail.vue', "dashboard: LayoutDashboard", 'addon Dashboard icon mapping')
+has('Elephant/frontend/app/components/navigation/IconRail.vue', 'dashboard: LayoutDashboard', 'addon Dashboard icon mapping')
 
 has('Elephant/backend/tauri/src/addon_services.rs', 'const SERVICE_PROTOCOL: &str = "elephant-addon-service-v1"', 'versioned addon service protocol')
 has('Elephant/backend/tauri/src/addon_services.rs', 'Addon native permission was not granted', 'native permission gate')
@@ -217,9 +217,14 @@ for (const [directory, addonId, entry] of physicalPackages) {
   read(main)
 }
 
-has('addons/official/dashboard/main.js', "const PROVIDER_RESOURCE = 'dashboard.provider'", 'package-owned Dashboard provider')
-has('addons/official/dashboard/main.js', 'api.workspace.registerView', 'package-owned Dashboard view')
-has('addons/official/dashboard/main.js', "id: `${ADDON_ID}.open`", 'package-owned Dashboard command')
+has('addons/official/dashboard/main.js', "const DASHBOARD_DIRECTORY = '.elephantnote'", 'hidden Elephant Dashboard directory')
+has('addons/official/dashboard/main.js', "const DASHBOARD_FILENAME = 'Dashboard.md'", 'Dashboard note filename')
+has('addons/official/dashboard/main.js', 'api.workspace.registerSidebarItem', 'package-owned Dashboard rail item')
+has('addons/official/dashboard/main.js', 'api.commands.register', 'package-owned Dashboard command')
+has('addons/official/dashboard/main.js', 'await store.openNote(note, { record: false })', 'normal Dashboard note opening')
+lacks('addons/official/dashboard/main.js', 'api.workspace.registerView', 'custom Dashboard workspace view')
+lacks('addons/official/dashboard/main.js', 'dashboard.provider', 'custom Dashboard provider')
+lacks('addons/official/dashboard/main.js', 'Recently edited', 'custom Dashboard recent-note surface')
 has('addons/catalog.json', '"id": "elephant.dashboard"', 'downloadable Dashboard package')
 has('packs/base.enaddonpack', '"id": "elephant.dashboard"', 'Dashboard in base pack')
 

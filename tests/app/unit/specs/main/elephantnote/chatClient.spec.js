@@ -19,11 +19,12 @@ describe('package-owned chat boundary', () => {
   })
 
   it('orchestrates chat from the physical AI Chat package', () => {
+    const base = read('addons/official/ai-chat/main.js')
     const chat = read('addons/official/ai-chat/main.v2.js')
 
-    expect(chat).toContain("getContributions?.('ai.providers')")
+    expect(base).toContain("getContributions?.('ai.providers')")
     expect(chat).toContain("this.api.resources.get(SEARCH_RESOURCE)")
-    expect(chat).toContain("typeof option.provider.chat !== 'function'")
+    expect(base).toContain("typeof option.provider.chat !== 'function'")
     expect(chat).not.toContain("this.call('rag.chat'")
     expect(chat).not.toContain('SEARCH_INIT_VAULT')
   })
@@ -31,7 +32,7 @@ describe('package-owned chat boundary', () => {
   it('renders citations as accessible actions that open their source note', () => {
     const chat = read('addons/official/ai-chat/main.js')
 
-    expect(chat).toContain('openCitation(citation)')
+    expect(chat).toContain('openNote(citation)')
     expect(chat).toContain("store.openNote({")
     expect(chat).toContain("node(documentRef, 'button', 'elephant-chat-citation')")
     expect(chat).toContain("button.setAttribute('aria-label'")

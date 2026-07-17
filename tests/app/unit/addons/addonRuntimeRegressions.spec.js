@@ -1,7 +1,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { reconcileOfficialAddonRecords } from '../../../../Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js'
+import {
+  isMissingNativeServiceError,
+  reconcileOfficialAddonRecords
+} from '../../../../Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js'
 
 const root = process.cwd()
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8')
@@ -29,6 +32,21 @@ describe('addon runtime regression repairs', () => {
     expect(record.official).toBeUndefined()
   })
 
+  it('repairs only the exact missing native executable failure', () => {
+    expect(isMissingNativeServiceError(new Error(
+      'Addon service executable is unavailable for elephant.sync: No such file or directory (os error 2)'
+    ))).toBe(true)
+    expect(isMissingNativeServiceError(new Error(
+      'Addon sidecar executable is unavailable for elephant.ai-ocr: No such file or directory (os error 2)'
+    ))).toBe(true)
+    expect(isMissingNativeServiceError(new Error('Addon activation failed'))).toBe(false)
+
+    const runtime = read('Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js')
+    expect(runtime).toContain("officialInstall: (addonId) => invoke('tauri_official_addons_catalog_install', { addonId })")
+    expect(runtime).toContain('await this.repairOfficialPackage(record)')
+    expect(runtime).toContain('official addon native package repaired')
+  })
+
   it('materializes missing native services during addon synchronization', () => {
     const sync = read('build/scripts/sync-elephant-addons.mjs')
     const builder = read('build/scripts/build-physical-addon.mjs')
@@ -36,6 +54,7 @@ describe('addon runtime regression repairs', () => {
     expect(sync).toContain('materializeNativeServices()')
     expect(sync).toContain('ELEPHANT_ADDON_MATERIALIZE_SOURCE')
     expect(sync).toContain('Native addon service was not materialized')
+    expect(sync).toContain("process.env.CI === 'true'")
     expect(builder).toContain('ELEPHANT_ADDON_MATERIALIZE_ONLY')
     expect(builder).toContain('materialized=${sourceSidecar}')
   })

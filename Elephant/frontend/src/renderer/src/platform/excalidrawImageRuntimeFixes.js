@@ -6,8 +6,10 @@ const EXCALIDRAW_ASSET_RE = /(?:^|\/)\.assets\/excalidraw-[^/?#]+\.png(?:[?#].*)
 const INSTALLED_ATTR = 'data-elephant-excalidraw-edit-installed'
 const CACHE_BUST_ATTR = 'data-elephant-excalidraw-cache-bust'
 const MAX_DIAGNOSTIC_LOGS = 1000
+const MAX_RESOLUTION_LOG_KEYS = 200
 
 let cacheBustSerial = Date.now()
+const loggedPathResolutions = new Set()
 
 const normalizeSlashes = (value = '') => String(value || '').replace(/\\/g, '/')
 const stripQueryAndHash = (value = '') => String(value || '').split(/[?#]/)[0]
@@ -72,6 +74,19 @@ const activeVaultRoot = () => {
   }
 }
 
+const logResolvedPathOnce = (source, vaultRoot, vaultRelativePath, resolved) => {
+  const key = `${source}\n${resolved}`
+  if (loggedPathResolutions.has(key)) return
+  if (loggedPathResolutions.size >= MAX_RESOLUTION_LOG_KEYS) loggedPathResolutions.clear()
+  loggedPathResolutions.add(key)
+  pushExcalidrawImageLog('info', 'resolved vault-relative drawing path', {
+    source,
+    vaultRoot,
+    vaultRelativePath,
+    resolved
+  })
+}
+
 const resolveExcalidrawAssetPath = (source = '') => {
   const decoded = normalizeSlashes(localSourceToPath(source))
   if (!decoded || isAbsoluteLocalPath(decoded)) return decoded
@@ -83,12 +98,7 @@ const resolveExcalidrawAssetPath = (source = '') => {
   const resolved = globalThis.window?.path?.join
     ? globalThis.window.path.join(vaultRoot, vaultRelativePath)
     : `${vaultRoot.replace(/\/+$/, '')}/${vaultRelativePath}`
-  pushExcalidrawImageLog('info', 'resolved vault-relative drawing path', {
-    source,
-    vaultRoot,
-    vaultRelativePath,
-    resolved
-  })
+  logResolvedPathOnce(source, vaultRoot, vaultRelativePath, resolved)
   return normalizeSlashes(resolved)
 }
 
@@ -351,13 +361,6 @@ const repairAllImages = () => {
   }
   const failedContainers = document.querySelectorAll('.ag-image-fail[data-image-src], .ag-image-fail[data-image-domsrc]')
   for (const container of failedContainers) void repairFailedImageContainer(container)
-  if (repaired || failedContainers.length) {
-    pushExcalidrawImageLog('info', 'repair scan completed', {
-      recognizedImages: repaired,
-      failedContainers: failedContainers.length,
-      vaultRoot: activeVaultRoot()
-    })
-  }
   return repaired
 }
 
@@ -447,6 +450,7 @@ export const installExcalidrawImageRuntimeFixes = (target = globalThis) => {
       document.removeEventListener('error', handleError, true)
       bus.off?.('invalidate-image-cache', refreshAllDrawings)
       removeInstalledUi()
+      loggedPathResolutions.clear()
       if (target.__ELEPHANT_EXCALIDRAW_IMAGE_RUNTIME_FIXES__ === runtime) {
         delete target.__ELEPHANT_EXCALIDRAW_IMAGE_RUNTIME_FIXES__
       }

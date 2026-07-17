@@ -19,7 +19,7 @@ describe('package-owned chat boundary', () => {
   })
 
   it('orchestrates chat from the physical AI Chat package', () => {
-    const chat = read('addons/official/ai-chat/main.js')
+    const chat = read('addons/official/ai-chat/main.v2.js')
 
     expect(chat).toContain("getContributions?.('ai.providers')")
     expect(chat).toContain("this.api.resources.get(SEARCH_RESOURCE)")

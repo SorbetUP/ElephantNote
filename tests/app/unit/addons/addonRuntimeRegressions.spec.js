@@ -59,11 +59,11 @@ describe('addon runtime regression repairs', () => {
     expect(builder).toContain('materialized=${sourceSidecar}')
   })
 
-  it('does not truncate large vaults at one thousand notes', () => {
+  it('bounds large vault listings with an explicit safety limit', () => {
     const source = read('Elephant/backend/tauri/src/addon_note_access.rs')
 
-    expect(source).not.toContain('MAX_LISTED_NOTES')
-    expect(source).not.toContain('Addon note listing exceeded the maximum of')
+    expect(source).toContain('MAX_LISTED_NOTES: usize = 1_000')
+    expect(source).toContain('Addon note listing exceeded the maximum of')
     expect(source).toContain('MAX_DIRECTORY_DEPTH')
     expect(source).toContain('MAX_NOTE_BYTES')
     expect(source).toContain('read_enabled_addon')

@@ -30,6 +30,7 @@ const observableRunner = readText('build/scripts/run-observable.mjs')
 for (const relativePath of [
   'build/scripts/run-observable.mjs',
   'build/scripts/validate-feature-matrix.mjs',
+  'tests/app/e2e/observable-preload-patch.js',
   'tests/app/e2e/official-addon-preload-patch.js',
   'tests/app/e2e/official-addons-regressions.spec.js',
   'tests/app/e2e/tauri-preload-entry.js',
@@ -47,25 +48,39 @@ for (const relativePath of [
 }
 
 try {
-  const patchPreload = require(path.join(root, 'tests/app/e2e/official-addon-preload-patch.js'))
+  const applyObservablePatch = require(path.join(root, 'tests/app/e2e/observable-preload-patch.js'))
+  const applyOfficialAddonPatch = require(path.join(root, 'tests/app/e2e/official-addon-preload-patch.js'))
   const originalPreload = readText('tests/app/e2e/tauri-preload.js')
-  const generatedPreload = patchPreload(originalPreload)
-  new vm.Script(generatedPreload, { filename: 'generated-official-addon-tauri-preload.js' })
+  const observablePreload = applyObservablePatch(originalPreload)
+  const generatedPreload = applyOfficialAddonPatch(observablePreload)
+  new vm.Script(generatedPreload, { filename: 'generated-observable-official-addon-tauri-preload.js' })
   const helperBoundary = generatedPreload.indexOf('const primitivePreference =')
   const fixtureBoundary = generatedPreload.indexOf('const officialAddonFixture =')
-  const invokeBoundary = generatedPreload.indexOf('const invoke = async')
-  if (!(helperBoundary >= 0 && fixtureBoundary > helperBoundary && invokeBoundary > fixtureBoundary)) {
-    fail('official addon fixture is not injected after initialized preload helpers and before invoke')
+  const implementationBoundary = generatedPreload.indexOf('const invokeImplementation = async')
+  const observableBoundary = generatedPreload.indexOf('const invoke = async')
+  if (!(helperBoundary >= 0 && fixtureBoundary > helperBoundary && implementationBoundary > fixtureBoundary && observableBoundary > implementationBoundary)) {
+    fail('preload patches are not composed after initialized helpers and before the observable invoke wrapper')
   } else {
-    pass('generated official addon preload parses and initializes in dependency order', {
+    pass('generated observable official addon preload parses in runtime dependency order', {
       bytes: Buffer.byteLength(generatedPreload),
       helperBoundary,
       fixtureBoundary,
-      invokeBoundary
+      implementationBoundary,
+      observableBoundary
     })
   }
+  for (const marker of [
+    '[e2e-tauri:invoke:start]',
+    '[e2e-tauri:invoke:done]',
+    '[e2e-tauri:invoke:error]',
+    'Unhandled E2E Tauri invoke',
+    'tauri_addons_read_module',
+    'tauri_addons_install'
+  ]) {
+    if (!generatedPreload.includes(marker)) fail(`generated preload omits ${marker}`)
+  }
 } catch (error) {
-  fail(`generated official addon preload is invalid: ${error?.stack || error?.message || String(error)}`)
+  fail(`generated observable official addon preload is invalid: ${error?.stack || error?.message || String(error)}`)
 }
 
 if (matrix.schemaVersion !== 1) fail(`unsupported schemaVersion ${matrix.schemaVersion}`)

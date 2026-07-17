@@ -32,6 +32,7 @@ import { installNoteCitationSelectionGuard } from './platform/noteCitationSelect
 import { restorePortableWindowState, savePortableWindowState } from './platform/windowState'
 import { installRendererDiagnostics, pushDiagnosticLog } from './platform/rendererDiagnostics'
 import { installStoreDiagnostics } from './platform/storeDiagnostics'
+import { installAcceptanceTestBridge } from './platform/acceptanceTestBridge'
 import { installAddonSystem } from './addons'
 import { activateCoreFeature } from './addons/coreFeatures'
 import { addonPacksCoreFeature } from './addons/builtin/addonProfiles'
@@ -192,6 +193,7 @@ const mountRendererApp = async(runtime, windowType) => {
     hasVisibleShell: Boolean(document.querySelector('.en-empty-vault, .en-shell'))
   })
   installStoreDiagnostics()
+  installAcceptanceTestBridge({ pinia })
   installNoteCitationRuntime({ pinia })
   installNoteCitationSelectionGuard(window)
 }

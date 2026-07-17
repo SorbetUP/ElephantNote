@@ -1,9 +1,13 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
+import vm from 'node:vm'
+import { spawnSync } from 'node:child_process'
+import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
+const require = createRequire(import.meta.url)
 const readText = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 const readJson = (relativePath) => JSON.parse(readText(relativePath))
 const fail = (message) => {
@@ -22,6 +26,47 @@ const officialAddonSuite = readText('tests/app/e2e/official-addons-regressions.s
 const packageJson = readJson('package.json')
 const workflow = readText('.github/workflows/e2e.yml')
 const observableRunner = readText('build/scripts/run-observable.mjs')
+
+for (const relativePath of [
+  'build/scripts/run-observable.mjs',
+  'build/scripts/validate-feature-matrix.mjs',
+  'tests/app/e2e/official-addon-preload-patch.js',
+  'tests/app/e2e/official-addons-regressions.spec.js',
+  'tests/app/e2e/tauri-preload-entry.js',
+  'tests/app/e2e/playwright.config.js'
+]) {
+  const result = spawnSync(process.execPath, ['--check', path.join(root, relativePath)], {
+    cwd: root,
+    encoding: 'utf8'
+  })
+  if (result.status !== 0) {
+    fail(`${relativePath} does not parse: ${String(result.stderr || result.stdout || '').trim()}`)
+  } else {
+    pass('JavaScript syntax', relativePath)
+  }
+}
+
+try {
+  const patchPreload = require(path.join(root, 'tests/app/e2e/official-addon-preload-patch.js'))
+  const originalPreload = readText('tests/app/e2e/tauri-preload.js')
+  const generatedPreload = patchPreload(originalPreload)
+  new vm.Script(generatedPreload, { filename: 'generated-official-addon-tauri-preload.js' })
+  const helperBoundary = generatedPreload.indexOf('const primitivePreference =')
+  const fixtureBoundary = generatedPreload.indexOf('const officialAddonFixture =')
+  const invokeBoundary = generatedPreload.indexOf('const invoke = async')
+  if (!(helperBoundary >= 0 && fixtureBoundary > helperBoundary && invokeBoundary > fixtureBoundary)) {
+    fail('official addon fixture is not injected after initialized preload helpers and before invoke')
+  } else {
+    pass('generated official addon preload parses and initializes in dependency order', {
+      bytes: Buffer.byteLength(generatedPreload),
+      helperBoundary,
+      fixtureBoundary,
+      invokeBoundary
+    })
+  }
+} catch (error) {
+  fail(`generated official addon preload is invalid: ${error?.stack || error?.message || String(error)}`)
+}
 
 if (matrix.schemaVersion !== 1) fail(`unsupported schemaVersion ${matrix.schemaVersion}`)
 else pass('feature matrix schema version', matrix.schemaVersion)
@@ -75,6 +120,15 @@ for (const addonId of matrixAddonIds) {
   }
   if (!addonId.startsWith('elephant.')) fail(`invalid official addon id ${addonId}`)
 }
+for (const requiredOperation of [
+  'installFromPath(`official:${id}`)',
+  'enableWithDependencies',
+  'probeAddonFunctionality',
+  'page.reload()',
+  'uninstallWithDependents'
+]) {
+  if (!officialAddonSuite.includes(requiredOperation)) fail(`official addon suite omits ${requiredOperation}`)
+}
 pass('official addon lifecycle suite is catalogue-driven', {
   addons: matrixAddonIds.length,
   scenariosPerAddon: (matrix.officialAddonScenarios || []).length
@@ -108,7 +162,8 @@ for (const workflowMarker of [
   'pnpm test:feature-matrix',
   'pnpm test:e2e',
   'test-results/observability/**',
-  'official-addon-evidence/**'
+  'official-addon-evidence/**',
+  'build/out/addons/releases/**'
 ]) {
   if (!workflow.includes(workflowMarker)) fail(`E2E workflow does not retain ${workflowMarker}`)
 }

@@ -49,7 +49,7 @@ jobs:
         run: |
           set -euxo pipefail
           node build/scripts/run-observable.mjs --label feature-matrix -- \
-            pnpm test:feature-matrix:raw
+            pnpm test:feature-matrix
 
       - name: Install exact wasm-bindgen CLI
         shell: bash
@@ -116,7 +116,7 @@ jobs:
           done
           echo "Built $built Linux native official addon package(s)." | tee -a official-addon-native-build.txt
           test "$built" -gt 0
-          find build/out/addons/releases -type f -maxdepth 3 -print -exec ls -lh {} \; | tee -a official-addon-native-build.txt
+          find build/out/addons/releases -maxdepth 3 -type f -print -exec ls -lh {} \; | tee -a official-addon-native-build.txt
 
       - name: Build Rust renderer for Linux usage simulations
         shell: bash
@@ -144,7 +144,7 @@ jobs:
           do
             cp "$evidence" "official-addon-evidence/$(basename "$evidence")"
           done < <(find test-results -type f -name '*native-package-evidence.json' -print 2>/dev/null || true)
-          find official-addon-evidence -type f -maxdepth 1 -print -exec cat {} \; || true
+          find official-addon-evidence -maxdepth 1 -type f -print -exec cat {} \; || true
 
       - name: Upload complete Linux usage diagnostics
         if: always()

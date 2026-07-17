@@ -60,6 +60,15 @@ describe('Elephant settings redesign', () => {
     expect(builtins).not.toContain('import(')
   })
 
+  it('keeps the selected settings page stable while addon contributions reload', () => {
+    const source = settings()
+    expect(source).toContain("const LAST_SETTINGS_SECTION_KEY = 'elephantnote:lastSettingsSection'")
+    expect(source).toContain('const rememberedSectionMeta = ref({})')
+    expect(source).toContain('rememberSection(activeSection.value)')
+    expect(source).toContain('Elephant keeps this page selected instead of moving you to another menu.')
+    expect(source).not.toContain("if (!sectionById.value[activeSection.value]) activeSection.value = 'addons'")
+  })
+
   it('keeps official packages independent from the Community Addons boundary', () => {
     const source = settings()
     const panel = addonsPanel()
@@ -116,8 +125,10 @@ describe('Elephant settings redesign', () => {
     expect(organizer).toContain('addDivider')
     expect(organizer).toContain('removeDivider(item.id)')
     expect(organizer).toContain('resetLayout')
+    expect(organizer).toContain('extendIconRailOrder')
     expect(organizer).toContain('vault: Vault')
     expect(organizer).toContain("'sidebar-toggle': PanelLeft")
+    expect(organizer).not.toContain("'sidebar-toggle': PanelLeft,\n  dashboard: LayoutDashboard")
   })
 
   it('keeps editor preferences semantic and persistent', () => {

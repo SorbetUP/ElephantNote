@@ -114,7 +114,14 @@
             </template>
 
             <template v-else-if="activeSection === 'addons'"><addons-settings-panel /></template>
-            <template v-else><div class="en-addon-settings-page-anchor" /></template>
+            <template v-else>
+              <div class="en-addon-settings-page-anchor" />
+              <div v-if="!sectionById[activeSection]" class="en-settings-empty-state">
+                <Package aria-hidden="true" />
+                <strong>{{ activeSectionMeta.label }} is unavailable</strong>
+                <span>The addon is being reloaded or has been disabled. Elephant keeps this page selected instead of moving you to another menu.</span>
+              </div>
+            </template>
           </template>
         </main>
       </div>
@@ -143,6 +150,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['close', 'update-theme'])
 
+const LAST_SETTINGS_SECTION_KEY = 'elephantnote:lastSettingsSection'
 const CORE_SECTIONS = Object.freeze([
   { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'editor', label: 'Editor', icon: PenLine },
@@ -201,7 +209,14 @@ const addonStandaloneSections = computed(() => {
 })
 const sections = computed(() => [...CORE_SECTIONS, ...addonStandaloneSections.value])
 const sectionById = computed(() => Object.fromEntries(sections.value.map((section) => [section.id, section])))
-const normalizeSection = (section) => sectionById.value[section] ? section : 'appearance'
+const rememberedSectionMeta = ref({})
+const normalizeSectionId = (section) => String(section || '').trim()
+const normalizeSection = (section, { preserveUnknown = false } = {}) => {
+  const candidate = normalizeSectionId(section)
+  if (!candidate) return 'appearance'
+  if (sectionById.value[candidate] || rememberedSectionMeta.value[candidate]) return candidate
+  return preserveUnknown && /^[a-z0-9._-]+$/i.test(candidate) ? candidate : 'appearance'
+}
 const settingsIndex = computed(() => [
   ...CORE_SETTINGS_INDEX,
   ...addonSettingsContributions.value.map((entry) => {
@@ -216,17 +231,30 @@ const settingsIndex = computed(() => [
   })
 ].map((entry) => ({
   ...entry,
-  sectionLabel: sectionById.value[entry.section]?.label || entry.section,
-  icon: sectionById.value[entry.section]?.icon || Package
+  sectionLabel: sectionById.value[entry.section]?.label || rememberedSectionMeta.value[entry.section]?.label || entry.section,
+  icon: sectionById.value[entry.section]?.icon || rememberedSectionMeta.value[entry.section]?.icon || Package
 })))
 
-const activeSection = ref(normalizeSection(props.initialSection))
+const storedInitialSection = window.localStorage.getItem(LAST_SETTINGS_SECTION_KEY)
+const requestedInitialSection = props.initialSection && props.initialSection !== 'appearance'
+  ? props.initialSection
+  : storedInitialSection || props.initialSection
+const activeSection = ref(normalizeSection(requestedInitialSection, { preserveUnknown: true }))
 const settingsQuery = ref('')
 const searchInput = ref(null)
 const settingsContent = ref(null)
 const themeExpanded = ref(true)
 const isMacOS = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(`${navigator.platform || ''} ${navigator.userAgent || ''}`)
-const activeSectionMeta = computed(() => sectionById.value[activeSection.value] || sections.value[0])
+const activeSectionMeta = computed(() => sectionById.value[activeSection.value] ||
+  rememberedSectionMeta.value[activeSection.value] || {
+    id: activeSection.value,
+    label: activeSection.value
+      .split(/[._-]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ') || 'Addon settings',
+    icon: Package
+  })
 const searchResults = computed(() => {
   const terms = settingsQuery.value.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean)
   if (!terms.length) return []
@@ -236,17 +264,26 @@ const searchResults = computed(() => {
   })
 })
 
+const rememberSection = (section) => {
+  const normalized = normalizeSectionId(section)
+  if (normalized) window.localStorage.setItem(LAST_SETTINGS_SECTION_KEY, normalized)
+}
+
+watch(sections, (currentSections) => {
+  const next = { ...rememberedSectionMeta.value }
+  for (const section of currentSections) next[section.id] = section
+  rememberedSectionMeta.value = next
+}, { immediate: true })
+
 watch(() => props.initialSection, (section) => {
-  const nextSection = normalizeSection(section)
+  const nextSection = normalizeSection(section, { preserveUnknown: true })
   if (activeSection.value !== nextSection) {
     activeSection.value = nextSection
+    rememberSection(nextSection)
     settingsQuery.value = ''
     log.info('[settings] initial-section:changed', { section: nextSection })
     scrollContentToTop()
   }
-})
-watch(sections, () => {
-  if (!sectionById.value[activeSection.value]) activeSection.value = 'addons'
 })
 
 const vaults = computed(() => props.vaults)
@@ -267,9 +304,16 @@ const vaultMessage = ref('')
 const removingVaultId = ref('')
 
 const scrollContentToTop = () => nextTick(() => settingsContent.value?.scrollTo({ top: 0, behavior: 'instant' }))
-const selectSection = (section) => { activeSection.value = section; settingsQuery.value = ''; log.info('[settings] section:selected', { section }); scrollContentToTop() }
+const selectSection = (section) => {
+  activeSection.value = section
+  rememberSection(section)
+  settingsQuery.value = ''
+  log.info('[settings] section:selected', { section })
+  scrollContentToTop()
+}
 const openSearchResult = (result) => {
   activeSection.value = result.section
+  rememberSection(result.section)
   settingsQuery.value = ''
   log.info('[settings] search-result:opened', { id: result.id, section: result.section })
   scrollContentToTop()
@@ -297,8 +341,9 @@ const handleKeyboard = (event) => {
 }
 
 onMounted(() => {
+  rememberSection(activeSection.value)
   window.addEventListener('keydown', handleKeyboard)
-  log.info('[settings] mounted', { sections: sections.value.map((section) => section.id), theme: activeThemeLabel.value })
+  log.info('[settings] mounted', { sections: sections.value.map((section) => section.id), activeSection: activeSection.value, theme: activeThemeLabel.value })
 })
 onBeforeUnmount(() => window.removeEventListener('keydown', handleKeyboard))
 </script>

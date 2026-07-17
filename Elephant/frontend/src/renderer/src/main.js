@@ -27,6 +27,8 @@ import { installTauriMarkTextSaveBridge } from './platform/tauriMarkTextSaveBrid
 import { installTauriLocalIpcBridge } from './platform/tauriLocalIpcBridge'
 import { installSlashMenuDiagnostics } from './platform/slashMenuDiagnostics'
 import { installWritingCommandBridge } from './platform/writingCommandBridge'
+import { installNoteCitationRuntime } from './platform/noteCitationRuntime'
+import { installNoteCitationSelectionGuard } from './platform/noteCitationSelectionGuard'
 import { restorePortableWindowState, savePortableWindowState } from './platform/windowState'
 import { installRendererDiagnostics, pushDiagnosticLog } from './platform/rendererDiagnostics'
 import { installStoreDiagnostics } from './platform/storeDiagnostics'
@@ -190,6 +192,8 @@ const mountRendererApp = async(runtime, windowType) => {
     hasVisibleShell: Boolean(document.querySelector('.en-empty-vault, .en-shell'))
   })
   installStoreDiagnostics()
+  installNoteCitationRuntime({ pinia })
+  installNoteCitationSelectionGuard(window)
 }
 
 const startRendererApp = async() => {

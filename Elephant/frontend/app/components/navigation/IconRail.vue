@@ -106,6 +106,7 @@ import { usePreferencesStore } from '@/store/preferences'
 import { VAULT_ICON_OPTIONS, normalizeVaultIcon } from 'common/elephantnote/appearance'
 import {
   addonViewRailId,
+  extendIconRailOrder,
   isIconRailSeparatorId,
   normalizeIconRailHidden,
   normalizeIconRailOrder,
@@ -122,6 +123,9 @@ const addonsStore = useAddonsStore()
 const preferences = usePreferencesStore()
 const editingVaultId = ref('')
 const showVaultMenu = ref(false)
+const runtimeRailOrder = ref([])
+const lastRailAction = ref({ id: '', at: 0 })
+const DUPLICATE_ACTION_WINDOW_MS = 420
 
 const VAULT_ICON_COMPONENTS = { Database, FileText, GraduationCap, Home, Landmark, Rocket, Star, Terminal, Workflow }
 const ADDON_ICON_COMPONENTS = {
@@ -199,25 +203,43 @@ const legacyAddonItems = computed(() => getAddonSidebarItems(addonsStore.contrib
 })))
 
 const allRailItems = computed(() => [...coreRailItems.value, ...addonViewItems.value, ...legacyAddonItems.value])
+const allRailItemIds = computed(() => allRailItems.value.map((item) => item.id))
+const configuredRailOrderSignature = computed(() => JSON.stringify(
+  Array.isArray(preferences.iconRailOrder) ? preferences.iconRailOrder : []
+))
 const visibleRailItems = computed(() => {
-  const ids = allRailItems.value.map((item) => item.id)
+  const ids = allRailItemIds.value
   const hidden = new Set(normalizeIconRailHidden(preferences.iconRailHidden, ids))
   const byId = new Map(allRailItems.value.map((item) => [item.id, item]))
-  return normalizeIconRailOrder(preferences.iconRailOrder, ids)
+  return normalizeIconRailOrder(runtimeRailOrder.value, ids)
     .filter((id) => isIconRailSeparatorId(id) || !hidden.has(id))
     .map((id) => isIconRailSeparatorId(id) ? { id, separator: true } : byId.get(id))
     .filter(Boolean)
 })
 const visibleRailIds = computed(() => visibleRailItems.value.map((item) => item.id))
 const layoutSignature = computed(() => JSON.stringify({
-  order: normalizeIconRailOrder(preferences.iconRailOrder, allRailItems.value.map((item) => item.id)),
-  hidden: normalizeIconRailHidden(preferences.iconRailHidden, allRailItems.value.map((item) => item.id)),
+  order: normalizeIconRailOrder(runtimeRailOrder.value, allRailItemIds.value),
+  hidden: normalizeIconRailHidden(preferences.iconRailHidden, allRailItemIds.value),
   visible: visibleRailIds.value
 }))
 
 const runRailItem = async (item) => {
+  const id = item?.id || ''
+  const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
+  const previous = lastRailAction.value
+  const ageMs = now - previous.at
+  if (id && previous.id === id && ageMs >= 0 && ageMs < DUPLICATE_ACTION_WINDOW_MS) {
+    pushIconRailLog('action:ignored-duplicate', {
+      id,
+      ageMs: Math.round(ageMs),
+      guardMs: DUPLICATE_ACTION_WINDOW_MS
+    })
+    return
+  }
+  lastRailAction.value = { id, at: now }
+
   pushIconRailLog('action:run', {
-    id: item?.id || '',
+    id,
     title: item?.title || '',
     activeVaultId: store.activeVaultId || '',
     workspaceView: store.activeWorkspaceView || ''
@@ -226,17 +248,18 @@ const runRailItem = async (item) => {
     await item?.run?.()
   } catch (error) {
     pushIconRailLog('action:error', {
-      id: item?.id || '',
+      id,
       error: error?.message || String(error)
     })
     throw error
   }
 }
 
-const openSettings = () => {
-  pushIconRailLog('action:settings')
-  emit('open-settings')
-}
+const openSettings = () => runRailItem({
+  id: 'settings',
+  title: 'Settings',
+  run: () => emit('open-settings')
+})
 const openActiveVaultIconPicker = () => {
   showVaultMenu.value = true
   editingVaultId.value = store.activeVaultId || ''
@@ -282,6 +305,22 @@ const handleAddonSidebarItem = async (item) => {
   if (item.actionId) return addonsStore.runAction(item.actionId)
   if (item.view) closeAddonAndOpen(item.view)
 }
+
+watch(configuredRailOrderSignature, () => {
+  runtimeRailOrder.value = extendIconRailOrder(preferences.iconRailOrder, allRailItemIds.value)
+}, { immediate: true })
+
+watch(allRailItemIds, (ids) => {
+  const previous = runtimeRailOrder.value
+  const next = extendIconRailOrder(previous, ids)
+  if (JSON.stringify(previous) === JSON.stringify(next)) return
+  runtimeRailOrder.value = next
+  pushIconRailLog('layout:extended', {
+    previous,
+    next,
+    added: next.filter((id) => !previous.includes(id))
+  })
+}, { immediate: true })
 
 watch(layoutSignature, (signature) => {
   const snapshot = JSON.parse(signature)

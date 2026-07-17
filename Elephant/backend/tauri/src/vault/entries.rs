@@ -112,6 +112,17 @@ fn title_from_name(name: &str) -> String {
   name.strip_suffix(".md").unwrap_or(name).to_string()
 }
 
+fn is_generated_untitled_title(value: &str) -> bool {
+  let normalized = value.trim().to_ascii_lowercase();
+  if normalized == "untitled" {
+    return true;
+  }
+  normalized
+    .strip_prefix("untitled ")
+    .map(|suffix| !suffix.is_empty() && suffix.chars().all(|ch| ch.is_ascii_digit()))
+    .unwrap_or(false)
+}
+
 fn markdown_preview(path: &Path, fallback_title: &str) -> Value {
   let file = fs::File::open(path);
   let Ok(file) = file else {
@@ -166,7 +177,7 @@ fn markdown_preview(path: &Path, fallback_title: &str) -> Value {
     }
   }
 
-  if title.is_empty() {
+  if title.is_empty() && !is_generated_untitled_title(fallback_title) {
     title = fallback_title.to_string();
   }
   json!({ "title": title, "excerpt": excerpt_lines.join(" ") })
@@ -262,11 +273,12 @@ fn unique_path(mut path: PathBuf) -> PathBuf {
 
 pub fn create_note(vault: &VaultDescriptor, relative_path: Option<String>, filename: Option<String>, title: Option<String>) -> R<Value> {
   let directory = writable_dir_inside_vault(&vault.path, relative_path.as_deref().unwrap_or(""))?;
-  let fallback_title = title.clone().filter(|value| !value.trim().is_empty()).unwrap_or_else(|| "Untitled".to_string());
+  let requested_title = title.filter(|value| !value.trim().is_empty());
+  let fallback_title = requested_title.clone().unwrap_or_else(|| "Untitled".to_string());
   let file_name = sanitize_leaf_name(filename.or_else(|| Some(format!("{}.md", fallback_title))), "Untitled.md", true)?;
   let path = unique_path(directory.join(file_name));
-  let note_title = title.unwrap_or_else(|| title_from_name(path.file_name().and_then(|name| name.to_str()).unwrap_or("Untitled.md")));
-  fs::write(&path, format!("# {}\n", note_title)).map_err(|error| error.to_string())?;
+  let markdown = requested_title.map(|value| format!("# {}\n", value)).unwrap_or_default();
+  fs::write(&path, markdown).map_err(|error| error.to_string())?;
   let root = canonical_root(&vault.path)?;
   let metadata = fs::metadata(&path).map_err(|error| error.to_string())?;
   Ok(entry_summary(&root, &path, &metadata, true))
@@ -354,6 +366,24 @@ pub fn delete_entry(vault: &VaultDescriptor, relative_path: String) -> R<Value> 
 mod tests {
   use super::*;
 
+  fn temp_dir(name: &str) -> PathBuf {
+    let stamp = std::time::SystemTime::now()
+      .duration_since(std::time::UNIX_EPOCH)
+      .unwrap()
+      .as_nanos();
+    std::env::temp_dir().join(format!("elephant-entries-{name}-{stamp}"))
+  }
+
+  fn test_vault(path: &Path) -> VaultDescriptor {
+    VaultDescriptor {
+      id: "test".to_string(),
+      name: "Test".to_string(),
+      path: path.to_string_lossy().to_string(),
+      icon: String::new(),
+      last_opened_at: "0".to_string(),
+    }
+  }
+
   #[test]
   fn normalizes_paths_without_traversal_components() {
     assert_eq!(normalize_relative_path("./a//b/../c.md"), "a/b/c.md");
@@ -365,5 +395,37 @@ mod tests {
     assert!(is_ignored_entry(".git"));
     assert!(is_ignored_entry(".elephantnote"));
     assert!(!is_ignored_entry("note.md"));
+  }
+
+  #[test]
+  fn creates_new_notes_without_a_default_title_or_body() {
+    let root = temp_dir("empty-note");
+    fs::create_dir_all(&root).unwrap();
+    let vault = test_vault(&root);
+
+    let entry = create_note(&vault, None, None, None).unwrap();
+    let relative_path = entry.get("path").and_then(Value::as_str).unwrap();
+    let markdown = fs::read_to_string(root.join(relative_path)).unwrap();
+
+    assert!(markdown.is_empty());
+    assert_eq!(entry.get("title").and_then(Value::as_str), Some(""));
+
+    let _ = fs::remove_dir_all(&root);
+  }
+
+  #[test]
+  fn preserves_an_explicit_title_during_note_creation() {
+    let root = temp_dir("titled-note");
+    fs::create_dir_all(&root).unwrap();
+    let vault = test_vault(&root);
+
+    let entry = create_note(&vault, None, None, Some("Dashboard".to_string())).unwrap();
+    let relative_path = entry.get("path").and_then(Value::as_str).unwrap();
+    let markdown = fs::read_to_string(root.join(relative_path)).unwrap();
+
+    assert_eq!(markdown, "# Dashboard\n");
+    assert_eq!(entry.get("title").and_then(Value::as_str), Some("Dashboard"));
+
+    let _ = fs::remove_dir_all(&root);
   }
 }

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const repository = 'https://github.com/SorbetUP/Elephant-Addons.git'
-const pinnedRef = process.env.ELEPHANT_ADDONS_REF || '1da098cc4ddb39b7cb4641a7d2c05c6b533a564f'
+const pinnedRef = process.env.ELEPHANT_ADDONS_REF || '2a5a7a0015b5a4e560d0ce2413a8a6dcb72e1fa9'
 const cacheRoot = path.join(root, '.cache', 'elephant-addons')
 
 const runGit = (args, cwd = root) => execFileSync('git', args, { cwd, stdio: 'inherit' })
@@ -15,6 +15,20 @@ const currentHead = () => {
   } catch {
     return ''
   }
+}
+
+const platformKey = () => {
+  const os = process.platform === 'darwin'
+    ? 'macos'
+    : process.platform === 'win32'
+      ? 'windows'
+      : process.platform
+  const arch = process.arch === 'arm64'
+    ? 'aarch64'
+    : process.arch === 'x64'
+      ? 'x86_64'
+      : process.arch
+  return `${os}-${arch}`
 }
 
 if (currentHead() !== pinnedRef) {
@@ -36,6 +50,56 @@ const ensureLink = (linkName, target) => {
   fs.symlinkSync(target, linkPath, process.platform === 'win32' ? 'junction' : 'dir')
 }
 
+const materializeNativeServices = () => {
+  const skippedExplicitly = process.env.ELEPHANT_SKIP_NATIVE_ADDON_BUILD === '1'
+  const genericCiSetup = process.env.CI === 'true' && process.env.ELEPHANT_BUILD_NATIVE_ADDONS !== '1'
+  if (skippedExplicitly || genericCiSetup) {
+    console.log('[addons] native service materialization skipped')
+    return
+  }
+
+  const platform = platformKey()
+  const officialRoot = path.join(cacheRoot, 'official')
+  for (const entry of fs.readdirSync(officialRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+
+    const addonDir = path.join(officialRoot, entry.name)
+    const buildConfigPath = path.join(addonDir, 'addon.build.json')
+    const manifestPath = path.join(addonDir, 'manifest.json')
+    if (!fs.existsSync(buildConfigPath) || !fs.existsSync(manifestPath)) continue
+
+    const buildConfig = JSON.parse(fs.readFileSync(buildConfigPath, 'utf8'))
+    if (!Array.isArray(buildConfig.supportedPlatforms) || !buildConfig.supportedPlatforms.includes(platform)) continue
+
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+    const sidecar = manifest?.native?.sidecars?.[platform]
+    if (!sidecar) continue
+
+    const executable = path.join(addonDir, sidecar)
+    if (fs.existsSync(executable) && fs.statSync(executable).isFile() && fs.statSync(executable).size > 0) continue
+
+    console.log(`[addons] building missing native service ${manifest.id} for ${platform}`)
+    execFileSync(process.execPath, [
+      path.join(root, 'build/scripts/build-physical-addon.mjs'),
+      `addons/official/${entry.name}`
+    ], {
+      cwd: root,
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        ELEPHANT_ADDON_PLATFORM: platform,
+        ELEPHANT_ADDON_MATERIALIZE_SOURCE: '1',
+        ELEPHANT_ADDON_MATERIALIZE_ONLY: '1'
+      }
+    })
+
+    if (!fs.existsSync(executable) || !fs.statSync(executable).isFile() || fs.statSync(executable).size === 0) {
+      throw new Error(`Native addon service was not materialized: ${manifest.id} (${sidecar})`)
+    }
+  }
+}
+
 ensureLink('addons', cacheRoot)
 ensureLink('packs', path.join(cacheRoot, 'packs'))
+materializeNativeServices()
 console.log(`[addons] materialized Elephant-Addons ${pinnedRef}`)

@@ -1,12 +1,13 @@
 import bus from '@/bus'
 import ExcalidrawEditorOverlay from './ui/ExcalidrawEditorOverlay.vue'
 import { getExcalidrawScenePath } from 'elephant-front/services/excalidraw'
+import { useVaultStore } from 'elephant-front/stores/vaultStore'
 import { installExcalidrawMarkdownCleanup } from '../../platform/excalidrawMarkdownCleanup'
 import { installExcalidrawImageRuntimeFixes } from '../../platform/excalidrawImageRuntimeFixes'
 
 const CORE_FEATURE_ID = 'core.excalidraw'
 const EXCALIDRAW_ASSET_RE = /(?:^|\/)\.assets\/excalidraw-[^/?#]+\.png(?:[?#].*)?$/i
-const EXCALIDRAW_ICON = 'data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgNjQgNjQiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjU4IiBoZWlnaHQ9IjU4IiByeD0iMTciIGZpbGw9IiM2OTY1REIiLz48cGF0aCBkPSJNMTguNSAzOS41IDM0LjggMTguOGMxLjctMi4xIDQuOC0yLjQgNi45LS43bDQuMiAzLjRjMi4xIDEuNyAyLjQgNC44LjcgNi45TDMwLjMgNDkuMWwtMTEuOCAyLjd2LTEyLjNaIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjQuNCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjxwYXRoIGQ9Im0yMSAzOSA5LjYgNy41TTM1IDE5LjRsMTEgOC43IiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjQuNCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PC9zdmc+'
+const EXCALIDRAW_ICON = 'data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgNjQgNjQiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZyI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjU4IiBoZWlnaHQ9IjU4IiByeD0iMTciIGZpbGw9IiM2OTY1REIiLz48cGF0aCBkPSJNMTguNSAzOS41IDM0LjggMTguOGMxLjctMi4xIDQuOC0yLjQgNi45LS43bDQuMiAzLjRjMi4xIDEuNyAyLjQgNC44LjcgNi45TDMwLjMgNDkuMWwtMTEuOCAyLjd2LTEyLjNaIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjQuNCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjxwYXRoIGQ9Im0yMSAzOSA5LjYgNy41TTM1IDE5LjRsMTEgOC43IiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjQuNCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PC9zdmc+'
 
 const normalizeSource = (value = '') => String(value || '')
   .replaceAll('\\', '/')
@@ -44,6 +45,9 @@ const dispatchLifecycle = (eventName) => {
 export const excalidrawCoreFeature = Object.freeze({
   id: CORE_FEATURE_ID,
   activate(ctx) {
+    const vaultStore = useVaultStore()
+    const getActiveVaultPath = () => vaultStore.activeVault?.path || ''
+    globalThis.__ELEPHANT_GET_ACTIVE_VAULT_PATH__ = getActiveVaultPath
     globalThis.__ELEPHANT_EXCALIDRAW_ENABLED__ = true
     document.documentElement.dataset.elephantExcalidrawEnabled = 'true'
     const cleanupRuntime = installExcalidrawMarkdownCleanup()
@@ -83,6 +87,9 @@ export const excalidrawCoreFeature = Object.freeze({
     return () => {
       cleanupRuntime?.dispose?.()
       imageRuntime?.dispose?.()
+      if (globalThis.__ELEPHANT_GET_ACTIVE_VAULT_PATH__ === getActiveVaultPath) {
+        delete globalThis.__ELEPHANT_GET_ACTIVE_VAULT_PATH__
+      }
       delete globalThis.__ELEPHANT_EXCALIDRAW_ENABLED__
       delete document.documentElement.dataset.elephantExcalidrawEnabled
       queueMicrotask(() => globalThis.__ELEPHANT_ADDON_CONTENT_FALLBACKS__?.refresh?.())

@@ -190,6 +190,25 @@ export class MuyaRustInputController {
       event.preventDefault()
       return
     }
+    if (
+      event.key === 'Enter' &&
+      !event.isComposing &&
+      !this.composition &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey
+    ) {
+      const selection = this.readSelection()
+      if (!selection) return
+      event.preventDefault()
+      this.schedule(async () => {
+        const nextSelection = this._inputSelection || selection
+        await this.bridge.setSelection(nextSelection)
+        await this.bridge.dispatch(editorCommands.insertParagraph())
+        this._inputSelection = this.bridge.selection || nextSelection
+      })
+      return
+    }
     if (event.key !== 'Tab') return
 
     const selection = this.readSelection()

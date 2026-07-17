@@ -7,6 +7,7 @@ import {
   revokeTrustedAddon,
   setTrustedSafeMode
 } from './trustedAddonRuntime'
+import { createIsolatedAddonWorkerSource } from './isolatedAddonWorkerSource'
 
 const COMMUNITY_ADDONS_PREF_KEY = 'addons.communityEnabled'
 
@@ -19,11 +20,26 @@ const invoke = (command, payload = {}, target = globalThis) => {
 
 export const externalAddonApi = Object.freeze({
   list: () => invoke('tauri_addons_list'),
+  officialList: () => invoke('tauri_official_addons_catalog_list'),
+  officialInstall: (addonId) => invoke('tauri_official_addons_catalog_install', { addonId }),
   install: (packagePath) => invoke('tauri_addons_install', { packagePath }),
   uninstall: (addonId) => invoke('tauri_addons_uninstall', { addonId }),
   setEnabled: (addonId, enabled) => invoke('tauri_addons_set_enabled', { addonId, enabled }),
   readEntry: (addonId) => invoke('tauri_addons_read_entry', { addonId }),
   listNotes: (addonId, prefix) => invoke('tauri_addons_notes_list', { addonId, prefix }),
+  readNote: async (addonId, path) => {
+    const document = await invoke('tauri_addons_notes_read', { addonId, path })
+    return Object.freeze({ ...document, content: document?.markdown ?? '' })
+  },
+  writeNote: async (addonId, path, content, overwrite = true) => {
+    const result = await invoke('tauri_addons_notes_write', {
+      addonId,
+      path,
+      markdown: String(content ?? ''),
+      overwrite: overwrite !== false
+    })
+    return Object.freeze({ ok: true, ...result })
+  },
   httpRequest: (addonId, params = {}) => invoke('tauri_addons_http_request', { addonId, params }),
   call: (addonId, method, params = {}) => invoke('tauri_addons_call', { addonId, method, params }),
   getCommunityEnabled: async () => await invoke('tauri_prefs_get', { key: COMMUNITY_ADDONS_PREF_KEY }) === true
@@ -48,6 +64,34 @@ const isOfficialRecord = (record = {}) => (
   record.manifest?.official === true
 )
 
+export const reconcileOfficialAddonRecords = (records = [], catalogue = []) => {
+  const officialIds = new Set(
+    catalogue
+      .filter((item) => item?.official === true && safeString(item?.id))
+      .map((item) => safeString(item.id))
+  )
+  return records.map((record) => {
+    const id = safeString(record?.manifest?.id)
+    if (!officialIds.has(id)) return record
+    return {
+      ...record,
+      source: 'official',
+      official: true,
+      manifest: {
+        ...record.manifest,
+        source: 'official',
+        official: true
+      }
+    }
+  })
+}
+
+export const isMissingNativeServiceError = (error) => {
+  const message = safeString(error?.message || error)
+  return message.includes('Addon service executable is unavailable') ||
+    message.includes('Addon sidecar executable is unavailable')
+}
+
 const runtimeManifest = (record = {}) => ({
   ...record.manifest,
   source: 'external',
@@ -59,121 +103,6 @@ const runtimeManifest = (record = {}) => ({
 
 const trustedManifest = (manifest = {}) => isTrustedExternalManifest({ ...manifest, source: 'external' })
 
-const createWorkerSource = (entrySource, addonId) => `
-'use strict';
-const __nativePost = self.postMessage.bind(self);
-const __disable = (name) => {
-  try { Object.defineProperty(self, name, { value: undefined, writable: false, configurable: false }); }
-  catch (_) { try { self[name] = undefined; } catch (_) {} }
-};
-['fetch','WebSocket','EventSource','XMLHttpRequest','importScripts','Worker','SharedWorker','BroadcastChannel','indexedDB','caches'].forEach(__disable);
-try {
-  Object.defineProperty(self, '__TAURI__', { value: undefined, writable: false, configurable: false });
-  Object.defineProperty(self, 'postMessage', { value: __nativePost, writable: false, configurable: false });
-} catch (_) {}
-${entrySource}
-(() => {
-  const addonId = ${JSON.stringify(addonId)};
-  const definition = self.elephantAddon;
-  const pendingRpc = new Map();
-  const commands = new Map();
-  const views = new Map();
-  let nextRpcId = 1;
-  let activationDispose = null;
-  const post = (message) => __nativePost(message);
-  const serializeError = (error) => ({ name: error?.name || 'Error', message: error?.message || String(error), stack: error?.stack || '' });
-  const rpc = (method, params = {}) => new Promise((resolve, reject) => {
-    const id = nextRpcId++;
-    pendingRpc.set(id, { resolve, reject });
-    post({ type: 'rpc', id, method, params });
-  });
-  const ownedId = (value, label) => {
-    const id = String(value || '').trim();
-    if (!id || !id.startsWith(addonId + '.')) throw new Error(label + ' ids must start with ' + addonId + '.');
-    return id;
-  };
-  const registerCommand = (command) => {
-    if (!command || typeof command !== 'object') throw new TypeError('Command definition is required');
-    const id = ownedId(command.id, 'External addon command');
-    if (typeof command.run !== 'function') throw new TypeError('Command run handler is required');
-    commands.set(id, command.run);
-    post({ type: 'register-action', action: { id, title: String(command.title || id), description: String(command.description || ''), order: Number.isFinite(command.order) ? command.order : 0 } });
-    return () => commands.delete(id);
-  };
-  const registerView = (view) => {
-    if (!view || typeof view !== 'object') throw new TypeError('View definition is required');
-    const id = ownedId(view.id, 'External addon view');
-    if (typeof view.getState !== 'function' || typeof view.dispatch !== 'function') throw new TypeError('View getState and dispatch handlers are required');
-    const kind = String(view.kind || '').trim();
-    if (!kind) throw new TypeError('View kind is required');
-    views.set(id, { getState: view.getState, dispatch: view.dispatch });
-    post({ type: 'register-view', view: { id, title: String(view.title || id), description: String(view.description || ''), icon: String(view.icon || 'list-todo'), kind, order: Number.isFinite(view.order) ? view.order : 0 } });
-    return () => views.delete(id);
-  };
-  const api = Object.freeze({
-    app: Object.freeze({ info: () => rpc('app.info') }),
-    notes: Object.freeze({
-      list: (prefix) => rpc('notes.list', { prefix }),
-      read: (path) => rpc('notes.read', { path }),
-      write: (path, content) => rpc('notes.write', { path, content })
-    }),
-    http: Object.freeze({ request: (request) => rpc('http.request', request || {}) }),
-    storage: Object.freeze({
-      get: (key) => rpc('storage.get', { key }),
-      set: (key, value) => rpc('storage.set', { key, value }),
-      remove: (key) => rpc('storage.remove', { key }),
-      entries: () => rpc('storage.entries')
-    }),
-    commands: Object.freeze({ register: registerCommand }),
-    views: Object.freeze({ register: registerView })
-  });
-  self.onmessage = async (event) => {
-    const message = event?.data || {};
-    if (message.type === 'rpc-result') {
-      const pending = pendingRpc.get(message.id);
-      if (!pending) return;
-      pendingRpc.delete(message.id);
-      if (message.ok) pending.resolve(message.result);
-      else pending.reject(new Error(message.error?.message || message.error || 'Addon API call failed'));
-      return;
-    }
-    if (message.type === 'activate') {
-      try {
-        if (!definition || typeof definition.activate !== 'function') throw new Error('Addon entry must assign self.elephantAddon = { activate(api) { ... } }');
-        const dispose = await definition.activate(api);
-        if (typeof dispose === 'function') activationDispose = dispose;
-        post({ type: 'activation-result', id: message.id, ok: true });
-      } catch (error) { post({ type: 'activation-result', id: message.id, ok: false, error: serializeError(error) }); }
-      return;
-    }
-    if (message.type === 'run-command') {
-      try {
-        const run = commands.get(message.commandId);
-        if (!run) throw new Error('Unknown addon command: ' + message.commandId);
-        post({ type: 'command-result', id: message.id, ok: true, result: await run(message.payload) });
-      } catch (error) { post({ type: 'command-result', id: message.id, ok: false, error: serializeError(error) }); }
-      return;
-    }
-    if (message.type === 'view-state' || message.type === 'view-action') {
-      try {
-        const view = views.get(message.viewId);
-        if (!view) throw new Error('Unknown addon view: ' + message.viewId);
-        const result = message.type === 'view-state' ? await view.getState(message.params || {}) : await view.dispatch(String(message.action || ''), message.params || {});
-        post({ type: message.type + '-result', id: message.id, ok: true, result });
-      } catch (error) { post({ type: message.type + '-result', id: message.id, ok: false, error: serializeError(error) }); }
-      return;
-    }
-    if (message.type === 'deactivate') {
-      try {
-        if (typeof definition?.deactivate === 'function') await definition.deactivate(api);
-        if (typeof activationDispose === 'function') await activationDispose();
-        post({ type: 'deactivation-result', id: message.id, ok: true });
-      } catch (error) { post({ type: 'deactivation-result', id: message.id, ok: false, error: serializeError(error) }); }
-    }
-  };
-})();
-`
-
 class IsolatedAddonSession {
   constructor(record, logger) {
     this.record = record
@@ -184,6 +113,7 @@ class IsolatedAddonSession {
     this.context = null
     this.pending = new Map()
     this.nextRequestId = 1
+    this.contributionDisposers = new Map()
     this.disposed = false
   }
 
@@ -193,7 +123,7 @@ class IsolatedAddonSession {
     const entry = await externalAddonApi.readEntry(this.addonId)
     const source = safeString(entry?.source)
     if (!source) throw new Error(`External addon ${this.addonId} has an empty entry file`)
-    const blob = new Blob([createWorkerSource(source, this.addonId)], { type: 'text/javascript' })
+    const blob = new Blob([createIsolatedAddonWorkerSource(source, this.addonId, this.record.manifest)], { type: 'text/javascript' })
     this.workerUrl = URL.createObjectURL(blob)
     this.worker = new Worker(this.workerUrl, { name: `elephant-addon:${this.addonId}` })
     this.worker.addEventListener('message', (event) => this.handleMessage(event?.data || {}))
@@ -207,6 +137,11 @@ class IsolatedAddonSession {
 
   callBroker(method, params = {}) {
     if (method === 'notes.list') return externalAddonApi.listNotes(this.addonId, safeString(params?.prefix))
+    if (method === 'notes.read') return externalAddonApi.readNote(this.addonId, safeString(params?.path))
+    if (method === 'notes.write') {
+      const content = params?.markdown ?? params?.content ?? ''
+      return externalAddonApi.writeNote(this.addonId, safeString(params?.path), content, params?.overwrite !== false)
+    }
     if (method === 'http.request') return externalAddonApi.httpRequest(this.addonId, params)
     return externalAddonApi.call(this.addonId, method, params)
   }
@@ -218,8 +153,11 @@ class IsolatedAddonSession {
         .catch((error) => this.post({ type: 'rpc-result', id: message.id, ok: false, error: { message: error?.message || String(error) } }))
       return
     }
+    if (message.type === 'log') return this.logFromWorker(message)
     if (message.type === 'register-action') return this.registerAction(message.action)
+    if (message.type === 'unregister-action') return this.removeContribution(`action:${safeString(message.id)}`)
     if (message.type === 'register-view') return this.registerView(message.view)
+    if (message.type === 'unregister-view') return this.removeContribution(`view:${safeString(message.id)}`)
     if (!message.type?.endsWith('-result')) return
     const pending = this.pending.get(message.id)
     if (!pending) return
@@ -229,17 +167,45 @@ class IsolatedAddonSession {
     else pending.reject(asError(message.error))
   }
 
+  logFromWorker(message = {}) {
+    const level = ['debug', 'info', 'warn', 'error'].includes(message.level) ? message.level : 'info'
+    const args = Array.isArray(message.args) ? message.args : []
+    const logger = this.logger?.[level] || this.logger?.info
+    logger?.call(this.logger, `[addon:${this.addonId}]`, ...args)
+  }
+
+  removeContribution(key) {
+    const dispose = this.contributionDisposers.get(key)
+    if (!dispose) return false
+    this.contributionDisposers.delete(key)
+    dispose()
+    return true
+  }
+
+  storeContribution(key, dispose) {
+    this.removeContribution(key)
+    let active = true
+    const remove = () => {
+      if (!active) return
+      active = false
+      dispose?.()
+    }
+    this.contributionDisposers.set(key, remove)
+    return remove
+  }
+
   registerAction(action = {}) {
     if (!this.record.manifest.permissions?.commands) return
     const id = safeString(action.id)
     if (!id.startsWith(`${this.addonId}.`)) return
-    this.context.addAction({
+    const dispose = this.context.addAction({
       id,
       title: safeString(action.title, id),
       description: safeString(action.description),
       order: Number.isFinite(action.order) ? action.order : 0,
       run: (payload) => this.request('run-command', { commandId: id, payload }, 60_000)
     })
+    this.storeContribution(`action:${id}`, dispose)
   }
 
   registerView(view = {}) {
@@ -247,7 +213,7 @@ class IsolatedAddonSession {
     const id = safeString(view.id)
     const declared = declaredViews.some((entry) => entry?.id === id && entry?.kind === view.kind)
     if (!declared || !id.startsWith(`${this.addonId}.`)) return
-    this.context.addView({
+    const dispose = this.context.addView({
       id,
       title: safeString(view.title, id),
       description: safeString(view.description),
@@ -257,6 +223,7 @@ class IsolatedAddonSession {
       getState: (params) => this.request('view-state', { viewId: id, params }, 60_000),
       dispatch: (action, params) => this.request('view-action', { viewId: id, action, params }, 60_000)
     })
+    this.storeContribution(`view:${id}`, dispose)
   }
 
   request(type, payload = {}, timeoutMs = 10_000) {
@@ -291,6 +258,7 @@ class IsolatedAddonSession {
     if (this.disposed) return
     this.disposed = true
     this.rejectAll(new Error(`External addon worker stopped: ${this.addonId}`))
+    for (const key of [...this.contributionDisposers.keys()]) this.removeContribution(key)
     this.worker?.terminate()
     this.worker = null
     if (this.workerUrl) URL.revokeObjectURL(this.workerUrl)
@@ -344,7 +312,15 @@ export class ExternalAddonController {
   }
 
   async load() {
-    const records = await externalAddonApi.list()
+    const installedRecords = await externalAddonApi.list()
+    let records = installedRecords
+    try {
+      records = reconcileOfficialAddonRecords(installedRecords, await externalAddonApi.officialList())
+    } catch (error) {
+      this.logger?.warn?.('official addon provenance reconciliation failed', {
+        error: error?.message || String(error)
+      })
+    }
     const communityEnabled = await externalAddonApi.getCommunityEnabled()
     const safeMode = await getTrustedSafeMode()
     for (const record of records) this.register(record)
@@ -357,10 +333,39 @@ export class ExternalAddonController {
         if (safeMode && trusted) this.logger?.warn?.('trusted addon disabled by safe mode', { id: record.manifest.id })
         continue
       }
-      try { await this.manager.enable(record.manifest.id) }
-      catch (error) { this.logger?.error?.('external addon startup failed', { id: record.manifest.id, error: error?.message || String(error) }) }
+      try {
+        await this.manager.enable(record.manifest.id)
+      } catch (error) {
+        if (official && isMissingNativeServiceError(error)) {
+          try {
+            await this.repairOfficialPackage(record)
+            continue
+          } catch (repairError) {
+            this.logger?.error?.('official addon native package repair failed', {
+              id: record.manifest.id,
+              error: repairError?.message || String(repairError)
+            })
+          }
+        }
+        this.logger?.error?.('external addon startup failed', { id: record.manifest.id, error: error?.message || String(error) })
+      }
     }
     return records
+  }
+
+  async repairOfficialPackage(record) {
+    const addonId = record.manifest.id
+    const repaired = await externalAddonApi.officialInstall(addonId)
+    if (this.manager.get(addonId)) {
+      await this.manager.disable(addonId).catch(() => {})
+      this.manager.unregister(addonId)
+    }
+    const [normalized] = reconcileOfficialAddonRecords([repaired], [{ id: addonId, official: true }])
+    this.records.set(addonId, normalized)
+    this.register(normalized)
+    await this.manager.enable(addonId)
+    this.logger?.info?.('official addon native package repaired', { id: addonId })
+    return normalized
   }
 
   register(record) {

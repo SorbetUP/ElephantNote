@@ -1,7 +1,6 @@
 export const CORE_ICON_RAIL_ITEMS = Object.freeze([
   { id: 'vault', label: 'Vault', description: 'Open the active vault switcher.' },
   { id: 'sidebar-toggle', label: 'Sidebar', description: 'Show or hide the navigation sidebar.' },
-  { id: 'dashboard', label: 'Dashboard', description: 'Overview of the active vault.' },
   { id: 'search', label: 'Search', description: 'Open global search.' }
 ])
 
@@ -48,6 +47,17 @@ export const pushIconRailLog = (event, details = {}) => {
 export const addonViewRailId = (viewId) => `addon-view:${String(viewId || '').trim()}`
 export const isIconRailSeparatorId = (id) => String(id || '').startsWith(ICON_RAIL_SEPARATOR_PREFIX)
 export const createIconRailSeparatorId = () => `${ICON_RAIL_SEPARATOR_PREFIX}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+
+export const extendIconRailOrder = (order, availableIds) => {
+  const extended = normalizeIds(order)
+  const seen = new Set(extended)
+  for (const id of normalizeIds(availableIds)) {
+    if (seen.has(id)) continue
+    seen.add(id)
+    extended.push(id)
+  }
+  return extended
+}
 
 export const normalizeIconRailOrder = (order, availableIds) => {
   const available = normalizeIds(availableIds)

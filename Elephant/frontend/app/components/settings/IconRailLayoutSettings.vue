@@ -49,7 +49,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import {
   BookOpenText,
   CalendarDays,
@@ -80,6 +80,7 @@ import {
   DEFAULT_ICON_RAIL_ORDER,
   addonViewRailId,
   createIconRailSeparatorId,
+  extendIconRailOrder,
   isIconRailSeparatorId,
   moveIconRailItem,
   normalizeIconRailHidden,
@@ -91,11 +92,11 @@ const preferences = usePreferencesStore()
 const addonsStore = useAddonsStore()
 const draggingId = ref('')
 const collapsed = ref(false)
+const runtimeOrder = ref([])
 
 const CORE_ICON_COMPONENTS = {
   vault: Vault,
   'sidebar-toggle': PanelLeft,
-  dashboard: LayoutDashboard,
   search: Search
 }
 const ADDON_ICON_COMPONENTS = {
@@ -139,7 +140,10 @@ const availableItems = computed(() => [
   ...legacyAddonItems.value
 ])
 const availableIds = computed(() => availableItems.value.map((item) => item.id))
-const orderedIds = computed(() => normalizeIconRailOrder(preferences.iconRailOrder, availableIds.value))
+const configuredOrderSignature = computed(() => JSON.stringify(
+  Array.isArray(preferences.iconRailOrder) ? preferences.iconRailOrder : []
+))
+const orderedIds = computed(() => normalizeIconRailOrder(runtimeOrder.value, availableIds.value))
 const hiddenIds = computed(() => normalizeIconRailHidden(preferences.iconRailHidden, availableIds.value))
 const orderedItems = computed(() => {
   const byId = new Map(availableItems.value.map((item) => [item.id, item]))
@@ -243,6 +247,22 @@ const toggleCollapsed = () => {
   collapsed.value = !collapsed.value
   pushIconRailLog('settings:collapsed', { collapsed: collapsed.value })
 }
+
+watch(configuredOrderSignature, () => {
+  runtimeOrder.value = extendIconRailOrder(preferences.iconRailOrder, availableIds.value)
+}, { immediate: true })
+
+watch(availableIds, (ids) => {
+  const previous = runtimeOrder.value
+  const next = extendIconRailOrder(previous, ids)
+  if (JSON.stringify(previous) === JSON.stringify(next)) return
+  runtimeOrder.value = next
+  pushIconRailLog('settings:layout-extended', {
+    previous,
+    next,
+    added: next.filter((id) => !previous.includes(id))
+  })
+}, { immediate: true })
 
 onMounted(() => {
   pushIconRailLog('settings:mounted', {

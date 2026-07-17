@@ -8,6 +8,11 @@ const overlay = read('Elephant/frontend/src/renderer/src/addons/builtin/ui/Excal
 const writingBridge = read('Elephant/frontend/src/renderer/src/platform/writingCommandBridge.js')
 
 describe('addon-owned Excalidraw note integration', () => {
+  it('does not persist the editor-only Untitled placeholder as note content', () => {
+    expect(editor).toContain('isUntitledPlaceholder')
+    expect(editor).toContain('[elephantnote:save] skipped empty untitled placeholder')
+  })
+
   it('keeps the base note editor free of Excalidraw UI and commands', () => {
     expect(editor).not.toContain('ExcalidrawDialog')
     expect(editor).not.toContain('isExcalidrawOpen')

@@ -4,6 +4,8 @@ import { CLASS_OR_ID } from '../../../config'
 
 const isFileUrl = (value = '') => /^file:\/\//i.test(String(value || '').trim())
 const isAbsoluteLocalPath = (value = '') => /^\//.test(value) || /^[a-zA-Z]:[\\/]/.test(value)
+const EXCALIDRAW_ASSET_RE = /(?:^|\/)\.assets\/excalidraw-[^/?#]+\.png(?:[?#].*)?$/i
+const MAX_DIAGNOSTIC_LOGS = 1000
 
 const removeQueryAndHash = (value = '') => String(value || '').split(/[?#]/)[0]
 
@@ -23,6 +25,36 @@ const resolveLocalFilePath = (value = '') => {
     return withoutProtocol.replace(/^\/([a-zA-Z]:\/)/, '$1')
   }
   return isAbsoluteLocalPath(raw) ? raw : ''
+}
+
+const normalizeSlashes = (value = '') => String(value || '').replace(/\\/g, '/')
+const isExcalidrawPath = (value = '') => EXCALIDRAW_ASSET_RE.test(normalizeSlashes(value))
+const errorDetails = (error) => ({
+  name: error?.name || 'Error',
+  message: error?.message || String(error || ''),
+  stack: error?.stack || ''
+})
+
+const pushImageLog = (level, message, details = {}, force = false) => {
+  const pathname = details?.localPath || details?.pathname || details?.src || ''
+  if (!force && !isExcalidrawPath(pathname)) return null
+  const target = globalThis.window || globalThis
+  const entry = {
+    time: new Date().toISOString(),
+    level,
+    message: `[image-loader] ${message}`,
+    details
+  }
+  target.__ELEPHANT_DEBUG_LOGS__ = Array.isArray(target.__ELEPHANT_DEBUG_LOGS__)
+    ? target.__ELEPHANT_DEBUG_LOGS__
+    : []
+  target.__ELEPHANT_DEBUG_LOGS__.push(entry)
+  if (target.__ELEPHANT_DEBUG_LOGS__.length > MAX_DIAGNOSTIC_LOGS) {
+    target.__ELEPHANT_DEBUG_LOGS__.splice(0, target.__ELEPHANT_DEBUG_LOGS__.length - MAX_DIAGNOSTIC_LOGS)
+  }
+  const logger = console[level] || console.log
+  logger.call(console, entry.message, details)
+  return entry
 }
 
 const mimeFromPath = (pathname = '') => {
@@ -81,6 +113,7 @@ const addImageToContainer = (imageText, img, className) => {
     imageText.classList.remove('ag-image-fail')
     imageText.classList.add('ag-image-success')
     imageText.removeAttribute('title')
+    delete imageText.dataset.imageError
   } else {
     insertAfter(img, imageText)
     operateClassName(imageText, 'add', className)
@@ -96,26 +129,73 @@ const bytesToBase64 = (bytes) => {
   return btoa(binary)
 }
 
+const dataByteLength = (data) => {
+  if (data instanceof Blob) return data.size
+  if (data instanceof ArrayBuffer) return data.byteLength
+  if (ArrayBuffer.isView(data)) return data.byteLength
+  if (typeof data === 'string') return new TextEncoder().encode(data).byteLength
+  return 0
+}
+
+const cachedExists = (pathname) => {
+  try {
+    return typeof window.fileUtils?.pathExistsSync === 'function'
+      ? Boolean(window.fileUtils.pathExistsSync(pathname))
+      : null
+  } catch (error) {
+    pushImageLog('warn', 'pathExistsSync cache probe failed', {
+      localPath: pathname,
+      error: errorDetails(error)
+    })
+    return null
+  }
+}
+
 const readLocalImageDataUrl = async (pathname = '') => {
   if (!pathname) throw new Error('empty-local-image-path')
-  if (!window.fileUtils?.pathExistsSync?.(pathname)) {
-    throw new Error('local-file-not-found')
+  const readFile = window.fileUtils?.readFile
+  if (typeof readFile !== 'function') throw new Error('fileUtils.readFile-unavailable')
+
+  const cacheState = cachedExists(pathname)
+  pushImageLog('info', 'local read:start', {
+    localPath: pathname,
+    cachedExists: cacheState,
+    cacheBypassed: cacheState === false
+  })
+
+  try {
+    // pathExistsSync is only a metadata-cache lookup in the Tauri bridge. A false
+    // value must never prevent a real read of a file that was just written.
+    const data = await readFile.call(window.fileUtils, pathname)
+    const byteLength = dataByteLength(data)
+    let dataUrl = ''
+    if (data instanceof Blob) {
+      const buffer = new Uint8Array(await data.arrayBuffer())
+      dataUrl = `data:${mimeFromPath(pathname)};base64,${bytesToBase64(buffer)}`
+    } else if (data instanceof ArrayBuffer) {
+      dataUrl = `data:${mimeFromPath(pathname)};base64,${bytesToBase64(new Uint8Array(data))}`
+    } else if (ArrayBuffer.isView(data)) {
+      dataUrl = `data:${mimeFromPath(pathname)};base64,${bytesToBase64(new Uint8Array(data.buffer, data.byteOffset, data.byteLength))}`
+    } else if (typeof data === 'string') {
+      const bytes = new TextEncoder().encode(data)
+      dataUrl = `data:${mimeFromPath(pathname)};base64,${bytesToBase64(bytes)}`
+    }
+    if (!dataUrl || byteLength <= 0) throw new Error('local-image-read-returned-empty-data')
+    pushImageLog('info', 'local read:success', {
+      localPath: pathname,
+      cachedExists: cacheState,
+      byteLength,
+      mime: mimeFromPath(pathname)
+    })
+    return dataUrl
+  } catch (error) {
+    pushImageLog('error', 'local read:failed', {
+      localPath: pathname,
+      cachedExists: cacheState,
+      error: errorDetails(error)
+    })
+    throw error
   }
-  const data = await window.fileUtils.readFile(pathname)
-  if (data instanceof Blob) {
-    const buffer = new Uint8Array(await data.arrayBuffer())
-    return `data:${mimeFromPath(pathname)};base64,${bytesToBase64(buffer)}`
-  }
-  if (data instanceof ArrayBuffer) {
-    return `data:${mimeFromPath(pathname)};base64,${bytesToBase64(new Uint8Array(data))}`
-  }
-  if (ArrayBuffer.isView(data)) {
-    return `data:${mimeFromPath(pathname)};base64,${bytesToBase64(new Uint8Array(data.buffer, data.byteOffset, data.byteLength))}`
-  }
-  if (typeof data === 'string') {
-    return `data:${mimeFromPath(pathname)};base64,${btoa(unescape(encodeURIComponent(data)))}`
-  }
-  return `data:${mimeFromPath(pathname)};base64,${bytesToBase64(new Uint8Array([]))}`
 }
 
 export default function loadImageAsync(imageInfo, attrs, className, imageClass) {
@@ -131,8 +211,8 @@ export default function loadImageAsync(imageInfo, attrs, className, imageClass) 
 
   let reload = false
   if (this.loadImageMap.has(src)) {
-    const imageInfo = this.loadImageMap.get(src)
-    if (imageInfo.dispMsec !== imageInfo.touchMsec) reload = true
+    const cachedImageInfo = this.loadImageMap.get(src)
+    if (cachedImageInfo.dispMsec !== cachedImageInfo.touchMsec) reload = true
   } else {
     reload = true
   }
@@ -141,8 +221,8 @@ export default function loadImageAsync(imageInfo, attrs, className, imageClass) 
     id = getUniqueId()
 
     const img = document.createElement('img')
-    let dispMsec = Date.now()
-    let touchMsec = dispMsec
+    const dispMsec = Date.now()
+    const touchMsec = dispMsec
     domsrc = createDomImageSrc(src, dispMsec)
     img.dataset.originalSrc = src
     img.dataset.localPath = localPath
@@ -162,7 +242,7 @@ export default function loadImageAsync(imageInfo, attrs, className, imageClass) 
       addedToImageContainer = true
     }
 
-    const fail = (reason = 'image-load-error') => {
+    const fail = (reason = 'image-load-error', error = null) => {
       const imageText = document.querySelector(`#${id}`)
       if (imageText) {
         operateClassName(imageText, 'remove', CLASS_OR_ID.AG_IMAGE_LOADING)
@@ -171,7 +251,13 @@ export default function loadImageAsync(imageInfo, attrs, className, imageClass) 
         const image = imageText.querySelector('img')
         if (image) image.remove()
       }
-      console.warn('[image] failed to load', { src, domsrc, localPath, reason })
+      pushImageLog('error', 'image load:failed', {
+        src,
+        domsrc,
+        localPath,
+        reason,
+        error: error ? errorDetails(error) : null
+      }, !localPath)
       if (this.urlMap.has(src)) this.urlMap.delete(src)
       this.loadImageMap.set(src, { id, isSuccess: false, domsrc, localPath, error: reason, addedToImageContainer: false })
     }
@@ -194,8 +280,18 @@ export default function loadImageAsync(imageInfo, attrs, className, imageClass) 
         localPath,
         addedToImageContainer
       })
+      pushImageLog('info', 'image element load:success', {
+        src,
+        localPath,
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+        addedToImageContainer
+      })
     }
-    img.onerror = () => fail(localPath ? 'local-object-url-load-error' : 'image-load-error')
+    img.onerror = (event) => fail(
+      localPath ? 'local-data-url-load-error' : 'image-load-error',
+      event?.error || null
+    )
 
     if (localPath) {
       readLocalImageDataUrl(localPath)
@@ -205,23 +301,23 @@ export default function loadImageAsync(imageInfo, attrs, className, imageClass) 
           img.dataset.resolvedSrc = dataUrl
           img.src = dataUrl
         })
-        .catch((error) => fail(error?.message || 'local-file-read-error'))
+        .catch((error) => fail(error?.message || 'local-file-read-error', error))
       img.dataset.resolvedSrc = localPath
     } else {
       img.src = domsrc
     }
   } else {
-    const imageInfo = this.loadImageMap.get(src)
-    id = imageInfo.id
-    isSuccess = imageInfo.isSuccess
-    w = imageInfo.width
-    h = imageInfo.height
-    domsrc = imageInfo.domsrc
-    if (!imageInfo.addedToImageContainer && imageInfo.img) {
+    const cachedImageInfo = this.loadImageMap.get(src)
+    id = cachedImageInfo.id
+    isSuccess = cachedImageInfo.isSuccess
+    w = cachedImageInfo.width
+    h = cachedImageInfo.height
+    domsrc = cachedImageInfo.domsrc
+    if (!cachedImageInfo.addedToImageContainer && cachedImageInfo.img) {
       const imageText = document.querySelector(`#${id}`)
       if (imageText) {
-        addImageToContainer(imageText, imageInfo.img, className)
-        this.loadImageMap.set(src, { ...imageInfo, addedToImageContainer: true })
+        addImageToContainer(imageText, cachedImageInfo.img, className)
+        this.loadImageMap.set(src, { ...cachedImageInfo, addedToImageContainer: true })
       }
     }
   }

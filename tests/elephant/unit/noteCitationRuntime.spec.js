@@ -30,6 +30,7 @@ beforeEach(() => {
 
 afterEach(() => {
   window.__ELEPHANT_NOTE_CITATION_RUNTIME__?.dispose?.()
+  vi.useRealTimers()
   document.body.innerHTML = ''
 })
 
@@ -122,19 +123,24 @@ describe('note text citations', () => {
       .toContain('Citation copiée')
   })
 
-  it('intercepts a citation link, opens the source note and keeps navigation inside Elephant', () => {
+  it('intercepts a citation link, opens the source note and recenters the quoted passage', () => {
+    vi.useFakeTimers()
     const quote = encodeQuoteAnchor('Passage source')
     document.body.innerHTML = `
       <div class="en-note-topbar-actions"></div>
       <div class="en-editor-host">
         <a id="citation" href="/Sources/Source.md#quote=${quote}">Source</a>
+        <p id="quoted-passage">Passage source</p>
       </div>
     `
+    const quotedPassage = document.getElementById('quoted-passage')
+    quotedPassage.scrollIntoView = vi.fn()
     const vaultStore = createVaultStore('Projects/Destination.md')
     installNoteCitationRuntime({ vaultStore, target: window })
 
     const click = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 })
     document.getElementById('citation').dispatchEvent(click)
+    vi.runOnlyPendingTimers()
 
     expect(click.defaultPrevented).toBe(true)
     expect(vaultStore.openNote).toHaveBeenCalledWith({
@@ -142,6 +148,10 @@ describe('note text citations', () => {
       title: 'Source',
       kind: 'note',
       type: 'note'
+    })
+    expect(quotedPassage.scrollIntoView).toHaveBeenCalledWith({
+      behavior: 'smooth',
+      block: 'center'
     })
   })
 })

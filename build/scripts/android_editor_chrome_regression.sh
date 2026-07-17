@@ -113,7 +113,21 @@ open_seeded_note
 require_accessible_control() {
   local label="$1"
   if ! grep -Fq "$label" "$UI_TREE"; then
-    if [ "$label" = 'Note title' ] && grep -Eq 'text="[^"]+"[^>]*class="android.widget.EditText"' "$UI_TREE"; then
+    if [ "$label" = 'Note title' ] && python3 - "$UI_TREE" <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+
+root = ET.parse(sys.argv[1]).getroot()
+for node in root.iter('node'):
+    if node.attrib.get('class') != 'android.widget.EditText' or not node.attrib.get('text', '').strip():
+        continue
+    match = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', node.attrib.get('bounds', ''))
+    if match and int(match.group(2)) < 600:
+        raise SystemExit(0)
+raise SystemExit(1)
+PY
+    then
       return 0
     fi
     echo "Missing accessible note-editor control: $label" >&2

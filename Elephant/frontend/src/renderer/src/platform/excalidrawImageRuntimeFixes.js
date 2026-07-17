@@ -58,6 +58,40 @@ const localSourceToPath = (value = '') => {
   return decodeSafe(text)
 }
 
+const isAbsoluteLocalPath = (pathname = '') => {
+  const value = normalizeSlashes(pathname)
+  return value.startsWith('/') || /^[a-zA-Z]:\//.test(value) || value.startsWith('//')
+}
+
+const activeVaultRoot = () => {
+  try {
+    return normalizeSlashes(globalThis.__ELEPHANT_GET_ACTIVE_VAULT_PATH__?.() || '')
+  } catch (error) {
+    pushExcalidrawImageLog('warn', 'active vault resolver failed', { error: errorDetails(error) })
+    return ''
+  }
+}
+
+const resolveExcalidrawAssetPath = (source = '') => {
+  const decoded = normalizeSlashes(localSourceToPath(source))
+  if (!decoded || isAbsoluteLocalPath(decoded)) return decoded
+  const marker = '.assets/'
+  const markerIndex = decoded.indexOf(marker)
+  const vaultRoot = activeVaultRoot()
+  if (!vaultRoot || markerIndex < 0) return decoded
+  const vaultRelativePath = decoded.slice(markerIndex)
+  const resolved = globalThis.window?.path?.join
+    ? globalThis.window.path.join(vaultRoot, vaultRelativePath)
+    : `${vaultRoot.replace(/\/+$/, '')}/${vaultRelativePath}`
+  pushExcalidrawImageLog('info', 'resolved vault-relative drawing path', {
+    source,
+    vaultRoot,
+    vaultRelativePath,
+    resolved
+  })
+  return normalizeSlashes(resolved)
+}
+
 const pathToDisplayUrl = (pathname) => {
   try {
     return convertFileSrc(pathname)
@@ -133,6 +167,9 @@ const readLocalImageDataUrl = async (pathname = '') => {
   })
 
   try {
+    // The Tauri bridge exposes pathExistsSync as a metadata-cache lookup. A cold
+    // cache is not proof that a freshly-written preview is missing, so readFile
+    // remains the authoritative operation.
     const data = await readFile.call(window.fileUtils, pathname)
     const byteLength = dataByteLength(data)
     let dataUrl = ''
@@ -197,8 +234,16 @@ const removeLocalImageLoaders = (img) => {
 
 const refreshImageSource = (img, source) => {
   if (img?.dataset?.localImageLoaded === 'true') return
-  const pathname = normalizeSlashes(localSourceToPath(source))
-  if (!pathname || !EXCALIDRAW_ASSET_RE.test(pathname)) return
+  const pathname = resolveExcalidrawAssetPath(source)
+  if (!pathname || !EXCALIDRAW_ASSET_RE.test(normalizeSlashes(pathname))) return
+  if (!isAbsoluteLocalPath(pathname)) {
+    pushExcalidrawImageLog('warn', 'drawing source remains relative after resolution', {
+      source,
+      pathname,
+      vaultRoot: activeVaultRoot()
+    })
+    return
+  }
   if (isTransientLocalImageSource(img)) return
   const token = `${pathname}:${cacheBustSerial}`
   if (img.getAttribute(CACHE_BUST_ATTR) === token) return
@@ -229,8 +274,8 @@ const ensureEditButton = (img, source) => {
   button.addEventListener('click', (event) => {
     event.preventDefault()
     event.stopPropagation()
-    const pathname = img.dataset.elephantExcalidrawPath || localSourceToPath(source)
-    pushExcalidrawImageLog('info', 'edit requested', { pathname })
+    const pathname = img.dataset.elephantExcalidrawPath || resolveExcalidrawAssetPath(source)
+    pushExcalidrawImageLog('info', 'edit requested', { source, pathname })
     bus.emit('open-excalidraw-from-image', pathname)
   }, true)
   container.appendChild(button)
@@ -239,8 +284,16 @@ const ensureEditButton = (img, source) => {
 const repairFailedImageContainer = async (container) => {
   if (!container?.classList?.contains('ag-image-fail')) return false
   const source = container.dataset.imageSrc || container.dataset.imageDomsrc || ''
-  const pathname = normalizeSlashes(localSourceToPath(source))
-  if (!pathname || !EXCALIDRAW_ASSET_RE.test(pathname)) return false
+  const pathname = resolveExcalidrawAssetPath(source)
+  if (!pathname || !EXCALIDRAW_ASSET_RE.test(normalizeSlashes(pathname))) return false
+  if (!isAbsoluteLocalPath(pathname)) {
+    pushExcalidrawImageLog('error', 'failed image repair cannot resolve an absolute path', {
+      source,
+      pathname,
+      vaultRoot: activeVaultRoot()
+    })
+    return false
+  }
 
   pushExcalidrawImageLog('info', 'failed image repair:start', {
     pathname,
@@ -265,8 +318,8 @@ const repairFailedImageContainer = async (container) => {
     container.classList.add('ag-image-success')
     container.removeAttribute('title')
     delete container.dataset.imageError
-    ensureEditButton(img, source)
-    pushExcalidrawImageLog('info', 'failed image repair:success', { pathname })
+    ensureEditButton(img, pathname)
+    pushExcalidrawImageLog('info', 'failed image repair:success', { source, pathname })
     return true
   } catch (error) {
     container.dataset.imageError = error?.message || 'local-file-read-error'
@@ -282,9 +335,11 @@ const repairFailedImageContainer = async (container) => {
 const repairImage = (img) => {
   const source = imageSource(img) || img.dataset.elephantExcalidrawPath || ''
   if (!source) return false
+  const resolvedPath = resolveExcalidrawAssetPath(source)
+  if (resolvedPath) img.dataset.elephantExcalidrawPath = resolvedPath
   removeLocalImageLoaders(img)
-  refreshImageSource(img, source)
-  ensureEditButton(img, source)
+  refreshImageSource(img, resolvedPath || source)
+  ensureEditButton(img, resolvedPath || source)
   return true
 }
 
@@ -299,7 +354,8 @@ const repairAllImages = () => {
   if (repaired || failedContainers.length) {
     pushExcalidrawImageLog('info', 'repair scan completed', {
       recognizedImages: repaired,
-      failedContainers: failedContainers.length
+      failedContainers: failedContainers.length,
+      vaultRoot: activeVaultRoot()
     })
   }
   return repaired
@@ -307,7 +363,10 @@ const repairAllImages = () => {
 
 const refreshAllDrawings = () => {
   cacheBustSerial = Date.now()
-  pushExcalidrawImageLog('info', 'image cache invalidated', { cacheBustSerial })
+  pushExcalidrawImageLog('info', 'image cache invalidated', {
+    cacheBustSerial,
+    vaultRoot: activeVaultRoot()
+  })
   repairAllImages()
 }
 
@@ -367,6 +426,7 @@ export const installExcalidrawImageRuntimeFixes = (target = globalThis) => {
     if (source) {
       pushExcalidrawImageLog('warn', 'browser image element emitted an error', {
         source,
+        resolvedPath: resolveExcalidrawAssetPath(source),
         src: img.getAttribute('src') || '',
         dataSource: img.getAttribute('data-src') || ''
       })
@@ -398,7 +458,8 @@ export const installExcalidrawImageRuntimeFixes = (target = globalThis) => {
   pushExcalidrawImageLog('info', 'runtime fixes installed', {
     hasReadFile: typeof target.fileUtils?.readFile === 'function',
     hasStat: typeof target.fileUtils?.stat === 'function',
-    hasPathExistsSync: typeof target.fileUtils?.pathExistsSync === 'function'
+    hasPathExistsSync: typeof target.fileUtils?.pathExistsSync === 'function',
+    vaultRoot: activeVaultRoot()
   })
   return runtime
 }

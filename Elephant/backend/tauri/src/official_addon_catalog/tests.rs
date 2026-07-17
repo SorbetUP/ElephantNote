@@ -2,6 +2,19 @@
 mod tests {
   use super::*;
 
+  fn sync_item(version: &str) -> CatalogAddon {
+    serde_json::from_value(serde_json::json!({
+      "id": "elephant.sync",
+      "slug": "sync",
+      "name": "Sync",
+      "version": version,
+      "official": true,
+      "manifestPath": "official/sync/manifest.json",
+      "entryPath": "official/sync/main.service.js"
+    }))
+    .unwrap()
+  }
+
   #[test]
   fn integrated_catalog_contains_dashboard_and_mobile_code_execution() {
     let addons = catalog().unwrap();
@@ -81,16 +94,7 @@ mod tests {
 
   #[test]
   fn future_source_only_sync_versions_are_not_silently_downgraded() {
-    let item: CatalogAddon = serde_json::from_value(serde_json::json!({
-      "id": "elephant.sync",
-      "slug": "sync",
-      "name": "Sync",
-      "version": "1.3.0",
-      "official": true,
-      "manifestPath": "official/sync/manifest.json",
-      "entryPath": "official/sync/main.service.js"
-    }))
-    .unwrap();
+    let item = sync_item("1.3.0");
     assert!(!uses_legacy_sync_package(&item));
     assert!(!available_for_platform(&item, "macos-aarch64"));
   }
@@ -106,19 +110,35 @@ mod tests {
     };
     let bytes = fetch_legacy_sync_bytes(path).expect("download immutable Sync package");
     assert_eq!(blake3::hash(&bytes).to_hex().to_string(), expected_hash);
+    validate_prebuilt_package(&sync_item(LEGACY_SYNC_VERSION), &bytes)
+      .expect("real Sync package contains its declared executable");
+  }
 
-    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).expect("valid Sync .enaddon archive");
-    let manifest: Value = {
-      let mut entry = archive.by_name("manifest.json").expect("Sync manifest");
-      serde_json::from_reader(&mut entry).expect("valid Sync manifest")
-    };
-    let sidecar = manifest
-      .pointer(&format!("/native/sidecars/{platform}"))
-      .and_then(Value::as_str)
-      .expect("Sync sidecar for the current platform")
-      .to_string();
-    let metadata = archive.by_name(&sidecar).expect("declared Sync executable in archive");
-    assert!(metadata.size() > 0);
+  #[test]
+  fn incomplete_prebuilt_sync_package_is_rejected_before_installation() {
+    let platform = platform_key();
+    let sidecar = format!("native/{platform}/elephant-sync-service");
+    let manifest = serde_json::json!({
+      "id": "elephant.sync",
+      "version": LEGACY_SYNC_VERSION,
+      "runtime": { "entry": "main.service.js" },
+      "permissions": { "native": true },
+      "native": {
+        "runner": "service",
+        "sidecars": { (platform): sidecar.clone() }
+      }
+    });
+    let mut writer = ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+    writer.start_file("manifest.json", options).unwrap();
+    writer.write_all(serde_json::to_string(&manifest).unwrap().as_bytes()).unwrap();
+    writer.start_file("main.service.js", options).unwrap();
+    writer.write_all(b"export default {};").unwrap();
+    let bytes = writer.finish().unwrap().into_inner();
+
+    let error = validate_prebuilt_package(&sync_item(LEGACY_SYNC_VERSION), &bytes)
+      .expect_err("a package without its declared service must fail before installation");
+    assert!(error.contains(&sidecar));
   }
 
   #[test]
@@ -126,24 +146,14 @@ mod tests {
     let platform = platform_key();
     let sidecar = format!("native/{platform}/elephant-sync-service");
     let manifest = serde_json::json!({
+      "permissions": { "native": true },
       "native": {
-        "sidecars": {
-          (platform.clone()): sidecar.clone()
-        }
+        "runner": "service",
+        "sidecars": { (platform): sidecar.clone() }
       }
     });
-    let item: CatalogAddon = serde_json::from_value(serde_json::json!({
-      "id": "elephant.sync",
-      "slug": "sync",
-      "name": "Sync",
-      "version": "1.2.0",
-      "official": true,
-      "manifestPath": "official/sync/manifest.json",
-      "entryPath": "official/sync/main.service.js"
-    }))
-    .unwrap();
     let files = BTreeMap::from([("manifest.json".to_string(), Vec::new())]);
-    let error = require_declared_sidecar(&item, &manifest, &files)
+    let error = require_declared_sidecar(&sync_item(LEGACY_SYNC_VERSION), &manifest, &files)
       .expect_err("missing native executables must fail during package construction");
     assert!(error.contains(&sidecar));
   }

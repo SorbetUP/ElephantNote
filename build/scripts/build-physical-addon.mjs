@@ -157,6 +157,18 @@ const stagedSidecar = join(stagingDir, safeModulePath(sidecarRelativePath, 'nati
 mkdirSync(dirname(stagedSidecar), { recursive: true })
 cpSync(binaryPath, stagedSidecar)
 
+if (process.env.ELEPHANT_ADDON_MATERIALIZE_SOURCE === '1') {
+  const sourceSidecar = resolve(addonDir, safeModulePath(sidecarRelativePath, 'native executable path'))
+  mkdirSync(dirname(sourceSidecar), { recursive: true })
+  cpSync(binaryPath, sourceSidecar)
+  console.log(`[physical-addon] materialized=${sourceSidecar}`)
+}
+
+if (process.env.ELEPHANT_ADDON_MATERIALIZE_ONLY === '1') {
+  console.log(`[physical-addon] runner=${runner} modules=${copiedModules.size}`)
+  process.exit(0)
+}
+
 const outputName = `${safeId}-${manifest.version}-${platform}.enaddon`
 const outputPath = join(releaseDir, outputName)
 const packagerOutput = run('cargo', [

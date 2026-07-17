@@ -40,7 +40,7 @@ const officialAddonFixture = (() => {
   }
   const addonEntry = (addonId) => {
     const entry = entries.get(addonId)
-    if (!entry) throw new Error(\`Unknown official addon: \${addonId}\`)
+    if (!entry) throw new Error('Unknown official addon: ' + addonId)
     return entry
   }
   const addonRoot = (entry) => path.dirname(path.join(officialAddonsRoot, entry.manifestPath))
@@ -78,8 +78,8 @@ const officialAddonFixture = (() => {
     const root = path.resolve(addonRoot(entry))
     const normalized = String(modulePath || '').replaceAll('\\', '/').replace(/^\/+/, '')
     const resolved = path.resolve(root, normalized)
-    if (resolved !== root && !resolved.startsWith(\`\${root}\${path.sep}\`)) {
-      throw new Error(\`Official addon module escaped package: \${addonId}/\${modulePath}\`)
+    if (resolved !== root && !resolved.startsWith(root + path.sep)) {
+      throw new Error('Official addon module escaped package: ' + addonId + '/' + modulePath)
     }
     return resolved
   }
@@ -117,13 +117,13 @@ const officialAddonFixture = (() => {
     evidence: 'Renderer E2E uses an explicit service mock; native package presence is validated separately.'
   })
   const callBroker = (addonId, method, params = {}) => {
-    const key = \`\${addonId}:\${String(params.key || '')}\`
+    const key = addonId + ':' + String(params.key || '')
     if (method === 'storage.get') return storage.get(key) ?? null
     if (method === 'storage.set') { storage.set(key, params.value); save(); return params.value }
     if (method === 'storage.remove') { storage.delete(key); save(); return true }
     if (method === 'storage.entries') {
       return [...storage.entries()]
-        .filter(([entryKey]) => entryKey.startsWith(\`\${addonId}:\`))
+        .filter(([entryKey]) => entryKey.startsWith(addonId + ':'))
         .map(([entryKey, value]) => [entryKey.slice(addonId.length + 1), value])
     }
     if (method === 'notes.list') return allMarkdownEntries()
@@ -159,12 +159,12 @@ const officialAddonFixture = (() => {
     serviceStatus,
     serviceStart: (addonId) => {
       runningServices.add(addonId)
-      console.warn(\`[e2e-addon-service-mock] start \${addonId}\`)
+      console.warn('[e2e-addon-service-mock] start ' + addonId)
       return serviceStatus(addonId)
     },
     serviceStop: (addonId) => {
       runningServices.delete(addonId)
-      console.warn(\`[e2e-addon-service-mock] stop \${addonId}\`)
+      console.warn('[e2e-addon-service-mock] stop ' + addonId)
       return serviceStatus(addonId)
     },
     serviceCall: (addonId, method, params) => ({ ok: true, addonId, method, params, mocked: true })

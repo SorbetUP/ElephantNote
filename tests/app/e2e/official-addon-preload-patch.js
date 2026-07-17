@@ -175,6 +175,7 @@ const officialAddonFixture = (() => {
 const addonCases = `    case 'tauri_addons_list':
     case 'tauri_addons_list_full': return officialAddonFixture.listInstalled()
     case 'tauri_addons_catalog_list': return officialAddonFixture.listCatalog()
+    case 'tauri_official_addons_catalog_list': return officialAddonFixture.listCatalog()
     case 'tauri_addons_install': return officialAddonFixture.install(params.packagePath)
     case 'tauri_addons_catalog_install':
     case 'tauri_addons_install_catalog':

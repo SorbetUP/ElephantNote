@@ -175,6 +175,9 @@ const searchQuery = (params = {}) => {
 
 const readMarkdown = (pathname) => {
   const fullPath = path.isAbsolute(pathname || '') ? pathname : resolveVaultPath(pathname)
+  if (!fs.existsSync(fullPath) && normalizeSlashes(pathname) === '.elephantnote/Dashboard.md') {
+    writeMarkdown(pathname, '# Dashboard\n')
+  }
   return fs.readFileSync(fullPath, 'utf8')
 }
 
@@ -217,7 +220,8 @@ const invoke = async (command, payload = {}) => {
     case 'tauri_wiki_proposals': return []
     case 'tauri_addons_list':
     case 'tauri_addons_list_full':
-    case 'tauri_addons_catalog_list': return []
+    case 'tauri_addons_catalog_list':
+    case 'tauri_official_addons_catalog_list': return []
     case 'tauri_atomic_features_list': return []
     case 'tauri_atomic_features_get': return null
     case 'tauri_features_get': return {}

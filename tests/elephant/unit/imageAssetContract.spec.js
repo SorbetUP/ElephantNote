@@ -20,7 +20,7 @@ describe('common Markdown image asset contract', () => {
       '![diagram](.assets/diagram.png "preview")'
     )
     expect(markdownImage('line\n\n', '.assets/diagram.png')).toBe(
-      '![line  ](.assets/diagram.png)'
+      '![line](.assets/diagram.png)'
     )
   })
 })

@@ -353,6 +353,35 @@ const repairImage = (img) => {
   return true
 }
 
+const reloadImageFromDisk = async (img, source, reason = 'cache-invalidation') => {
+  const pathname = resolveExcalidrawAssetPath(source)
+  if (!pathname || !isAbsoluteLocalPath(pathname) || !EXCALIDRAW_ASSET_RE.test(normalizeSlashes(pathname))) return false
+  pushExcalidrawImageLog('info', 'cache refresh:start', { pathname, reason })
+  try {
+    const dataUrl = await readLocalImageDataUrl(pathname)
+    img.dataset.originalSrc = img.dataset.originalSrc || source
+    img.dataset.localPath = pathname
+    img.dataset.elephantExcalidrawPath = pathname
+    img.dataset.localImageLoaded = 'true'
+    img.dataset.resolvedSrc = dataUrl
+    img.setAttribute(CACHE_BUST_ATTR, `${pathname}:${cacheBustSerial}`)
+    img.src = dataUrl
+    pushExcalidrawImageLog('info', 'cache refresh:success', {
+      pathname,
+      reason,
+      dataUrlLength: dataUrl.length
+    })
+    return true
+  } catch (error) {
+    pushExcalidrawImageLog('error', 'cache refresh:failed', {
+      pathname,
+      reason,
+      error: errorDetails(error)
+    })
+    return false
+  }
+}
+
 const repairAllImages = () => {
   const images = document.querySelectorAll('img')
   let repaired = 0
@@ -366,11 +395,22 @@ const repairAllImages = () => {
 
 const refreshAllDrawings = () => {
   cacheBustSerial = Date.now()
+  const refreshTargets = []
+  for (const img of document.querySelectorAll('img')) {
+    const source = imageSource(img) || img.dataset.elephantExcalidrawPath || ''
+    if (!source) continue
+    repairImage(img)
+    refreshTargets.push({ img, source })
+  }
+  const failedContainers = document.querySelectorAll('.ag-image-fail[data-image-src], .ag-image-fail[data-image-domsrc]')
+  for (const container of failedContainers) void repairFailedImageContainer(container)
+  for (const { img, source } of refreshTargets) void reloadImageFromDisk(img, source)
   pushExcalidrawImageLog('info', 'image cache invalidated', {
     cacheBustSerial,
-    vaultRoot: activeVaultRoot()
+    vaultRoot: activeVaultRoot(),
+    refreshTargets: refreshTargets.length,
+    failedContainers: failedContainers.length
   })
-  repairAllImages()
 }
 
 const removeInstalledUi = () => {

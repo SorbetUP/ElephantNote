@@ -358,9 +358,9 @@ export const installNoteCitationRuntime = ({
     }
 
     const notePath = normalizeVaultPath(store.openedNotePath || '')
-    const noteTitle = target.document.querySelector('.en-note-title-input')?.value
-      || notePath.split('/').pop()?.replace(/\.md$/i, '')
-      || 'Source'
+    const noteTitle = target.document.querySelector('.en-note-title-input')?.value ||
+      notePath.split('/').pop()?.replace(/\.md$/i, '') ||
+      'Source'
     const citation = buildNoteCitationMarkdown({
       text: selection.toString(),
       notePath,

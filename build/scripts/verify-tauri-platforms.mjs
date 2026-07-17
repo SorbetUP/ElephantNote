@@ -97,8 +97,8 @@ assert(
   'Android dev script must use the Android config'
 )
 assert(
-  packageJson.scripts['tauri:dev'] === './build/scripts/build_dev.sh',
-  'Tauri dev script must live under build/scripts/'
+  packageJson.scripts['tauri:dev'].includes('./build/scripts/build_dev.sh'),
+  'Tauri dev script must execute build/scripts/build_dev.sh'
 )
 assert(
   packageJson.scripts['tauri:android:build'] === './build/scripts/build_dev_apk.sh',

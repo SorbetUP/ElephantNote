@@ -19,6 +19,8 @@ const invoke = (command, payload = {}, target = globalThis) => {
 
 export const externalAddonApi = Object.freeze({
   list: () => invoke('tauri_addons_list'),
+  officialList: () => invoke('tauri_official_addons_catalog_list'),
+  officialInstall: (addonId) => invoke('tauri_official_addons_catalog_install', { addonId }),
   install: (packagePath) => invoke('tauri_addons_install', { packagePath }),
   uninstall: (addonId) => invoke('tauri_addons_uninstall', { addonId }),
   setEnabled: (addonId, enabled) => invoke('tauri_addons_set_enabled', { addonId, enabled }),
@@ -47,6 +49,34 @@ const isOfficialRecord = (record = {}) => (
   record.manifest?.source === 'official' ||
   record.manifest?.official === true
 )
+
+export const reconcileOfficialAddonRecords = (records = [], catalogue = []) => {
+  const officialIds = new Set(
+    catalogue
+      .filter((item) => item?.official === true && safeString(item?.id))
+      .map((item) => safeString(item.id))
+  )
+  return records.map((record) => {
+    const id = safeString(record?.manifest?.id)
+    if (!officialIds.has(id)) return record
+    return {
+      ...record,
+      source: 'official',
+      official: true,
+      manifest: {
+        ...record.manifest,
+        source: 'official',
+        official: true
+      }
+    }
+  })
+}
+
+export const isMissingNativeServiceError = (error) => {
+  const message = safeString(error?.message || error)
+  return message.includes('Addon service executable is unavailable') ||
+    message.includes('Addon sidecar executable is unavailable')
+}
 
 const runtimeManifest = (record = {}) => ({
   ...record.manifest,
@@ -344,7 +374,15 @@ export class ExternalAddonController {
   }
 
   async load() {
-    const records = await externalAddonApi.list()
+    const installedRecords = await externalAddonApi.list()
+    let records = installedRecords
+    try {
+      records = reconcileOfficialAddonRecords(installedRecords, await externalAddonApi.officialList())
+    } catch (error) {
+      this.logger?.warn?.('official addon provenance reconciliation failed', {
+        error: error?.message || String(error)
+      })
+    }
     const communityEnabled = await externalAddonApi.getCommunityEnabled()
     const safeMode = await getTrustedSafeMode()
     for (const record of records) this.register(record)
@@ -357,10 +395,39 @@ export class ExternalAddonController {
         if (safeMode && trusted) this.logger?.warn?.('trusted addon disabled by safe mode', { id: record.manifest.id })
         continue
       }
-      try { await this.manager.enable(record.manifest.id) }
-      catch (error) { this.logger?.error?.('external addon startup failed', { id: record.manifest.id, error: error?.message || String(error) }) }
+      try {
+        await this.manager.enable(record.manifest.id)
+      } catch (error) {
+        if (official && isMissingNativeServiceError(error)) {
+          try {
+            await this.repairOfficialPackage(record)
+            continue
+          } catch (repairError) {
+            this.logger?.error?.('official addon native package repair failed', {
+              id: record.manifest.id,
+              error: repairError?.message || String(repairError)
+            })
+          }
+        }
+        this.logger?.error?.('external addon startup failed', { id: record.manifest.id, error: error?.message || String(error) })
+      }
     }
     return records
+  }
+
+  async repairOfficialPackage(record) {
+    const addonId = record.manifest.id
+    const repaired = await externalAddonApi.officialInstall(addonId)
+    if (this.manager.get(addonId)) {
+      await this.manager.disable(addonId).catch(() => {})
+      this.manager.unregister(addonId)
+    }
+    const [normalized] = reconcileOfficialAddonRecords([repaired], [{ id: addonId, official: true }])
+    this.records.set(addonId, normalized)
+    this.register(normalized)
+    await this.manager.enable(addonId)
+    this.logger?.info?.('official addon native package repaired', { id: addonId })
+    return normalized
   }
 
   register(record) {

@@ -12,7 +12,6 @@ use crate::addon_runtime_access::{canonical_vault_root, normalize_relative_path,
 
 type R<T> = Result<T, String>;
 
-const MAX_LISTED_NOTES: usize = 1_000;
 const MAX_DIRECTORY_DEPTH: usize = 64;
 const MAX_NOTE_BYTES: u64 = 5 * 1024 * 1024;
 
@@ -141,9 +140,6 @@ fn collect_markdown_notes(root: &Path, prefix: &str, scopes: &[String]) -> R<Vec
         size: metadata.len(),
         modified_at: modified_at(&metadata),
       });
-      if notes.len() >= MAX_LISTED_NOTES {
-        return Err(format!("Addon note listing exceeded the maximum of {MAX_LISTED_NOTES} notes"));
-      }
     }
   }
 

@@ -22,10 +22,13 @@ contextBridge.exposeInMainWorld('process', {
 })
 
 const fixturePath = path.join(__dirname, 'tauri-preload.js')
-const fixtureSource = fs.readFileSync(fixturePath, 'utf8').replace(
+let fixtureSource = fs.readFileSync(fixturePath, 'utf8').replace(
   "contextBridge.exposeInMainWorld('__MARKTEXT_RUNTIME__', 'tauri')\n",
   ''
 )
+if (process.env.ELEPHANT_E2E_OFFICIAL_ADDONS) {
+  fixtureSource = require('./official-addon-preload-patch')(fixtureSource)
+}
 const fixtureModule = new Module(fixturePath, module)
 fixtureModule.filename = fixturePath
 fixtureModule.paths = Module._nodeModulePaths(path.dirname(fixturePath))

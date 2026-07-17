@@ -81,6 +81,9 @@ mod tests {
 
   #[test]
   fn current_sync_package_downloads_with_its_declared_service() {
+    if std::env::var_os("CI").is_none() {
+      return;
+    }
     let platform = platform_key();
     let Some((path, expected_hash)) = legacy_sync_package(&platform) else {
       return;

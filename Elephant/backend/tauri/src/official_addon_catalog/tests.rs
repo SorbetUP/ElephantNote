@@ -56,7 +56,7 @@ mod tests {
           "requiresPlatformPackage": true,
           "packages": {{
             "{platform}": {{
-              "path": "official/sync/releases/elephant.sync-1.2.1-{platform}.enaddon",
+              "path": "official/sync/releases/elephant.sync-1.2.0-{platform}.enaddon",
               "hash": "invalid"
             }}
           }}
@@ -77,6 +77,29 @@ mod tests {
       assert!(hash.bytes().all(|byte| byte.is_ascii_hexdigit()));
     }
     assert!(legacy_sync_package("android-aarch64").is_none());
+  }
+
+  #[test]
+  fn current_sync_package_downloads_with_its_declared_service() {
+    let platform = platform_key();
+    let Some((path, expected_hash)) = legacy_sync_package(&platform) else {
+      return;
+    };
+    let bytes = fetch_legacy_sync_bytes(path).expect("download immutable Sync package");
+    assert_eq!(blake3::hash(&bytes).to_hex().to_string(), expected_hash);
+
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).expect("valid Sync .enaddon archive");
+    let manifest: Value = {
+      let mut entry = archive.by_name("manifest.json").expect("Sync manifest");
+      serde_json::from_reader(&mut entry).expect("valid Sync manifest")
+    };
+    let sidecar = manifest
+      .pointer(&format!("/native/sidecars/{platform}"))
+      .and_then(Value::as_str)
+      .expect("Sync sidecar for the current platform")
+      .to_string();
+    let metadata = archive.by_name(&sidecar).expect("declared Sync executable in archive");
+    assert!(metadata.size() > 0);
   }
 
   #[test]

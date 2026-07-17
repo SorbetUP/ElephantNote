@@ -27,18 +27,18 @@ const invoke = async (command, payload = {}) => {
   const sequence = ++observableInvokeSequence
   const startedAt = Date.now()
   const safePayload = redactObservableValue(payload)
-  console.log(\`[e2e-tauri:invoke:start] \${JSON.stringify({ sequence, command, payload: safePayload })}\`)
+  console.log('[e2e-tauri:invoke:start] ' + JSON.stringify({ sequence, command, payload: safePayload }))
   try {
     const result = await invokeImplementation(command, payload)
-    console.log(\`[e2e-tauri:invoke:done] \${JSON.stringify({
+    console.log('[e2e-tauri:invoke:done] ' + JSON.stringify({
       sequence,
       command,
       durationMs: Date.now() - startedAt,
       result: redactObservableValue(result)
-    })}\`)
+    }))
     return result
   } catch (error) {
-    console.error(\`[e2e-tauri:invoke:error] \${JSON.stringify({
+    console.error('[e2e-tauri:invoke:error] ' + JSON.stringify({
       sequence,
       command,
       durationMs: Date.now() - startedAt,
@@ -47,13 +47,13 @@ const invoke = async (command, payload = {}) => {
         message: error?.message || String(error),
         stack: error?.stack || ''
       }
-    })}\`)
+    }))
     throw error
   }
 }
 `
 
-const strictUnhandledSource = String.raw`      const error = new Error(\`Unhandled E2E Tauri invoke: \${command} \${JSON.stringify(redactObservableValue(params))}\`)
+const strictUnhandledSource = String.raw`      const error = new Error('Unhandled E2E Tauri invoke: ' + command + ' ' + JSON.stringify(redactObservableValue(params)))
       console.error('[e2e-tauri] unhandled invoke', command, redactObservableValue(params))
       if (process.env.ELEPHANT_E2E_STRICT_TAURI_COMMANDS !== '0') throw error
       return null`

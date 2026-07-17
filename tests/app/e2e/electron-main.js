@@ -84,6 +84,10 @@ const createWindow = async () => {
 
 app.commandLine.appendSwitch('disable-gpu')
 app.commandLine.appendSwitch('disable-dev-shm-usage')
+if (process.env.ELEPHANT_ACCEPTANCE_CDP_PORT) {
+  app.commandLine.appendSwitch('remote-debugging-port', String(process.env.ELEPHANT_ACCEPTANCE_CDP_PORT))
+  console.info(`[acceptance-runner] CDP listening on ${process.env.ELEPHANT_ACCEPTANCE_CDP_PORT}`)
+}
 app.whenReady().then(createWindow).catch((error) => {
   console.error('[e2e-shell] failed to start', error)
   app.exit(1)

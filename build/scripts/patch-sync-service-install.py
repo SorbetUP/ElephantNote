@@ -7,6 +7,7 @@ SERVICES = ROOT / "Elephant/backend/tauri/src/addon_services.rs"
 
 def replace_once(source: str, old: str, new: str, label: str) -> str:
     count = source.count(old)
+    print(f"[sync-repair] {label}: matches={count}", flush=True)
     if count != 1:
         raise SystemExit(f"{label}: expected one match, found {count}")
     return source.replace(old, new, 1)
@@ -16,8 +17,8 @@ source = CATALOG.read_text()
 source = replace_once(
     source,
     "const MAX_ENTRY_BYTES: u64 = 8 * 1024 * 1024;\nconst MAX_PACKAGE_FILE_BYTES: u64 = 128 * 1024 * 1024;",
-    "const MAX_ENTRY_BYTES: u64 = 8 * 1024 * 1024;\nconst MAX_PACKAGE_BYTES: u64 = 25 * 1024 * 1024;\nconst MAX_PACKAGE_FILE_BYTES: u64 = 128 * 1024 * 1024;",
-    "package byte limit",
+    "const MAX_ENTRY_BYTES: u64 = 8 * 1024 * 1024;\nconst MAX_PACKAGE_BYTES: u64 = 25 * 1024 * 1024;\nconst MAX_PACKAGE_FILE_BYTES: u64 = 128 * 1024 * 1024;\nconst LEGACY_SYNC_ROOT: &str = \"https://raw.githubusercontent.com/SorbetUP/ElephantNote/2a4547c17e3ce1e581e9956dc970c37039d49329/\";",
+    "package byte limit and immutable Sync root",
 )
 
 platform_helpers = '''fn platform_key() -> String {
@@ -39,7 +40,32 @@ platform_helpers = '''fn platform_key() -> String {
   format!("{os}-{arch}")
 }
 
+fn legacy_sync_package(platform: &str) -> Option<(&'static str, &'static str)> {
+  match platform {
+    "linux-x86_64" => Some((
+      "addons/sync/releases/elephant.sync-1.2.0-linux-x86_64.enaddon",
+      "6a9996f9542616d18835d807a03577a976ffbb2c9b321ad24fe8ce37cbe9eaad",
+    )),
+    "macos-aarch64" => Some((
+      "addons/sync/releases/elephant.sync-1.2.0-macos-aarch64.enaddon",
+      "ada18591bb94f4a7218c098dee79673d652c77031562bd9f2c856b051c3ccda3",
+    )),
+    "macos-x86_64" => Some((
+      "addons/sync/releases/elephant.sync-1.2.0-macos-x86_64.enaddon",
+      "bd3d5d28f561d3fa88042025729067d6f5ba044663dc490b7359b1d469118bc3",
+    )),
+    "windows-x86_64" => Some((
+      "addons/sync/releases/elephant.sync-1.2.0-windows-x86_64.enaddon",
+      "318d9ba10d85d9496fadcf539bed4fb6391da9cc1d53f20cc12c5dc2560aa8f6",
+    )),
+    _ => None,
+  }
+}
+
 fn available_for_platform(item: &CatalogAddon, platform: &str) -> bool {
+  if item.id == "elephant.sync" && item.packages.is_empty() {
+    return legacy_sync_package(platform).is_some();
+  }
   if item.packages.is_empty() {
     !item.requires_platform_package
   } else {
@@ -48,7 +74,12 @@ fn available_for_platform(item: &CatalogAddon, platform: &str) -> bool {
 }
 
 '''
-source = replace_once(source, "fn parse_catalog(bytes: &[u8])", platform_helpers + "fn parse_catalog(bytes: &[u8])", "platform helpers")
+source = replace_once(
+    source,
+    "fn parse_catalog(bytes: &[u8])",
+    platform_helpers + "fn parse_catalog(bytes: &[u8])",
+    "platform and immutable Sync package helpers",
+)
 
 sidecar_function = '''fn current_sidecar_path(manifest: &Value) -> Option<String> {
   let platform = if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
@@ -147,8 +178,7 @@ new_temporary = '''fn temporary_package_path(item: &CatalogAddon) -> PathBuf {
   ))
 }
 
-fn download_prebuilt_package(item: &CatalogAddon, package_path: &str, package_hash: &str) -> R<PathBuf> {
-  let bytes = fetch_official_bytes(package_path, MAX_PACKAGE_BYTES)?;
+fn write_verified_package(item: &CatalogAddon, bytes: Vec<u8>, package_hash: &str) -> R<PathBuf> {
   let actual_hash = blake3::hash(&bytes).to_hex().to_string();
   if actual_hash != package_hash.trim().to_ascii_lowercase() {
     return Err(format!("Official addon package hash mismatch for {}", item.id));
@@ -158,8 +188,64 @@ fn download_prebuilt_package(item: &CatalogAddon, package_path: &str, package_ha
   Ok(path)
 }
 
+fn download_prebuilt_package(item: &CatalogAddon, package_path: &str, package_hash: &str) -> R<PathBuf> {
+  let bytes = fetch_official_bytes(package_path, MAX_PACKAGE_BYTES)?;
+  write_verified_package(item, bytes, package_hash)
+}
+
+fn fetch_legacy_sync_bytes(relative_path: &str) -> R<Vec<u8>> {
+  let normalized = safe_official_path(&format!("official/{relative_path}"))?
+    .strip_prefix("official/")
+    .ok_or_else(|| "Invalid immutable Sync package path".to_string())?
+    .to_string();
+  if !normalized.starts_with("addons/sync/releases/") || !normalized.ends_with(".enaddon") {
+    return Err("Immutable Sync packages must stay under addons/sync/releases".to_string());
+  }
+  let root = Url::parse(LEGACY_SYNC_ROOT).map_err(|error| error.to_string())?;
+  let url = root.join(&normalized).map_err(|error| error.to_string())?;
+  if url.scheme() != "https"
+    || url.host_str() != Some("raw.githubusercontent.com")
+    || !url.path().starts_with(
+      "/SorbetUP/ElephantNote/2a4547c17e3ce1e581e9956dc970c37039d49329/addons/sync/releases/",
+    )
+  {
+    return Err("Immutable Sync package URL escaped its pinned repository revision".to_string());
+  }
+  let client = reqwest::blocking::Client::builder()
+    .timeout(Duration::from_secs(90))
+    .redirect(reqwest::redirect::Policy::none())
+    .build()
+    .map_err(|error| error.to_string())?;
+  let mut response = client
+    .get(url)
+    .send()
+    .map_err(|error| format!("Failed to reach immutable Sync package: {error}"))?;
+  if !response.status().is_success() {
+    return Err(format!("Immutable Sync package returned HTTP {}", response.status()));
+  }
+  if response.content_length().is_some_and(|length| length > MAX_PACKAGE_BYTES) {
+    return Err("Immutable Sync package exceeds the allowed size".to_string());
+  }
+  let mut bytes = Vec::new();
+  response
+    .by_ref()
+    .take(MAX_PACKAGE_BYTES + 1)
+    .read_to_end(&mut bytes)
+    .map_err(|error| error.to_string())?;
+  if bytes.len() as u64 > MAX_PACKAGE_BYTES {
+    return Err("Immutable Sync package exceeds the allowed size".to_string());
+  }
+  Ok(bytes)
+}
+
 fn prebuilt_package(item: &CatalogAddon) -> R<Option<PathBuf>> {
   let platform = platform_key();
+  if item.id == "elephant.sync" && item.packages.is_empty() {
+    let (package_path, package_hash) = legacy_sync_package(&platform)
+      .ok_or_else(|| format!("Official addon {} is not available for platform {platform}", item.id))?;
+    let bytes = fetch_legacy_sync_bytes(package_path)?;
+    return write_verified_package(item, bytes, package_hash).map(Some);
+  }
   if let Some(package) = item.packages.get(&platform) {
     return download_prebuilt_package(item, &package.path, &package.hash).map(Some);
   }
@@ -186,7 +272,7 @@ fn temporary_package(item: &CatalogAddon) -> R<PathBuf> {
   Ok(path)
 }
 '''
-source = replace_once(source, old_temporary, new_temporary, "prebuilt package download")
+source = replace_once(source, old_temporary, new_temporary, "verified and immutable prebuilt package download")
 
 source = replace_once(
     source,
@@ -229,6 +315,18 @@ test_marker = '''  #[test]
 test_replacement = test_marker[:-2] + '''
 
   #[test]
+  fn immutable_sync_packages_cover_all_supported_desktop_targets() {
+    for platform in ["linux-x86_64", "macos-aarch64", "macos-x86_64", "windows-x86_64"] {
+      let (path, hash) = legacy_sync_package(platform).expect("supported Sync package");
+      assert!(path.starts_with("addons/sync/releases/elephant.sync-1.2.0-"));
+      assert!(path.ends_with(".enaddon"));
+      assert_eq!(hash.len(), 64);
+      assert!(hash.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    }
+    assert!(legacy_sync_package("android-aarch64").is_none());
+  }
+
+  #[test]
   fn source_packages_cannot_omit_the_declared_service_executable() {
     let platform = platform_key();
     let sidecar = format!("native/{platform}/elephant-sync-service");
@@ -239,7 +337,7 @@ test_replacement = test_marker[:-2] + '''
       "id": "elephant.sync",
       "slug": "sync",
       "name": "Sync",
-      "version": "1.2.1",
+      "version": "1.2.0",
       "official": true,
       "manifestPath": "official/sync/manifest.json",
       "entryPath": "official/sync/main.service.js"
@@ -251,7 +349,7 @@ test_replacement = test_marker[:-2] + '''
     assert!(error.contains(&sidecar));
   }
 }'''
-source = replace_once(source, test_marker, test_replacement, "regression test")
+source = replace_once(source, test_marker, test_replacement, "regression tests")
 CATALOG.write_text(source)
 
 services = SERVICES.read_text()

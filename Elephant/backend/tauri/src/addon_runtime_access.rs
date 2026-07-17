@@ -15,6 +15,7 @@ use crate::{
 type R<T> = Result<T, String>;
 
 const REGISTRY_VERSION: u32 = 1;
+const PUBLIC_HTTPS_CAPABILITY: &str = "public-https";
 
 #[derive(Debug, Deserialize)]
 struct AddonRegistry {
@@ -63,7 +64,9 @@ pub fn scope_matches(scope: &str, relative_path: &str) -> bool {
 pub fn host_matches(pattern: &str, host: &str) -> bool {
   let pattern = pattern.trim().to_ascii_lowercase();
   let host = host.to_ascii_lowercase();
-  if let Some(suffix) = pattern.strip_prefix("*.") {
+  if pattern == PUBLIC_HTTPS_CAPABILITY {
+    true
+  } else if let Some(suffix) = pattern.strip_prefix("*.") {
     host != suffix && host.ends_with(&format!(".{suffix}"))
   } else {
     host == pattern
@@ -110,6 +113,7 @@ mod tests {
   fn scopes_and_hosts_are_boundary_aware() {
     assert!(scope_matches("Inbox/**", "Inbox/note.md"));
     assert!(!scope_matches("Inbox/**", "Inbox-old/note.md"));
+    assert!(host_matches("public-https", "example.com"));
     assert!(host_matches("*.example.com", "api.example.com"));
     assert!(!host_matches("*.example.com", "example.com"));
   }

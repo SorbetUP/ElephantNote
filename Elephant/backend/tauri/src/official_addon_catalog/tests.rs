@@ -80,6 +80,22 @@ mod tests {
   }
 
   #[test]
+  fn future_source_only_sync_versions_are_not_silently_downgraded() {
+    let item: CatalogAddon = serde_json::from_value(serde_json::json!({
+      "id": "elephant.sync",
+      "slug": "sync",
+      "name": "Sync",
+      "version": "1.3.0",
+      "official": true,
+      "manifestPath": "official/sync/manifest.json",
+      "entryPath": "official/sync/main.service.js"
+    }))
+    .unwrap();
+    assert!(!uses_legacy_sync_package(&item));
+    assert!(!available_for_platform(&item, "macos-aarch64"));
+  }
+
+  #[test]
   fn current_sync_package_downloads_with_its_declared_service() {
     if std::env::var_os("CI").is_none() {
       return;

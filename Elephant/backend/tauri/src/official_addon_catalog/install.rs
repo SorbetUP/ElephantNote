@@ -62,11 +62,46 @@ fn temporary_package_path(item: &CatalogAddon) -> PathBuf {
   ))
 }
 
+fn validate_prebuilt_package(item: &CatalogAddon, bytes: &[u8]) -> R<()> {
+  let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes))
+    .map_err(|error| format!("Invalid official addon archive for {}: {error}", item.id))?;
+  let manifest: Value = {
+    let mut entry = archive
+      .by_name("manifest.json")
+      .map_err(|_| format!("Official addon package is missing manifest.json: {}", item.id))?;
+    serde_json::from_reader(&mut entry)
+      .map_err(|error| format!("Invalid official addon manifest for {}: {error}", item.id))?
+  };
+  if manifest.get("id").and_then(Value::as_str) != Some(item.id.as_str()) {
+    return Err(format!("Official addon package id mismatch for {}", item.id));
+  }
+  if manifest.get("version").and_then(Value::as_str) != Some(item.version.as_str()) {
+    return Err(format!("Official addon package version mismatch for {}", item.id));
+  }
+  if let Some(sidecar) = required_sidecar_path(item, &manifest)? {
+    let entry = archive.by_name(&sidecar).map_err(|_| {
+      format!(
+        "Official addon package is incomplete for {} on {}: missing native executable {sidecar}",
+        item.id,
+        platform_key()
+      )
+    })?;
+    if entry.is_dir() || entry.size() == 0 {
+      return Err(format!(
+        "Official addon package contains an invalid native executable for {}: {sidecar}",
+        item.id
+      ));
+    }
+  }
+  Ok(())
+}
+
 fn write_verified_package(item: &CatalogAddon, bytes: Vec<u8>, package_hash: &str) -> R<PathBuf> {
   let actual_hash = blake3::hash(&bytes).to_hex().to_string();
   if actual_hash != package_hash.trim().to_ascii_lowercase() {
     return Err(format!("Official addon package hash mismatch for {}", item.id));
   }
+  validate_prebuilt_package(item, &bytes)?;
   let path = temporary_package_path(item);
   fs::write(&path, bytes).map_err(|error| error.to_string())?;
   Ok(path)

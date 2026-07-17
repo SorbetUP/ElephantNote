@@ -1,6 +1,6 @@
 'use strict'
 
-const INSERT_AFTER_IMPORT = "const { clipboard, contextBridge, shell } = require('electron')\n"
+const INSERT_AFTER_HELPERS = "const primitivePreference = (store, key, fallback = null) => Object.prototype.hasOwnProperty.call(store, key) ? store[key] : fallback\n"
 const EMPTY_ADDON_CASES = `    case 'tauri_addons_list':
     case 'tauri_addons_list_full':
     case 'tauri_addons_catalog_list': return []`
@@ -28,11 +28,13 @@ const officialAddonFixture = (() => {
   const persisted = readJson(officialAddonStateFile, null)
   const state = persisted && Array.isArray(persisted.installed)
     ? persisted
-    : { installed: requestedIds, enabled: [] }
-  const storage = new Map()
+    : { installed: requestedIds, enabled: [], storage: {} }
+  if (!state.storage || typeof state.storage !== 'object') state.storage = {}
+  const storage = new Map(Object.entries(state.storage))
   const runningServices = new Set()
 
   const save = () => {
+    state.storage = Object.fromEntries(storage)
     fs.mkdirSync(path.dirname(officialAddonStateFile), { recursive: true })
     fs.writeFileSync(officialAddonStateFile, JSON.stringify(state, null, 2))
   }
@@ -74,9 +76,9 @@ const officialAddonFixture = (() => {
   const safeModulePath = (addonId, modulePath) => {
     const entry = addonEntry(addonId)
     const root = path.resolve(addonRoot(entry))
-    const normalized = String(modulePath || '').replaceAll('\\\\', '/').replace(/^\/+/, '')
+    const normalized = String(modulePath || '').replaceAll('\\', '/').replace(/^\/+/, '')
     const resolved = path.resolve(root, normalized)
-    if (resolved !== root && !resolved.startsWith(\`${root}\${path.sep}\`)) {
+    if (resolved !== root && !resolved.startsWith(\`\${root}\${path.sep}\`)) {
       throw new Error(\`Official addon module escaped package: \${addonId}/\${modulePath}\`)
     }
     return resolved
@@ -91,7 +93,9 @@ const officialAddonFixture = (() => {
     save()
     return { ok: true, addonId, enabled: enabled === true }
   }
-  const install = (addonId) => {
+  const normalizeInstallId = (value) => String(value || '').replace(/^official:/, '').trim()
+  const install = (value) => {
+    const addonId = normalizeInstallId(value)
     addonEntry(addonId)
     if (!state.installed.includes(addonId)) state.installed.push(addonId)
     state.installed.sort()
@@ -113,13 +117,13 @@ const officialAddonFixture = (() => {
     evidence: 'Renderer E2E uses an explicit service mock; native package presence is validated separately.'
   })
   const callBroker = (addonId, method, params = {}) => {
-    const key = \`${addonId}:\${String(params.key || '')}\`
+    const key = \`\${addonId}:\${String(params.key || '')}\`
     if (method === 'storage.get') return storage.get(key) ?? null
-    if (method === 'storage.set') { storage.set(key, params.value); return params.value }
-    if (method === 'storage.remove') { storage.delete(key); return true }
+    if (method === 'storage.set') { storage.set(key, params.value); save(); return params.value }
+    if (method === 'storage.remove') { storage.delete(key); save(); return true }
     if (method === 'storage.entries') {
       return [...storage.entries()]
-        .filter(([entryKey]) => entryKey.startsWith(\`${addonId}:\`))
+        .filter(([entryKey]) => entryKey.startsWith(\`\${addonId}:\`))
         .map(([entryKey, value]) => [entryKey.slice(addonId.length + 1), value])
     }
     if (method === 'notes.list') return allMarkdownEntries()
@@ -171,6 +175,7 @@ const officialAddonFixture = (() => {
 const addonCases = `    case 'tauri_addons_list':
     case 'tauri_addons_list_full': return officialAddonFixture.listInstalled()
     case 'tauri_addons_catalog_list': return officialAddonFixture.listCatalog()
+    case 'tauri_addons_install': return officialAddonFixture.install(params.packagePath)
     case 'tauri_addons_catalog_install':
     case 'tauri_addons_install_catalog':
     case 'tauri_addons_install_official': return officialAddonFixture.install(params.addonId || params.id)
@@ -186,8 +191,8 @@ const addonCases = `    case 'tauri_addons_list':
 
 module.exports = (source) => {
   let patched = String(source)
-  if (!patched.includes(INSERT_AFTER_IMPORT)) throw new Error('Unable to locate Electron import in tauri-preload fixture')
-  patched = patched.replace(INSERT_AFTER_IMPORT, `${INSERT_AFTER_IMPORT}${fixtureSource}\n`)
+  if (!patched.includes(INSERT_AFTER_HELPERS)) throw new Error('Unable to locate initialized preload helper boundary')
+  patched = patched.replace(INSERT_AFTER_HELPERS, `${INSERT_AFTER_HELPERS}${fixtureSource}\n`)
   if (!patched.includes(EMPTY_ADDON_CASES)) throw new Error('Unable to locate empty addon command cases')
   patched = patched.replace(EMPTY_ADDON_CASES, addonCases)
   if (!patched.includes(ENABLED_CASES)) throw new Error('Unable to locate addon enabled command cases')

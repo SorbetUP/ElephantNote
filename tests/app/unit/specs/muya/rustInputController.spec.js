@@ -91,13 +91,37 @@ describe('MuyaRustInputController', () => {
     )
   })
 
-  it('routes Return through Rust when WebKit does not emit beforeinput', async () => {
+  it('owns plain Return on keydown when WebKit omits beforeinput', async () => {
     const event = browserEvent('keydown', { key: 'Enter', isComposing: false })
     container.dispatchEvent(event)
     await controller.idle()
 
     expect(event.defaultPrevented).toBe(true)
+    expect(bridge.setSelection).toHaveBeenCalledWith({
+      anchor: { node: 3, offset_utf16: 2 },
+      focus: { node: 3, offset_utf16: 2 }
+    })
     expect(bridge.dispatch).toHaveBeenCalledWith({ type: 'insert_paragraph' })
+  })
+
+  it('does not turn an IME confirmation or modified Return into a paragraph', async () => {
+    const composing = browserEvent('keydown', {
+      key: 'Enter',
+      isComposing: true
+    })
+    const modified = browserEvent('keydown', {
+      key: 'Enter',
+      metaKey: true,
+      isComposing: false
+    })
+
+    container.dispatchEvent(composing)
+    container.dispatchEvent(modified)
+    await controller.idle()
+
+    expect(composing.defaultPrevented).toBe(false)
+    expect(modified.defaultPrevented).toBe(false)
+    expect(bridge.dispatch).not.toHaveBeenCalled()
   })
 
   it('routes plain clipboard Markdown through one paste command', async () => {

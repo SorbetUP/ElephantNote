@@ -190,9 +190,14 @@ export class MuyaRustInputController {
       event.preventDefault()
       return
     }
-    // WebKit can omit beforeinput for Enter in a contenteditable host. Own the
-    // mutation here so Return always reaches the Rust document engine.
-    if (event.key === 'Enter' && !event.isComposing) {
+    if (
+      event.key === 'Enter' &&
+      !event.isComposing &&
+      !this.composition &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey
+    ) {
       const selection = this.readSelection()
       if (!selection) return
       event.preventDefault()

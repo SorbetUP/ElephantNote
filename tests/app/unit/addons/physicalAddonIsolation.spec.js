@@ -115,11 +115,12 @@ describe('physical addon isolation', () => {
   })
 
   it('routes chat through installed provider contributions instead of a global RAG client', () => {
-    const chat = read('addons/official/ai-chat/main.js')
+    const chat = read('addons/official/ai-chat/main.v2.js')
+    const base = read('addons/official/ai-chat/main.js')
 
-    expect(chat).toContain("getContributions?.('ai.providers')")
-    expect(chat).toContain("this.api.resources.get(SEARCH_RESOURCE)")
-    expect(chat).toContain("typeof option.provider.chat !== 'function'")
+    expect(base).toContain("getContributions?.('ai.providers')")
+    expect(base).toContain("typeof option.provider.chat !== 'function'")
+    expect(chat).toContain('async runProvider(')
     expect(chat).not.toContain("this.call('rag.chat'")
     expect(chat).not.toContain('Provider id')
   })

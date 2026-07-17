@@ -25,6 +25,7 @@ const MAX_ENTRY_BYTES: u64 = 8 * 1024 * 1024;
 const MAX_PACKAGE_BYTES: u64 = 25 * 1024 * 1024;
 const MAX_PACKAGE_FILE_BYTES: u64 = 128 * 1024 * 1024;
 const LEGACY_SYNC_ROOT: &str = "https://raw.githubusercontent.com/SorbetUP/ElephantNote/2a4547c17e3ce1e581e9956dc970c37039d49329/";
+const LEGACY_SYNC_VERSION: &str = "1.2.0";
 
 #[derive(Deserialize)]
 struct IntegratedCatalog {
@@ -81,9 +82,16 @@ fn legacy_sync_package(platform: &str) -> Option<(&'static str, &'static str)> {
   }
 }
 
+fn uses_legacy_sync_package(item: &CatalogAddon) -> bool {
+  item.id == "elephant.sync" && item.version == LEGACY_SYNC_VERSION && item.packages.is_empty()
+}
+
 fn available_for_platform(item: &CatalogAddon, platform: &str) -> bool {
-  if item.id == "elephant.sync" && item.packages.is_empty() {
+  if uses_legacy_sync_package(item) {
     return legacy_sync_package(platform).is_some();
+  }
+  if item.id == "elephant.sync" && item.packages.is_empty() {
+    return false;
   }
   if item.packages.is_empty() {
     !item.requires_platform_package
@@ -232,4 +240,3 @@ fn fetch_official_bytes(relative_path: &str, max_bytes: u64) -> R<Vec<u8>> {
   }
   Ok(bytes)
 }
-

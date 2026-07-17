@@ -32,6 +32,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useEditorStore } from '@/store/editor'
 import { useVaultStore } from '../../stores/vaultStore'
 import { useAddonsStore } from '@/store/addons'
 import LibraryToolbar from '../library/LibraryToolbar.vue'
@@ -47,8 +48,25 @@ const props = defineProps({
 })
 const emit = defineEmits(['close-addon-view'])
 const store = useVaultStore()
+const editorStore = useEditorStore()
 const addonsStore = useAddonsStore()
-const hasOpenNote = computed(() => !!store.openedNotePath)
+const openedNoteAbsolutePath = computed(() => {
+  if (!store.activeVault?.path || !store.openedNotePath) return ''
+  return window.path.join(store.activeVault.path, store.openedNotePath)
+})
+const pathsMatch = (left, right) => {
+  if (!left || !right) return false
+  if (typeof window.fileUtils?.isSamePathSync === 'function') {
+    return window.fileUtils.isSamePathSync(left, right)
+  }
+  return String(left).replace(/\\/g, '/') === String(right).replace(/\\/g, '/')
+}
+const hasOpenNote = computed(() => {
+  const pathname = openedNoteAbsolutePath.value
+  if (!pathname) return false
+  return [editorStore.currentFile, ...(editorStore.tabs || [])]
+    .some((file) => pathsMatch(file?.pathname, pathname))
+})
 const activeAddonViewId = computed(() => props.activeAddonViewId)
 const showLibrary = computed(() => store.activeWorkspaceView === 'notes')
 const workspacePanels = computed(() => addonsStore.getContributions('layout.zones')

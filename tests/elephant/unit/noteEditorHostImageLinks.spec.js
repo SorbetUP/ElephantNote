@@ -3,8 +3,10 @@ import { readFileSync } from 'node:fs'
 
 const read = (path) => readFileSync(path, 'utf8')
 const editor = read('Elephant/frontend/app/components/editor/NoteEditorHost.vue')
+const shell = read('Elephant/frontend/app/components/shell/AppShell.vue')
 const addon = read('Elephant/frontend/src/renderer/src/addons/builtin/excalidraw.js')
 const overlay = read('Elephant/frontend/src/renderer/src/addons/builtin/ui/ExcalidrawEditorOverlay.vue')
+const dialog = read('Elephant/frontend/app/components/editor/ExcalidrawDialog.vue')
 const writingBridge = read('Elephant/frontend/src/renderer/src/platform/writingCommandBridge.js')
 
 describe('addon-owned Excalidraw note integration', () => {
@@ -20,8 +22,6 @@ describe('addon-owned Excalidraw note integration', () => {
     expect(editor).not.toContain('getExcalidrawScenePath')
     expect(editor).not.toContain("bus.on('ELEPHANT::open-excalidraw'")
     expect(editor).not.toContain("bus.on('open-excalidraw-from-image'")
-    expect(editor).toContain("entry?.contribution?.zone === 'editor.overlay'")
-    expect(editor).toContain(':is="entry.contribution.component"')
   })
 
   it('keeps ordinary image relocation generic and delegates companion files to addons', () => {
@@ -35,7 +35,7 @@ describe('addon-owned Excalidraw note integration', () => {
 
   it('lets the Excalidraw addon own its overlay, writing command and image action', () => {
     expect(addon).toContain('component: ExcalidrawEditorOverlay')
-    expect(addon).toContain("zone: 'editor.overlay'")
+    expect(addon).toContain("zone: 'shell.right'")
     expect(addon).toContain('writingCommands: [{')
     expect(addon).toContain("id: 'excalidraw'")
     expect(addon).toContain('imageToolbarItems: [{')
@@ -45,6 +45,10 @@ describe('addon-owned Excalidraw note integration', () => {
     expect(overlay).toContain('const save = async')
     expect(overlay).toContain("bus.on('ELEPHANT::open-excalidraw', open)")
     expect(overlay).toContain("bus.on('open-excalidraw-from-image', openFromImage)")
+    expect(shell).toContain("entry?.contribution?.zone === 'shell.right'")
+    expect(dialog).toContain('data-testid="excalidraw-dialog"')
+    expect(dialog).toContain('data-testid="excalidraw-close"')
+    expect(dialog).toContain("message: `[excalidraw-dialog] ${event}`")
   })
 
   it('removes the hardcoded Excalidraw case from the core writing bridge', () => {

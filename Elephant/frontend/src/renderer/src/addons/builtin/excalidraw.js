@@ -55,7 +55,11 @@ export const excalidrawCoreFeature = Object.freeze({
 
     ctx.registerContribution('layout.zones', {
       id: `${CORE_FEATURE_ID}.editor-overlay`,
-      zone: 'editor.overlay',
+      // Keep the editor dialog mounted at shell scope. NoteEditorHost is
+      // intentionally replaced during navigation, and mounting the dialog
+      // there made Escape/Close race with the host unmount and left users in
+      // a full-screen Excalidraw surface.
+      zone: 'shell.right',
       order: 40,
       component: ExcalidrawEditorOverlay
     })

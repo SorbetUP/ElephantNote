@@ -142,6 +142,49 @@ fn routes_mark_boundary_enter_to_the_boundary_engine() {
 }
 
 #[test]
+fn accepts_insert_paragraph_at_every_common_markdown_text_caret() {
+  let samples = [
+    "# Heading\n\nPlain **bold** and *emphasis* with [a link](https://example.com).",
+    "> quoted **text**\n\n- one\n- [x] checked",
+    "Before `code` and ~~strike~~ after.\n\n```rust\nlet answer = 42;\n```",
+    "| A | B |\n|---|---|\n| one | two |\n\n![diagram](.assets/diagram.png)",
+  ];
+
+  for markdown in samples {
+    let probe = EditorSession::from_markdown(markdown);
+    let carets = probe
+      .document()
+      .nodes
+      .values()
+      .filter_map(|node| match &node.kind {
+        NodeKind::Inline(InlineKind::Text { value }) => {
+          Some((node.id, value.encode_utf16().count() as u32))
+        }
+        _ => None,
+      })
+      .flat_map(|(node, length)| {
+        [0, length / 2, length]
+          .into_iter()
+          .map(move |offset| (node, offset))
+      })
+      .collect::<Vec<_>>();
+
+    for (node, offset_utf16) in carets {
+      let mut session = EditorSession::from_markdown(markdown);
+      let selection = Selection::collapsed(SelectionPoint { node, offset_utf16 });
+      let selected =
+        session.handle_request(request(0, ProtocolCommand::SetSelection { selection }));
+      assert!(matches!(selected, EditorResponse::Update(_)));
+      let response = session.handle_request(request(0, ProtocolCommand::InsertParagraph));
+      assert!(
+        matches!(response, EditorResponse::Update(_)),
+        "Markdown caret rejected at node {node:?}, offset {offset_utf16}: {markdown:?}"
+      );
+    }
+  }
+}
+
+#[test]
 fn maps_stale_revisions_to_a_stable_error_code() {
   let mut session = EditorSession::from_markdown("abc");
   let response = session.handle_request(request(4, ProtocolCommand::Undo));

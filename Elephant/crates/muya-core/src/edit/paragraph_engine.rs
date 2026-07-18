@@ -320,7 +320,9 @@ fn split_path(document: &Document, text: NodeId) -> Result<SplitPath, EditError>
       .node(parent)
       .ok_or(EditError::NodeNotFound(parent))?;
     match &parent_node.kind {
-      NodeKind::Block(BlockKind::Paragraph) => break parent,
+      NodeKind::Block(BlockKind::Paragraph | BlockKind::Heading { .. } | BlockKind::BlockQuote) => {
+        break parent
+      }
       NodeKind::Inline(InlineKind::Text { .. }) => {
         return Err(EditError::UnsupportedStructure(parent));
       }
@@ -539,5 +541,48 @@ mod tests {
     inverse.apply(&mut document).unwrap();
     assert_eq!(document.children(list).count(), 3);
     assert_eq!(document.children(list).nth(2).unwrap().id, right_item);
+  }
+
+  #[test]
+  fn accepts_common_markdown_caret_boundaries() {
+    let samples = [
+      "# Heading\n\nPlain **bold** and *emphasis* with [a link](https://example.com).",
+      "> quoted **text**\n\n- one\n- [x] checked",
+      "Before `code` and ~~strike~~ after.\n\n![diagram](.assets/diagram.png)",
+    ];
+
+    for markdown in samples {
+      let document = parse_markdown(markdown);
+      let text_nodes = document
+        .nodes
+        .values()
+        .filter_map(|node| match &node.kind {
+          NodeKind::Inline(InlineKind::Text { value }) => Some((node.id, value.clone())),
+          _ => None,
+        })
+        .collect::<Vec<_>>();
+
+      for (node, value) in text_nodes {
+        let length = value.encode_utf16().count() as u32;
+        for offset in [0, length / 2, length] {
+          let selection = Selection::collapsed(SelectionPoint {
+            node,
+            offset_utf16: offset,
+          });
+          let result = build_insert_paragraph(&document, selection).or_else(|error| {
+            if matches!(error, EditError::UnsupportedStructure(_)) {
+              super::super::paragraph_boundary::ParagraphBoundaryCommand::InsertParagraph
+                .build(&document, selection)
+            } else {
+              Err(error)
+            }
+          });
+          assert!(
+            !matches!(result, Err(EditError::UnsupportedStructure(_))),
+            "common markdown rejected at node {node:?}, offset {offset}: {markdown:?}"
+          );
+        }
+      }
+    }
   }
 }

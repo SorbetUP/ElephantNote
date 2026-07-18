@@ -124,7 +124,7 @@ export class ElephantRustInputController {
     event.preventDefault()
 
     this.schedule(async () => {
-      const selection = this._inputSelection || observedSelection
+      const selection = await this.resolveQueuedSelection(this._inputSelection || observedSelection)
       await this.bridge.setSelection(selection)
       await this.bridge.dispatch(command)
       this._inputSelection = this.bridge.selection || selection
@@ -152,7 +152,7 @@ export class ElephantRustInputController {
     event.preventDefault()
     event.stopPropagation?.()
     this.schedule(async () => {
-      const selection = this._inputSelection || observedSelection
+      const selection = await this.resolveQueuedSelection(this._inputSelection || observedSelection)
       await this.bridge.setSelection(selection)
       await this.bridge.dispatch(editorCommands.pasteMarkdown(markdown))
       this._inputSelection = this.bridge.selection || selection
@@ -200,7 +200,7 @@ export class ElephantRustInputController {
       if (!selection) return
       event.preventDefault()
       this.schedule(async () => {
-        const nextSelection = this._inputSelection || selection
+        const nextSelection = await this.resolveQueuedSelection(this._inputSelection || selection)
         await this.bridge.setSelection(nextSelection)
         await this.bridge.dispatch(editorCommands.insertParagraph())
         this._inputSelection = this.bridge.selection || nextSelection
@@ -215,7 +215,7 @@ export class ElephantRustInputController {
     if (!command) return
     event.preventDefault()
     this.schedule(async () => {
-      await this.bridge.setSelection(selection)
+      await this.bridge.setSelection(await this.resolveQueuedSelection(selection))
       await this.bridge.dispatch(command)
       this._inputSelection = this.bridge.selection || selection
     })
@@ -228,6 +228,29 @@ export class ElephantRustInputController {
       if (!isSelectionBoundaryError(error)) this.onError(error)
       return null
     }
+  }
+
+  async resolveQueuedSelection(selection) {
+    const isEditablePoint = (point) => {
+      const node = this.renderer.logical.node(Number(point?.node))
+      return ['text', 'code_span'].includes(node?.kind?.value?.type)
+    }
+    if (isEditablePoint(selection?.anchor) && isEditablePoint(selection?.focus)) return selection
+
+    // A prop-driven markdown refresh can replace the DOM between the browser
+    // event and the queued command. Never send the detached node id back to
+    // Rust; refresh the authoritative snapshot and use its valid caret.
+    const snapshot = await this.bridge.snapshot()
+    const recovered = snapshot?.selection || this.bridge.selection
+    if (!isEditablePoint(recovered?.anchor) || !isEditablePoint(recovered?.focus)) {
+      throw new TypeError('Elephant Rust could not recover an editable selection after a document refresh.')
+    }
+    console.info('[Elephant Rust Editor] recovered queued selection after DOM refresh', {
+      previous: selection,
+      recovered,
+      revision: snapshot?.revision ?? this.bridge.revision
+    })
+    return recovered
   }
 
   schedule(task) {

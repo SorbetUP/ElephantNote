@@ -3,6 +3,7 @@
     <div class="en-excalidraw-overlay" :style="themeTokens">
       <section
         class="en-excalidraw-shell"
+        data-testid="excalidraw-dialog"
         role="dialog"
         aria-modal="true"
         :aria-label="t('excalidraw.title')"
@@ -29,6 +30,7 @@
             <button
               type="button"
               class="en-excalidraw-button secondary"
+              data-testid="excalidraw-close"
               :aria-label="t('excalidraw.cancel')"
               :title="`${t('excalidraw.cancel')} · Esc`"
               @pointerdown.stop
@@ -128,6 +130,26 @@ const initialData = ref(null)
 const errorMessage = ref('')
 const isMacOS = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(`${navigator.platform || ''} ${navigator.userAgent || ''}`)
 
+const logDialogError = (event, error) => {
+  const details = {
+    name: error?.name || 'Error',
+    message: error?.message || String(error)
+  }
+  window.__ELEPHANT_DEBUG_LOGS__ = Array.isArray(window.__ELEPHANT_DEBUG_LOGS__)
+    ? window.__ELEPHANT_DEBUG_LOGS__
+    : []
+  window.__ELEPHANT_DEBUG_LOGS__.push({
+    at: new Date().toISOString(),
+    level: 'error',
+    message: `[excalidraw-dialog] ${event}`,
+    details
+  })
+  if (window.__ELEPHANT_DEBUG_LOGS__.length > 1000) {
+    window.__ELEPHANT_DEBUG_LOGS__.splice(0, window.__ELEPHANT_DEBUG_LOGS__.length - 1000)
+  }
+  console.error(`[excalidraw-dialog] ${event}`, details)
+}
+
 // Elephant themes expose full palettes while Excalidraw accepts only its
 // canonical light/dark modes. Keep the surrounding shell on the full palette.
 const excalidrawTheme = computed(() => getThemeMode(props.theme))
@@ -226,7 +248,7 @@ const handleSave = async () => {
       sceneBlob: await sceneBlob.text()
     })
   } catch (error) {
-    console.error('Failed to save Excalidraw:', error)
+    logDialogError('save failed', error)
     errorMessage.value = error?.message || t('excalidraw.failedSave')
   } finally {
     isSaving.value = false
@@ -249,7 +271,7 @@ onMounted(() => {
   document.body.classList.add('en-excalidraw-open')
   window.addEventListener('keydown', handleKeyboard, true)
   renderCanvas().catch((error) => {
-    console.error('Failed to open Excalidraw:', error)
+    logDialogError('initialization failed', error)
     errorMessage.value = error?.message || t('excalidraw.failedInitialize')
   })
 })

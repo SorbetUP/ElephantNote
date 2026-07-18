@@ -473,6 +473,11 @@ export const installExcalidrawImageRuntimeFixes = (target = globalThis) => {
         src: img.getAttribute('src') || '',
         dataSource: img.getAttribute('data-src') || ''
       })
+      // A Tauri webview can reject an asset:// URL even when the file exists
+      // and the Rust file bridge can read it. Re-applying the same URL only
+      // loops the browser error; read the bytes and replace the source with a
+      // data URL instead.
+      void reloadImageFromDisk(img, source, 'browser-error')
     }
     repairImage(img)
   }

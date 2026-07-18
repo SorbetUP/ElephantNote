@@ -46,7 +46,17 @@ impl Command {
   pub fn build(&self, document: &Document, selection: Selection) -> Result<Transaction, EditError> {
     match self {
       Self::InsertText(inserted) => build_replace_selection(document, selection, inserted),
-      Self::InsertParagraph => build_insert_paragraph(document, selection),
+      Self::InsertParagraph => {
+        if let (Some(anchor_block), Some(focus_block)) = (
+          literal_newline_block_ancestor(document, selection.anchor.node),
+          literal_newline_block_ancestor(document, selection.focus.node),
+        ) {
+          if anchor_block == focus_block {
+            return build_replace_selection(document, selection, "\n");
+          }
+        }
+        build_insert_paragraph(document, selection)
+      }
       Self::DeleteBackward => build_delete_backward(document, selection),
       Self::SetParagraph => build_set_block_kind(document, selection, BlockKind::Paragraph),
       Self::SetHeading(level) => {
@@ -60,6 +70,20 @@ impl Command {
       Self::ToggleStrike => build_toggle_mark(document, selection, MarkKind::Strike),
     }
   }
+}
+
+fn literal_newline_block_ancestor(document: &Document, start: NodeId) -> Option<NodeId> {
+  let mut current = start;
+  while let Some(node) = document.node(current) {
+    if matches!(
+      node.kind,
+      NodeKind::Block(BlockKind::CodeBlock { .. } | BlockKind::TableCell { .. })
+    ) {
+      return Some(current);
+    }
+    current = node.parent?;
+  }
+  None
 }
 
 fn build_replace_selection(

@@ -210,7 +210,9 @@ fn boundary_path(document: &Document, text: NodeId) -> Result<BoundaryPath, Edit
         top_wrapper = Some(parent);
         current = parent;
       }
-      NodeKind::Block(BlockKind::Paragraph) => break parent,
+      NodeKind::Block(BlockKind::Paragraph | BlockKind::Heading { .. } | BlockKind::BlockQuote) => {
+        break parent
+      }
       _ => return Err(EditError::UnsupportedStructure(parent)),
     }
   };

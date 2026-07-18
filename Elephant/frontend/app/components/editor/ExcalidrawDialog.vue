@@ -3,6 +3,7 @@
     <div class="en-excalidraw-overlay" :style="themeTokens">
       <section
         class="en-excalidraw-shell"
+        data-testid="excalidraw-dialog"
         role="dialog"
         aria-modal="true"
         :aria-label="t('excalidraw.title')"
@@ -29,6 +30,7 @@
             <button
               type="button"
               class="en-excalidraw-button secondary"
+              data-testid="excalidraw-close"
               :aria-label="t('excalidraw.cancel')"
               :title="`${t('excalidraw.cancel')} · Esc`"
               @pointerdown.stop

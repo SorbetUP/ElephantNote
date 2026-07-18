@@ -47,6 +47,26 @@ let internalPropResetTimer = null
 
 const reportError = (error) => {
   errorMessage.value = error?.message || String(error)
+  const details = {
+    name: error?.name || 'Error',
+    message: errorMessage.value,
+    revision: runtime?.bridge?.revision ?? null,
+    selection: runtime?.bridge?.selection ?? null,
+    markdownLength: runtimeMarkdown.length
+  }
+  window.__ELEPHANT_DEBUG_LOGS__ = Array.isArray(window.__ELEPHANT_DEBUG_LOGS__)
+    ? window.__ELEPHANT_DEBUG_LOGS__
+    : []
+  window.__ELEPHANT_DEBUG_LOGS__.push({
+    at: new Date().toISOString(),
+    level: 'error',
+    message: '[elephantnote:rust-editor] runtime error',
+    details
+  })
+  if (window.__ELEPHANT_DEBUG_LOGS__.length > 1000) {
+    window.__ELEPHANT_DEBUG_LOGS__.splice(0, window.__ELEPHANT_DEBUG_LOGS__.length - 1000)
+  }
+  console.error('[elephantnote:rust-editor] runtime error', details)
   emit('error', error)
 }
 

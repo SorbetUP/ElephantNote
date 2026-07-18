@@ -13,7 +13,7 @@
 </template>
 
 <script setup>
-import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import bus from '@/bus'
 import { useEditorStore } from '@/store/editor'
@@ -322,10 +322,15 @@ const openFromImage = async (src) => {
 }
 
 const close = () => {
-  log('info', 'editor closed', { targetPath: targetPath.value, scenePath: scenePath.value })
+  log('info', 'editor closed', { targetPath: targetPath.value, scenePath: scenePath.value, reason: 'user-or-navigation' })
   isOpen.value = false
   initialBlob.value = null
 }
+
+watch(() => vaultStore.openedNotePath, (nextPath, previousPath) => {
+  if (!isOpen.value || nextPath === previousPath) return
+  close()
+})
 
 const appendPreviewToNote = (previewPath, resolvedName) => {
   const file = activeFile.value

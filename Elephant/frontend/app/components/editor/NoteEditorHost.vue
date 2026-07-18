@@ -48,12 +48,6 @@
         @toggle-theme="toggleTheme"
       />
     </section>
-
-    <component
-      :is="entry.contribution.component"
-      v-for="entry in editorOverlayZones"
-      :key="entry.contribution.id"
-    />
   </div>
 </template>
 
@@ -165,10 +159,6 @@ let lastSeenMarkdown = ''
 const editorExtensions = computed(() => addonsStore.getContributions('editor.extensions')
   .map((entry) => entry?.contribution)
   .filter(Boolean))
-const editorOverlayZones = computed(() => addonsStore.getContributions('layout.zones')
-  .filter((entry) => entry?.contribution?.zone === 'editor.overlay' && entry?.contribution?.component)
-  .sort((left, right) => Number(left.contribution.order || 0) - Number(right.contribution.order || 0)))
-
 const openedNoteAbsolutePath = computed(() => {
   if (!store.activeVault?.path || !store.openedNotePath) return ''
   return window.path.join(store.activeVault.path, store.openedNotePath)

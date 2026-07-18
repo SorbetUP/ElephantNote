@@ -6,6 +6,7 @@ const editor = read('Elephant/frontend/app/components/editor/NoteEditorHost.vue'
 const shell = read('Elephant/frontend/app/components/shell/AppShell.vue')
 const addon = read('Elephant/frontend/src/renderer/src/addons/builtin/excalidraw.js')
 const overlay = read('Elephant/frontend/src/renderer/src/addons/builtin/ui/ExcalidrawEditorOverlay.vue')
+const dialog = read('Elephant/frontend/app/components/editor/ExcalidrawDialog.vue')
 const writingBridge = read('Elephant/frontend/src/renderer/src/platform/writingCommandBridge.js')
 
 describe('addon-owned Excalidraw note integration', () => {
@@ -45,6 +46,9 @@ describe('addon-owned Excalidraw note integration', () => {
     expect(overlay).toContain("bus.on('ELEPHANT::open-excalidraw', open)")
     expect(overlay).toContain("bus.on('open-excalidraw-from-image', openFromImage)")
     expect(shell).toContain("entry?.contribution?.zone === 'shell.right'")
+    expect(dialog).toContain('data-testid="excalidraw-dialog"')
+    expect(dialog).toContain('data-testid="excalidraw-close"')
+    expect(dialog).toContain("message: `[excalidraw-dialog] ${event}`")
   })
 
   it('removes the hardcoded Excalidraw case from the core writing bridge', () => {

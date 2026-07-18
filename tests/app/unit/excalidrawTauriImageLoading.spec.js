@@ -163,6 +163,29 @@ describe('Excalidraw Tauri image loading', () => {
     }
   })
 
+  it('replaces a Tauri asset URL after the browser rejects an existing preview', async () => {
+    window.__ELEPHANT_GET_ACTIVE_VAULT_PATH__ = () => '/vault'
+
+    const wrapper = document.createElement('div')
+    const img = document.createElement('img')
+    img.dataset.src = '/vault/.assets/excalidraw-browser-error.png'
+    img.src = 'asset://localhost/vault/.assets/excalidraw-browser-error.png'
+    wrapper.appendChild(img)
+    document.body.appendChild(wrapper)
+
+    runtime = installExcalidrawImageRuntimeFixes(window)
+    await flushPromises()
+    img.dispatchEvent(new Event('error', { bubbles: true }))
+    await flushPromises()
+
+    expect(window.fileUtils.readFile).toHaveBeenCalledWith('/vault/.assets/excalidraw-browser-error.png')
+    expect(img.dataset.localImageLoaded).toBe('true')
+    expect(img.getAttribute('src')).toMatch(/^data:image\/png;base64,/)
+    expect(window.__ELEPHANT_DEBUG_LOGS__).toEqual(expect.arrayContaining([
+      expect.objectContaining({ message: '[excalidraw-image] cache refresh:success' })
+    ]))
+  })
+
   it('keeps authoritative stat probes and lifecycle diagnostics in the overlay implementation', () => {
     const overlaySource = readFileSync(
       'Elephant/frontend/src/renderer/src/addons/builtin/ui/ExcalidrawEditorOverlay.vue',

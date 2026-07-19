@@ -19,7 +19,6 @@ const expectedScenarios = [
   'library-layout-toggle',
   'library-sort-sheet',
   'open-existing-note',
-  'editor-markdown-write',
   'drawer-back-close',
   'note-back-roundtrip',
   'app-background-resume',

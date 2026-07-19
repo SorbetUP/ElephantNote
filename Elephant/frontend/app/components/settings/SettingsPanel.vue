@@ -33,7 +33,12 @@
           <footer class="en-settings-nav-footer"><span>Local-first</span><span>v0.18.9</span></footer>
         </aside>
 
-        <main ref="settingsContent" class="en-settings-content" :data-active-section="settingsQuery.trim() ? 'search' : activeSection">
+        <main
+          ref="settingsContent"
+          class="en-settings-content"
+          :class="{ 'is-addons': !settingsQuery.trim() && activeSection === 'addons' }"
+          :data-active-section="settingsQuery.trim() ? 'search' : activeSection"
+        >
           <template v-if="settingsQuery.trim()">
             <div class="en-settings-page-title"><h1>Search</h1><span>{{ searchResults.length }} result{{ searchResults.length === 1 ? '' : 's' }}</span></div>
             <section v-if="searchResults.length" class="en-settings-search-results">

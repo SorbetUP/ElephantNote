@@ -34,6 +34,7 @@
 .en-addons-feedback.error { background:color-mix(in srgb,#dc2626 9%,var(--en-surface,#fff)); color:#b91c1c; }
 
 .en-addon-catalogue { min-height:0; max-height:clamp(480px,calc(90vh - 240px),720px); display:grid; grid-template-columns:repeat(auto-fill,minmax(245px,1fr)); align-content:start; gap:12px; overflow-y:auto; overscroll-behavior:contain; padding:2px 2px 16px; scrollbar-gutter:stable; }
+.en-settings-content.is-addons .en-addon-catalogue { max-height:none; overflow:visible; }
 .en-addon-tile { min-width:0; min-height:150px; display:grid; grid-template-columns:46px minmax(0,1fr) 16px; align-items:start; gap:12px; padding:16px; border:1px solid var(--en-border,#c5cfdd); border-radius:14px; background:var(--en-surface,#fff); color:var(--en-text,#101828); text-align:left; box-shadow:0 4px 16px rgba(15,23,42,.035); cursor:pointer; transition:border-color 140ms ease,transform 140ms ease,box-shadow 140ms ease,background 140ms ease; }
 .en-addon-tile:hover { transform:translateY(-1px); border-color:color-mix(in srgb,var(--en-primary,#2563eb) 38%,var(--en-border,#c5cfdd)); background:color-mix(in srgb,var(--en-primary,#2563eb) 3%,var(--en-surface,#fff)); box-shadow:0 10px 24px rgba(15,23,42,.075); }
 .en-addon-tile:focus-visible { outline:3px solid color-mix(in srgb,var(--en-primary,#2563eb) 22%,transparent); outline-offset:2px; }
@@ -49,13 +50,16 @@
 .en-addon-tile.installed .en-addon-tile-status { background:color-mix(in srgb,#16a34a 12%,var(--en-surface,#fff)); color:#15803d; }
 
 .en-addon-browser { height:clamp(480px,calc(90vh - 240px),720px); min-height:0; display:grid; grid-template-columns:minmax(245px,32%) minmax(0,1fr); overflow:hidden; border:1px solid var(--en-border,#c5cfdd); border-radius:14px; background:var(--en-surface,#fff); }
+.en-settings-content.is-addons .en-addon-browser { height:auto; overflow:visible; }
 .en-addon-browser-sidebar { min-width:0; min-height:0; display:grid; grid-template-rows:auto minmax(0,1fr); overflow:hidden; border-right:1px solid var(--en-border,#c5cfdd); background:color-mix(in srgb,var(--en-soft,#e9eff7) 26%,var(--en-surface,#fff)); }
+.en-settings-content.is-addons .en-addon-browser-sidebar { min-height:0; grid-template-rows:auto auto; overflow:visible; }
 .en-addon-browser-sidebar-header { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px; border-bottom:1px solid var(--en-border,#c5cfdd); }
 .en-addon-browser-sidebar-header small { color:var(--en-muted,#667085); font-size:9.5px; white-space:nowrap; }
 .en-addon-browser-back { min-width:0; display:inline-flex; align-items:center; gap:7px; padding:7px 9px; border:0; border-radius:8px; background:transparent; color:var(--en-text,#101828); font:inherit; font-size:11px; cursor:pointer; }
 .en-addon-browser-back:hover { background:var(--en-surface,#fff); }
 .en-addon-browser-back svg { width:14px; height:14px; }
 .en-addon-browser-list { min-height:0; display:grid; align-content:start; gap:5px; overflow-y:auto; overscroll-behavior:contain; padding:9px; scrollbar-gutter:stable; }
+.en-settings-content.is-addons .en-addon-browser-list { overflow:visible; }
 .en-addon-browser-item { min-width:0; display:grid; grid-template-columns:36px minmax(0,1fr) 14px; align-items:center; gap:9px; padding:9px; border:1px solid transparent; border-radius:10px; background:transparent; color:var(--en-text,#101828); text-align:left; cursor:pointer; }
 .en-addon-browser-item:hover { border-color:var(--en-border,#c5cfdd); background:var(--en-surface,#fff); }
 .en-addon-browser-item.active { border-color:color-mix(in srgb,var(--en-primary,#2563eb) 38%,var(--en-border,#c5cfdd)); background:color-mix(in srgb,var(--en-primary,#2563eb) 10%,var(--en-surface,#fff)); box-shadow:inset 3px 0 0 var(--en-primary,#2563eb); }
@@ -67,6 +71,7 @@
 .en-addon-browser-item-copy small { overflow:hidden; color:var(--en-muted,#667085); font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
 
 .en-addon-browser-detail { min-width:0; min-height:0; display:grid; align-content:start; gap:20px; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; padding:28px 32px 36px; }
+.en-settings-content.is-addons .en-addon-browser-detail { overflow:visible; }
 .en-addon-detail-header { display:grid; grid-template-columns:58px minmax(0,1fr) auto; align-items:center; gap:16px; }
 .en-addon-detail-logo { width:58px; height:58px; display:grid; place-items:center; border-radius:15px; background:var(--en-soft,#e9eff7); color:var(--en-primary,#2563eb); }
 .en-addon-detail-logo svg { width:32px; height:32px; }

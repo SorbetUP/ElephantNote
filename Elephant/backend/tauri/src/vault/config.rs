@@ -10,6 +10,10 @@ pub const CONFIG_FILE: &str = "tauri-vaults.json";
 const MOBILE_DEFAULT_VAULT_ID: &str = "mobile-personal";
 const MOBILE_DEFAULT_VAULT_NAME: &str = "Personal";
 
+fn is_acceptance_temp_vault(path: &str) -> bool {
+  path.contains("/elephant-tauri-acceptance-") && path.ends_with("/vault")
+}
+
 type R<T> = Result<T, String>;
 
 pub fn now_string() -> String {
@@ -45,21 +49,37 @@ fn mobile_default_vault(path: PathBuf) -> VaultDescriptor {
 }
 
 fn with_fallback_vault(mut config: VaultConfig, fallback_path: Option<PathBuf>) -> VaultConfig {
-  let Some(fallback_path) = fallback_path else {
-    return config;
-  };
-
-  if config.vaults.is_empty() {
-    let vault = mobile_default_vault(fallback_path);
-    config.active_vault_id = Some(vault.id.clone());
-    config.vaults.push(vault);
-    return config;
+  if let Some(fallback_path) = fallback_path {
+    if config.vaults.is_empty() {
+      let vault = mobile_default_vault(fallback_path);
+      config.active_vault_id = Some(vault.id.clone());
+      config.vaults.push(vault);
+      return config;
+    }
   }
 
   if config.active_vault_id.as_deref().is_none()
     || active_vault(&config).is_none()
   {
     config.active_vault_id = config.vaults.first().map(|vault| vault.id.clone());
+  }
+
+  // Desktop acceptance runs use temporary vaults. They must never become the
+  // user's next normal development vault after the test process exits.
+  #[cfg(not(mobile))]
+  if let Some(active) = active_vault(&config) {
+    if is_acceptance_temp_vault(&active.path) {
+      let replacement = config
+        .vaults
+        .iter()
+        .filter(|vault| !is_acceptance_temp_vault(&vault.path))
+        .filter(|vault| Path::new(&vault.path).is_dir())
+        .max_by(|left, right| left.last_opened_at.cmp(&right.last_opened_at))
+        .map(|vault| vault.id.clone());
+      if replacement.is_some() {
+        config.active_vault_id = replacement;
+      }
+    }
   }
 
   config
@@ -84,7 +104,7 @@ pub fn read_config(app: &AppHandle) -> R<VaultConfig> {
   let config = if !path.exists() {
     VaultConfig::default()
   } else {
-    let raw = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let raw = fs::read_to_string(&path).map_err(|e| e.to_string())?;
     serde_json::from_str(&raw).unwrap_or_default()
   };
 
@@ -92,7 +112,12 @@ pub fn read_config(app: &AppHandle) -> R<VaultConfig> {
   if let Some(path) = fallback.as_ref() {
     fs::create_dir_all(path).map_err(|e| e.to_string())?;
   }
-  Ok(with_fallback_vault(config, fallback))
+  let normalized = with_fallback_vault(config.clone(), fallback);
+  if normalized.active_vault_id != config.active_vault_id {
+    let raw = serde_json::to_string_pretty(&normalized).map_err(|e| e.to_string())?;
+    fs::write(&path, raw).map_err(|e| e.to_string())?;
+  }
+  Ok(normalized)
 }
 
 pub fn write_config(app: &AppHandle, config: &VaultConfig) -> R<()> {
@@ -194,6 +219,12 @@ mod tests {
     let config = with_fallback_vault(VaultConfig::default(), None);
     assert!(config.vaults.is_empty());
     assert!(config.active_vault_id.is_none());
+  }
+
+  #[test]
+  fn acceptance_temp_vaults_are_identified() {
+    assert!(is_acceptance_temp_vault("/tmp/elephant-tauri-acceptance-abc/vault"));
+    assert!(!is_acceptance_temp_vault("/Users/sorbet/Documents/Notes"));
   }
 
   #[test]

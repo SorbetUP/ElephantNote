@@ -126,6 +126,13 @@ const fetchDirectoryPage = async(relativePath, offset = 0, generation = director
 
 const openPagedFolder = async(relativePath, view) => {
   const vaultId = store.activeVaultId
+  log.info('[library] openPagedFolder:start', {
+    relativePath,
+    view,
+    vaultId,
+    previousOpenedNotePath: store.openedNotePath || null,
+    previousCurrentPath: store.currentPath || ''
+  })
   store.currentPath = relativePath
   store.openedNotePath = ''
   store.activeWorkspaceView = view
@@ -149,6 +156,14 @@ const openPagedFolder = async(relativePath, view) => {
       entries: entryArray(store.entries).length,
       mayHaveMore: directoryMayHaveMore.value
     })
+    log.info('[library] openPagedFolder:done', {
+      relativePath,
+      view,
+      vaultId,
+      openedNotePath: store.openedNotePath || null,
+      currentPath: store.currentPath || '',
+      entryCount: entryArray(store.entries).length
+    })
   } catch (error) {
     if (!shouldApplyFolderResult(relativePath, vaultId, view)) return
     store.entries = []
@@ -157,6 +172,13 @@ const openPagedFolder = async(relativePath, view) => {
     log.info(`[${view}] folder empty or unavailable in library grid`, {
       path: relativePath,
       error: error?.message || error
+    })
+    log.info('[library] openPagedFolder:error', {
+      relativePath,
+      view,
+      vaultId,
+      openedNotePath: store.openedNotePath || null,
+      error: error?.message || String(error)
     })
   }
 }
@@ -199,6 +221,13 @@ const handleGridScroll = (event) => {
 
 const openEntry = async (entry) => {
   const kind = getEntryKind(entry)
+  log.info('[library] openEntry', {
+    path: entry?.path || null,
+    type: entry?.type || null,
+    kind,
+    currentPath: store.currentPath || '',
+    openedNotePath: store.openedNotePath || null
+  })
   if (kind === 'folder') {
     await openFolderInCurrentView(entry.path)
     return

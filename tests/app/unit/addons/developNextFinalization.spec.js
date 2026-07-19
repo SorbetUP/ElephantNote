@@ -35,7 +35,7 @@ describe('develop_next final architecture', () => {
     expect(runtimeImages).toContain('checkRuntimeImageContentType')
   })
 
-  it('keeps the production editor bridge in the neutral Rust namespace', () => {
+  it('keeps the Rust engine neutral and the Muya compatibility facade explicit', () => {
     expect(fs.existsSync(path.join(
       root,
       'Elephant/frontend/src/renderer/src/editor-rust/wasmFactory.js'
@@ -43,8 +43,9 @@ describe('develop_next final architecture', () => {
     const component = read(
       'Elephant/frontend/src/renderer/src/muya/RustMuyaRuntimeEditor.vue'
     )
-    expect(component).toContain('../editor-rust/protocol')
     expect(component).toContain('../editor-rust/runtime')
-    expect(component).not.toContain('muya/lib/rust')
+    expect(component).toContain('completeMuyaRustAdapter.js.wrapper.js')
+    expect(read('Elephant/frontend/src/renderer/src/muya/completeMuyaRustAdapter.js'))
+      .toContain('extends RustOwnedMuya')
   })
 })

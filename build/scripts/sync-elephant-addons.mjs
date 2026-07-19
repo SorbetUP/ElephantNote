@@ -46,15 +46,30 @@ for (const required of ['catalog.json', 'official', 'packs/base.enaddonpack', 'p
 
 const ensureLink = (linkName, target) => {
   const linkPath = path.join(root, linkName)
-  fs.rmSync(linkPath, { recursive: true, force: true })
-  fs.symlinkSync(target, linkPath, process.platform === 'win32' ? 'junction' : 'dir')
+  const pointsToTarget = () => {
+    try {
+      return fs.realpathSync(linkPath) === fs.realpathSync(target)
+    } catch {
+      return false
+    }
+  }
+  if (pointsToTarget()) return
+  try {
+    fs.rmSync(linkPath, { recursive: true, force: true })
+    fs.symlinkSync(target, linkPath, process.platform === 'win32' ? 'junction' : 'dir')
+  } catch (error) {
+    // Another concurrent addons:sync may have created the correct link between
+    // rmSync and symlinkSync. Treat that race as success; surface all other
+    // filesystem failures with their original error and path.
+    if (error?.code === 'EEXIST' && pointsToTarget()) return
+    throw error
+  }
 }
 
 const materializeNativeServices = () => {
   const skippedExplicitly = process.env.ELEPHANT_SKIP_NATIVE_ADDON_BUILD === '1'
-  const genericCiSetup = process.env.CI === 'true' && process.env.ELEPHANT_BUILD_NATIVE_ADDONS !== '1'
-  if (skippedExplicitly || genericCiSetup) {
-    console.log('[addons] native service materialization skipped')
+  if (skippedExplicitly) {
+    console.log('[addons] native service materialization skipped explicitly')
     return
   }
 

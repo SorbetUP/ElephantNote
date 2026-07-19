@@ -165,8 +165,6 @@ const COMMAND_KEY_MAP = {
   'view.toggle-toc': 'commands.view.toggleToc',
 
   // Edit modes
-  'view.toggle-source-code-mode': 'commands.view.toggleSourceCodeMode',
-  'view.source-code-mode': 'commands.view.sourceCodeMode',
   'view.toggle-typewriter-mode': 'commands.view.toggleTypewriterMode',
   'view.typewriter-mode': 'commands.view.typewriterMode',
   'view.toggle-focus-mode': 'commands.view.toggleFocusMode',

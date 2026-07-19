@@ -26,6 +26,7 @@ beforeEach(() => {
   window.__ELEPHANT_NOTE_CITATION_SELECTION_GUARD__?.dispose?.()
   document.body.innerHTML = ''
   delete window.__ELEPHANT_NOTE_CITATION_RUNTIME__
+  delete window.__ELEPHANT_NOTE_CITATION_BUFFER__
   delete window.__ELEPHANT_NOTE_CITATION_SELECTION_GUARD__
   delete window.__ELEPHANT_DEBUG_LOGS__
   vi.restoreAllMocks()
@@ -36,6 +37,7 @@ afterEach(() => {
   window.__ELEPHANT_NOTE_CITATION_SELECTION_GUARD__?.dispose?.()
   vi.useRealTimers()
   document.body.innerHTML = ''
+  delete window.__ELEPHANT_NOTE_CITATION_BUFFER__
 })
 
 describe('note text citations', () => {
@@ -162,5 +164,41 @@ describe('note text citations', () => {
       behavior: 'smooth',
       block: 'center'
     })
+  })
+
+  it('pastes a buffered citation into another note and exposes a delete context action', async() => {
+    document.body.innerHTML = `
+      <div class="en-note-topbar-actions"></div>
+      <div class="en-editor-host"><p id="source">Passage à conserver.</p></div>
+    `
+    const clipboardWrite = vi.fn(async() => {})
+    Object.defineProperty(window.navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: clipboardWrite }
+    })
+    const sourceVault = createVaultStore('Source.md')
+    const editorStore = { currentFile: { id: 'target', markdown: '# Destination', isSaved: true } }
+    const runtime = installNoteCitationRuntime({ vaultStore: sourceVault, editorStore, target: window })
+    const range = document.createRange()
+    range.selectNodeContents(document.getElementById('source'))
+    const selection = window.getSelection()
+    selection.removeAllRanges()
+    selection.addRange(range)
+    const copy = document.querySelector('[data-elephant-note-citation]')
+    copy.click()
+    await flushPromises()
+
+    const buffered = document.querySelector('[data-elephant-citation-buffer-item]')
+    expect(buffered).not.toBeNull()
+    buffered.click()
+    expect(editorStore.currentFile.markdown).toContain('> Passage à conserver.')
+    expect(editorStore.currentFile.isSaved).toBe(false)
+
+    buffered.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: 20, clientY: 20 }))
+    const remove = document.querySelector('[data-elephant-citation-context] button')
+    expect(remove).not.toBeNull()
+    remove.click()
+    expect(document.querySelector('[data-elephant-citation-buffer-item]')).toBeNull()
+    runtime.dispose()
   })
 })

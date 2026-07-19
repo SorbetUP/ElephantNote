@@ -50,7 +50,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "resources": [],
+    "resources": ["resources/official-addons"],
     "icon": [
       "../../assets/static/icon.png",
       "../../assets/static/icon.icns",

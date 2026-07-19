@@ -11,6 +11,7 @@ let androidSyncTimer = null
 const ANDROID_ADVANCED_DIRTY_KEY = 'elephantnote:mobile-advanced-vault-dirty-v1'
 
 const normalizeSlashes = (value = '') => String(value || '').replace(/\\/g, '/')
+const canonicalizeMacPrivatePath = (value = '') => normalizeSlashes(value).replace(/^\/private(?=\/var\/)/, '')
 
 const fileUrlToPath = (value = '') => {
   const text = String(value || '')
@@ -302,7 +303,8 @@ export const installTauriFileUtilsPathGuards = (target = globalThis) => {
       KNOWN_EXISTING_PATHS.has(canonicalizeAndroidPrivateVaultPath(pathname)) ||
       shouldTrustHiddenAssetPath(pathname)
   })
-  wrapSyncPathMethod(fileUtils, 'isSamePathSync', [0, 1])
+  wrapSyncPathMethod(fileUtils, 'isSamePathSync', [0, 1], (_original, args) =>
+    canonicalizeMacPrivatePath(args[0]) === canonicalizeMacPrivatePath(args[1]))
   wrapSyncPathMethod(fileUtils, 'isChildOfDirectory', [0, 1])
   wrapSyncPathMethod(fileUtils, 'isFile', [0], (original, args) =>
     original.apply(fileUtils, args) ||

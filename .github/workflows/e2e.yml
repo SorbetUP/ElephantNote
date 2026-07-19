@@ -40,7 +40,9 @@ jobs:
           sudo apt-get install -y \
             libx11-dev libxkbfile-dev libsecret-1-dev libfontconfig-dev \
             xvfb libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
-            libdrm2 libgtk-3-0 libgbm1 libasound2t64 unzip
+            libdrm2 libgtk-3-0 libgbm1 libasound2t64 unzip \
+            libayatana-appindicator3-dev librsvg2-dev libwebkit2gtk-4.1-dev \
+            patchelf
 
       - uses: ./.github/actions/setup
 
@@ -138,6 +140,18 @@ jobs:
           set -euxo pipefail
           xvfb-run --auto-servernum pnpm test:e2e 2>&1 | tee e2e-tests.txt
 
+      - name: Build and run the packaged Tauri desktop acceptance scenario
+        shell: bash
+        run: |
+          set -euxo pipefail
+          node build/scripts/run-observable.mjs --label tauri-linux-build -- \
+            pnpm build:linux 2>&1 | tee tauri-linux-build.txt
+          test -x Elephant/backend/tauri/target/release/Elephant
+          xvfb-run --auto-servernum env \
+            ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
+            ELEPHANT_ACCEPTANCE_APP_PATH="$PWD/Elephant/backend/tauri/target/release/Elephant" \
+            pnpm test:desktop:acceptance 2>&1 | tee tauri-acceptance-tests.txt
+
       - name: Collect explicit official addon evidence
         if: always()
         shell: bash
@@ -160,6 +174,8 @@ jobs:
             official-addon-native-build.txt
             e2e-build.txt
             e2e-tests.txt
+            tauri-linux-build.txt
+            tauri-acceptance-tests.txt
             test-results/observability/**
             test-results/e2e-results.json
             test-results/e2e-junit.xml

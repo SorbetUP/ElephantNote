@@ -54,6 +54,11 @@ const getRelativeVaultPath = (target, vaultRoot = '', filePath = '') => {
 }
 
 const readVaultNote = async(target, relativePath) => {
+  const invoke = target.__TAURI__?.core?.invoke
+  if (typeof invoke === 'function') {
+    const result = await invoke('tauri_notes_read', { relativePath })
+    if (result != null) return result
+  }
   if (typeof target.elephantnote?.notes?.read === 'function') {
     return target.elephantnote.notes.read({ relativePath })
   }

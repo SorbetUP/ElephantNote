@@ -1,9 +1,12 @@
 import { useVaultStore } from 'elephant-front/stores/vaultStore'
+import { useEditorStore } from '@/store/editor'
+import bus from '@/bus'
 
 const EXTERNAL_PROTOCOL_RE = /^(?:https?:|mailto:|tel:|data:|javascript:|file:)/i
 const MARKDOWN_PATH_RE = /\.md$/i
 const MAX_QUOTE_ANCHOR_CHARS = 640
 const RUNTIME_KEY = '__ELEPHANT_NOTE_CITATION_RUNTIME__'
+const BUFFER_KEY = '__ELEPHANT_NOTE_CITATION_BUFFER__'
 
 const decodeComponent = (value = '') => {
   try {
@@ -243,6 +246,7 @@ const appendDebugLog = (windowObject, level, message, details = {}) => {
     ? windowObject.__ELEPHANT_DEBUG_LOGS__
     : []
   windowObject.__ELEPHANT_DEBUG_LOGS__.push(entry)
+  if (Array.isArray(windowObject.__ELEPHANT_ACCEPTANCE_LOGS__)) windowObject.__ELEPHANT_ACCEPTANCE_LOGS__.push(entry)
   if (windowObject.__ELEPHANT_DEBUG_LOGS__.length > 1000) {
     windowObject.__ELEPHANT_DEBUG_LOGS__.splice(0, windowObject.__ELEPHANT_DEBUG_LOGS__.length - 1000)
   }
@@ -292,6 +296,24 @@ const createFeedback = (message, windowObject, isError = false) => {
   windowObject.setTimeout(() => feedback.remove(), 2200)
 }
 
+const appendCitationToCurrentNote = (editorStore, markdown) => {
+  if (!editorStore?.currentFile?.id) throw new Error('Ouvrez une note avant de coller une citation.')
+  const current = String(editorStore.currentFile.markdown || '')
+  const separator = current && !current.endsWith('\n') ? '\n\n' : ''
+  const next = `${current}${separator}${markdown}\n`
+  editorStore.currentFile.markdown = next
+  editorStore.currentFile.isSaved = false
+  bus.emit('file-changed', {
+    id: editorStore.currentFile.id,
+    markdown: next,
+    cursor: editorStore.currentFile.cursor,
+    renderCursor: true,
+    history: editorStore.currentFile.history,
+    scrollTop: editorStore.currentFile.scrollTop
+  })
+  return next
+}
+
 const selectionBelongsToEditor = (selection, editorHost) => {
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed || !editorHost) return false
   const anchorElement = selection.anchorNode?.nodeType === 1
@@ -338,13 +360,98 @@ const createCitationButton = (copyCitation, windowObject) => {
 export const installNoteCitationRuntime = ({
   pinia,
   vaultStore = null,
+  editorStore: providedEditorStore = null,
   target = globalThis.window
 } = {}) => {
   if (!target?.document) return { dispose() {} }
   target[RUNTIME_KEY]?.dispose?.()
 
   const store = vaultStore || useVaultStore(pinia)
+  const editorStore = providedEditorStore || (pinia ? useEditorStore(pinia) : null)
   let citationButton = null
+  let selectionButton = null
+  let palette = null
+  let contextMenu = null
+  const buffer = Array.isArray(target[BUFFER_KEY]) ? target[BUFFER_KEY] : []
+  target[BUFFER_KEY] = buffer
+
+  const removeContextMenu = () => {
+    contextMenu?.remove()
+    contextMenu = null
+  }
+
+  const deleteCitation = (item) => {
+    const index = buffer.findIndex((entry) => entry.id === item.id)
+    if (index >= 0) buffer.splice(index, 1)
+    removeContextMenu()
+    renderPalette()
+    appendDebugLog(target, 'info', '[elephantnote:citation] buffer item deleted', { id: item.id })
+  }
+
+  const pasteCitation = (item) => {
+    try {
+      appendCitationToCurrentNote(editorStore, item.markdown)
+      createFeedback('Citation collée dans la note.', target)
+      appendDebugLog(target, 'info', '[elephantnote:citation] buffer item pasted', {
+        id: item.id,
+        targetPath: store.openedNotePath || ''
+      })
+      return true
+    } catch (error) {
+      createFeedback(error?.message || String(error), target, true)
+      appendDebugLog(target, 'error', '[elephantnote:citation] paste failed', {
+        id: item.id,
+        error: error?.message || String(error)
+      })
+      return false
+    }
+  }
+
+  const showCitationInfo = (item, x, y) => {
+    removeContextMenu()
+    contextMenu = target.document.createElement('div')
+    contextMenu.dataset.elephantCitationContext = 'true'
+    contextMenu.setAttribute('role', 'menu')
+    contextMenu.style.cssText = 'position:fixed;z-index:10001;display:grid;gap:6px;min-width:240px;padding:10px;border:1px solid var(--en-border);border-radius:10px;background:var(--en-surface);color:var(--en-text);box-shadow:0 18px 44px rgba(0,0,0,.28);'
+    const info = target.document.createElement('div')
+    info.textContent = `${item.title} · ${item.path}`
+    info.style.cssText = 'padding:4px 6px;font-size:12px;white-space:normal;'
+    const remove = target.document.createElement('button')
+    remove.type = 'button'
+    remove.textContent = 'Supprimer la citation'
+    remove.setAttribute('aria-label', `Supprimer la citation ${item.title}`)
+    remove.onclick = () => deleteCitation(item)
+    contextMenu.append(info, remove)
+    target.document.body.appendChild(contextMenu)
+    contextMenu.style.left = `${Math.max(8, Math.min(Number(x) || 20, target.innerWidth - 270))}px`
+    contextMenu.style.top = `${Math.max(8, Math.min(Number(y) || 20, target.innerHeight - 130))}px`
+  }
+
+  const renderPalette = () => {
+    if (!target.document.body) return
+    palette?.remove()
+    palette = target.document.createElement('div')
+    palette.dataset.elephantCitationPalette = 'true'
+    palette.setAttribute('aria-label', 'Citations en attente')
+    palette.style.cssText = 'position:fixed;right:20px;bottom:20px;z-index:10000;display:grid;gap:6px;max-width:min(360px,calc(100vw - 40px));'
+    for (const item of buffer.slice().reverse()) {
+      const button = target.document.createElement('button')
+      button.type = 'button'
+      button.dataset.elephantCitationBufferItem = item.id
+      button.className = 'en-note-citation-buffer-item'
+      button.title = 'Cliquer pour coller · clic droit pour les informations'
+      button.setAttribute('aria-label', `Coller la citation ${item.title}`)
+      button.textContent = `↳ ${item.title}: ${item.text.slice(0, 72)}${item.text.length > 72 ? '…' : ''}`
+      button.style.cssText = 'padding:9px 12px;border:1px solid var(--en-border);border-radius:10px;background:var(--en-surface);color:var(--en-text);box-shadow:0 12px 30px rgba(0,0,0,.22);text-align:left;cursor:pointer;'
+      button.onclick = () => pasteCitation(item)
+      button.oncontextmenu = (event) => {
+        event.preventDefault()
+        showCitationInfo(item, event.clientX, event.clientY)
+      }
+      palette.appendChild(button)
+    }
+    if (buffer.length) target.document.body.appendChild(palette)
+  }
 
   const copyCitation = async () => {
     const editorHost = target.document.querySelector('.en-editor-host')
@@ -372,12 +479,26 @@ export const installNoteCitationRuntime = ({
     }
 
     try {
+      const item = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        path: notePath,
+        title: noteTitle,
+        text: normalizeCitationText(selection.toString()),
+        markdown: citation,
+        createdAt: new Date().toISOString()
+      }
+      buffer.push(item)
+      while (buffer.length > 8) buffer.shift()
       await writeClipboardText(citation, target)
-      createFeedback('Citation copiée. Collez-la dans une autre note.', target)
+      selectionButton?.remove()
+      selectionButton = null
+      renderPalette()
+      createFeedback('Citation copiée et ajoutée au tampon. Cliquez-la dans une autre note pour la coller.', target)
       appendDebugLog(target, 'info', '[elephantnote:citation] copied selected note text', {
         notePath,
         selectedLength: normalizeCitationText(selection.toString()).length,
-        citationLength: citation.length
+        citationLength: citation.length,
+        bufferSize: buffer.length
       })
     } catch (error) {
       createFeedback('La citation n’a pas pu être copiée.', target, true)
@@ -386,6 +507,26 @@ export const installNoteCitationRuntime = ({
         error: error?.message || String(error)
       })
     }
+  }
+
+  const updateSelectionButton = () => {
+    const editorHost = target.document.querySelector('.en-editor-host')
+    const selection = target.getSelection?.()
+    if (!selectionBelongsToEditor(selection, editorHost)) {
+      selectionButton?.remove()
+      selectionButton = null
+      return
+    }
+    if (selectionButton) return
+    selectionButton = target.document.createElement('button')
+    selectionButton.type = 'button'
+    selectionButton.dataset.elephantCitationSelectionAction = 'true'
+    selectionButton.className = 'en-note-citation-selection-action'
+    selectionButton.setAttribute('aria-label', 'Ajouter la sélection aux citations')
+    selectionButton.textContent = 'Citer'
+    selectionButton.style.cssText = 'position:fixed;right:20px;bottom:20px;z-index:10000;padding:9px 13px;border:1px solid var(--en-primary);border-radius:10px;background:var(--en-primary);color:#fff;cursor:pointer;box-shadow:0 12px 30px rgba(0,0,0,.25);'
+    selectionButton.onclick = () => void copyCitation()
+    target.document.body.appendChild(selectionButton)
   }
 
   const ensureCitationButton = () => {
@@ -444,14 +585,24 @@ export const installNoteCitationRuntime = ({
   const observer = new target.MutationObserver(ensureCitationButton)
   observer.observe(target.document.documentElement, { childList: true, subtree: true })
   target.document.addEventListener('click', handleInternalLinkClick, true)
+  target.document.addEventListener('selectionchange', updateSelectionButton)
+  target.document.addEventListener('mouseup', updateSelectionButton)
   ensureCitationButton()
+  renderPalette()
 
   const runtime = {
     copyCitation,
+    pasteCitation,
+    buffer,
     dispose() {
       observer.disconnect()
       target.document.removeEventListener('click', handleInternalLinkClick, true)
+      target.document.removeEventListener('selectionchange', updateSelectionButton)
+      target.document.removeEventListener('mouseup', updateSelectionButton)
       citationButton?.remove()
+      selectionButton?.remove()
+      palette?.remove()
+      removeContextMenu()
       target.document.querySelector('[data-elephant-citation-feedback]')?.remove()
       if (target[RUNTIME_KEY] === runtime) delete target[RUNTIME_KEY]
     }

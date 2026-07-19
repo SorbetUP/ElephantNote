@@ -1,4 +1,5 @@
 import './platform/bootstrapGlobals'
+import elephantLogoUrl from '../../../../assets/static/icon.png'
 import './mobile-shell-layout.css'
 import './mobile-android.css'
 import './mobile-native-ux.css'
@@ -73,7 +74,7 @@ const renderStartupFailure = (error) => {
   const mark = document.createElement('div')
   mark.className = 'elephant-startup-mark'
   mark.setAttribute('aria-hidden', 'true')
-  mark.textContent = '🐘'
+  installStartupLogo(mark)
 
   const title = document.createElement('strong')
   title.textContent = 'Elephant n’a pas pu démarrer'
@@ -85,6 +86,15 @@ const renderStartupFailure = (error) => {
   root.append(surface)
 }
 
+const installStartupLogo = (mark = document.querySelector('.elephant-startup-mark')) => {
+  if (!mark) return
+  const logo = document.createElement('img')
+  logo.src = elephantLogoUrl
+  logo.alt = ''
+  mark.replaceChildren(logo)
+}
+
+installStartupLogo()
 installRendererDiagnostics()
 globalThis.marktext = {}
 clearBootstrapFileUtilsFallbackForTauri()
@@ -193,7 +203,10 @@ const mountRendererApp = async(runtime, windowType) => {
     hasVisibleShell: Boolean(document.querySelector('.en-empty-vault, .en-shell'))
   })
   installStoreDiagnostics()
-  installAcceptanceTestBridge({ pinia })
+  const acceptanceEnabled = typeof window.__TAURI__?.core?.invoke === 'function'
+    ? await window.__TAURI__.core.invoke('tauri_acceptance_enabled').catch(() => false)
+    : false
+  if (acceptanceEnabled === true) installAcceptanceTestBridge({ pinia })
   installNoteCitationRuntime({ pinia })
   installNoteCitationSelectionGuard(window)
 }

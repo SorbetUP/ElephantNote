@@ -1,4 +1,5 @@
 import ExportMarkdown from '../../../../Elephant/frontend/src/muya/lib/utils/exportMarkdown'
+import { CURSOR_ANCHOR_DNA, CURSOR_FOCUS_DNA } from '../../../../Elephant/frontend/src/muya/lib/config'
 
 // Build a minimal table block structure that ExportMarkdown.normalizeTable expects.
 const makeTableBlock = (headerCells, bodyRows) => {
@@ -60,5 +61,20 @@ describe('ExportMarkdown.normalizeTable', () => {
   it('handles a body row with fewer cells than the header', () => {
     const table = makeTableBlock(['col1', 'col2', 'col3'], [['a']])
     expect(() => exporter.normalizeTable(table, '')).not.to.throw()
+  })
+})
+
+describe('ExportMarkdown cursor markers', () => {
+  it('never leaks Muya cursor DNA into exported Markdown', () => {
+    const heading = {
+      type: 'h1',
+      headingStyle: 'atx',
+      children: [{ text: `${CURSOR_ANCHOR_DNA}# Title${CURSOR_FOCUS_DNA}` }]
+    }
+    const output = new ExportMarkdown([heading]).generate()
+
+    expect(output).to.equal('# Title\n')
+    expect(output).not.to.include(CURSOR_ANCHOR_DNA)
+    expect(output).not.to.include(CURSOR_FOCUS_DNA)
   })
 })

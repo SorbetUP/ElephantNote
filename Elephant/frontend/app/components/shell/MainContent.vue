@@ -31,7 +31,8 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
+import log from '@/platform/runtimeLogShim'
 import { useEditorStore } from '@/store/editor'
 import { useVaultStore } from '../../stores/vaultStore'
 import { useAddonsStore } from '@/store/addons'
@@ -65,8 +66,25 @@ const hasOpenNote = computed(() => {
   const pathname = openedNoteAbsolutePath.value
   if (!pathname) return false
   return [editorStore.currentFile, ...(editorStore.tabs || [])]
-    .some((file) => pathsMatch(file?.pathname, pathname))
+    .some((file) => pathsMatch(file?.pathname, pathname) &&
+      file?.id && typeof file.markdown === 'string')
 })
+watch(
+  [hasOpenNote, openedNoteAbsolutePath, () => store.openedNotePath, () => editorStore.currentFile?.pathname, () => editorStore.tabs.length],
+  ([nextOpen, absolutePath, relativePath, currentPath, tabCount], previous) => {
+    log.info('[main-content] note-visibility', {
+      nextOpen,
+      previousOpen: previous?.[0] ?? null,
+      absolutePath: absolutePath || null,
+      relativePath: relativePath || null,
+      currentPath: currentPath || null,
+      tabCount,
+      activeVaultId: store.activeVaultId || null,
+      workspaceView: store.activeWorkspaceView
+    })
+  },
+  { immediate: true }
+)
 const activeAddonViewId = computed(() => props.activeAddonViewId)
 const showLibrary = computed(() => store.activeWorkspaceView === 'notes')
 const workspacePanels = computed(() => addonsStore.getContributions('layout.zones')

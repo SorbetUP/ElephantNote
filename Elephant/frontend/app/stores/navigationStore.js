@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import log from '@/platform/runtimeLogShim'
 import { irohSyncClient } from '../services/irohSyncClient'
 
 const isSameEntry = (a, b) => {
@@ -34,9 +35,18 @@ export const useNavigationStore = defineStore('elephantnoteNavigation', {
   actions: {
     push(entry) {
       if (!entry) return
+      log.info('[navigation] push:start', {
+        entry,
+        current: this.current,
+        index: this.index,
+        historyLength: this.history.length
+      })
       const normalized = { ...entry }
       if (this.history.length > 0 && this.index >= 0) {
-        if (isSameEntry(this.history[this.index], normalized)) return
+        if (isSameEntry(this.history[this.index], normalized)) {
+          log.info('[navigation] push:skip-same-entry', { entry: normalized })
+          return
+        }
         this.history = this.history.slice(0, this.index + 1)
       }
       this.history = [...this.history, normalized]
@@ -45,9 +55,15 @@ export const useNavigationStore = defineStore('elephantnoteNavigation', {
         this.history = this.history.slice(-80)
         this.index = this.history.length - 1
       }
+      log.info('[navigation] push:done', {
+        current: this.current,
+        index: this.index,
+        historyLength: this.history.length
+      })
     },
 
     reset(entry) {
+      log.info('[navigation] reset', { entry, previousLength: this.history.length })
       this.history = []
       this.index = -1
       this.push(entry)
@@ -56,16 +72,20 @@ export const useNavigationStore = defineStore('elephantnoteNavigation', {
     back() {
       if (this.index > 0) {
         this.index -= 1
+        log.info('[navigation] back', { entry: this.history[this.index], index: this.index })
         return this.history[this.index]
       }
+      log.info('[navigation] back:empty', { index: this.index })
       return null
     },
 
     forward() {
       if (this.index < this.history.length - 1) {
         this.index += 1
+        log.info('[navigation] forward', { entry: this.history[this.index], index: this.index })
         return this.history[this.index]
       }
+      log.info('[navigation] forward:empty', { index: this.index })
       return null
     },
 

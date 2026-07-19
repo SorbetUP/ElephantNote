@@ -66,7 +66,7 @@ describe('progressive Linux application usage simulations', () => {
     expect(suite).toContain('checkpointState')
     expect(suite).toContain("page.on('pageerror'")
     expect(suite).toContain("message.type() === 'error'")
-    expect(suite).toContain("getByTestId('muya-rust-runtime-editor')")
+    expect(suite).toContain("getByTestId('muya-runtime-editor')")
     expect(suite).toContain("getByRole('textbox', { name: 'Note title' })")
     expect(suite).toContain('Preview updated by Rust editor 9173.')
     expect(suite).toContain('E2E Note Tools')

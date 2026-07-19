@@ -46,6 +46,7 @@
 .en-settings-nav > button:hover .en-settings-nav-chevron, .en-settings-nav > button.active .en-settings-nav-chevron { opacity: .72; transform: translateX(1px); }
 .en-settings-nav-footer { margin-top: auto; display: flex; justify-content: space-between; gap: 8px; padding: 11px 9px 0; border-top: 1px solid var(--en-border, #c5cfdd); color: var(--en-muted, #667085); font-size: 9.5px; }
 .en-settings-content { min-width: 0; overflow-x: hidden; overflow-y: auto; padding: 28px 34px 46px; background: var(--en-bg, #f7f9fc); }
+.en-settings-content.is-addons { overflow-y: auto; }
 .en-settings-page-title { min-height: 38px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .en-settings-page-title h1 { margin: 0; font-size: 24px; line-height: 1.2; letter-spacing: -.035em; }
 .en-settings-page-title span { color: var(--en-muted, #667085); font-size: 11px; }

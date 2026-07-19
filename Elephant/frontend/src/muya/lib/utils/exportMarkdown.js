@@ -9,13 +9,20 @@
  * The output markdown needs to obey the standards of these Spec.
  */
 
+import { CURSOR_ANCHOR_DNA, CURSOR_FOCUS_DNA } from '../config'
+
+const stripCursorDna = (value) => String(value || '')
+  .split(CURSOR_ANCHOR_DNA).join('')
+  .split(CURSOR_FOCUS_DNA).join('')
+
 class ExportMarkdown {
-  constructor(blocks, listIndentation = 1, isGitlabCompatibilityEnabled = false) {
+  constructor(blocks, listIndentation = 1, isGitlabCompatibilityEnabled = false, preserveCursorDna = false) {
     this.blocks = blocks
     this.listType = [] // 'ul' or 'ol'
     // helper to translate the first tight item in a nested list
     this.isLooseParentList = true
     this.isGitlabCompatibilityEnabled = !!isGitlabCompatibilityEnabled
+    this.preserveCursorDna = Boolean(preserveCursorDna)
 
     // set and validate settings
     this.listIndentation = 'number'
@@ -30,7 +37,8 @@ class ExportMarkdown {
   }
 
   generate() {
-    return this.translateBlocks2Markdown(this.blocks)
+    const markdown = this.translateBlocks2Markdown(this.blocks)
+    return this.preserveCursorDna ? markdown : stripCursorDna(markdown)
   }
 
   translateBlocks2Markdown(blocks, indent = '', listIndent = '') {
@@ -181,7 +189,8 @@ class ExportMarkdown {
 
   normalizeHeaderText(block, indent) {
     const { headingStyle, marker } = block
-    const { text } = block.children[0]
+    const rawText = block.children[0].text
+    const text = this.preserveCursorDna ? rawText : stripCursorDna(rawText)
     if (headingStyle === 'atx') {
       const match = text.match(/^ {0,3}(#{1,6})(.*)$/)
       if (!match) {

@@ -6,7 +6,7 @@ const root = process.cwd()
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8')
 
 describe('neutral Rust editor namespace', () => {
-  it('keeps production adapters outside the legacy Muya source tree', () => {
+  it('keeps the Rust engine neutral while restoring the Muya compatibility facade', () => {
     const runtime = read('Elephant/frontend/src/renderer/src/editor-rust/runtime.js')
     const bridge = read('Elephant/frontend/src/renderer/src/editor-rust/bridge.js')
     const wasmFactory = read('Elephant/frontend/src/renderer/src/editor-rust/wasmFactory.js')
@@ -16,8 +16,9 @@ describe('neutral Rust editor namespace', () => {
     expect(bridge).toContain('Elephant Rust')
     expect(wasmFactory).toContain('muya-rust-wasm-bundle')
     expect(wasmFactory).not.toContain('editorState-rust-wasm-bundle')
-    expect(component).toContain('../editor-rust/protocol')
     expect(component).toContain('../editor-rust/runtime')
-    expect(component).not.toContain('muya/lib/rust')
+    expect(component).toContain('completeMuyaRustAdapter.js.wrapper.js')
+    expect(read('Elephant/frontend/src/renderer/src/muya/completeMuyaRustAdapter.js'))
+      .toContain('extends RustOwnedMuya')
   })
 })

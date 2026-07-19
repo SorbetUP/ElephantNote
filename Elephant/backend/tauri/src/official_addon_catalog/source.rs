@@ -41,6 +41,10 @@ fn local_package_directory(item: &CatalogAddon) -> R<PathBuf> {
     .join(prefix))
 }
 
+fn bundled_package_directory(item: &CatalogAddon, addons_root: &Path) -> R<PathBuf> {
+  Ok(addons_root.join(package_prefix(item)?))
+}
+
 fn collect_local_files(root: &Path, current: &Path, files: &mut BTreeMap<String, Vec<u8>>) -> R<()> {
   for entry in fs::read_dir(current).map_err(|error| error.to_string())? {
     let entry = entry.map_err(|error| error.to_string())?;

@@ -91,13 +91,7 @@ export const installTauriMarkTextSaveBridge = (target = globalThis) => {
   target.__TAURI_MARKTEXT_SAVE_BRIDGE_INSTALLED__ = true
 
   ipc.on('mt::response-file-save', (_event, ...args) => {
-    const record = getRecordFromArgs(args)
-    console.warn('[tauri:marktext-save] ignored compatibility response-file-save; NoteEditorHost autosave is authoritative', {
-      id: record.id || '',
-      pathname: normalizePath(getSaveTarget(target, record)),
-      length: typeof record.markdown === 'string' ? record.markdown.length : 0
-    })
-    if (record.id) ipc.send('mt::tab-saved', record.id)
+    void writeRecord(target, ipc, getRecordFromArgs(args), 'response-file-save')
   })
 
   ipc.on('mt::response-file-save-as', (_event, ...args) => {

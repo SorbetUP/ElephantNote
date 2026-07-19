@@ -472,9 +472,20 @@ const createTauriElectronFacade = (target, tauri) => {
   }
   const openMarkdownDocuments = async(filePaths) => {
     const paths = Array.isArray(filePaths) ? filePaths : [filePaths]
+    console.info('[tauri:runtime-bridge] openMarkdownDocuments:start', {
+      count: paths.filter(Boolean).length,
+      paths: paths.filter(Boolean)
+    })
     for (const [index, pathname] of paths.filter(Boolean).entries()) {
       const markdown = await decodeText(await target.fileUtils?.readFile?.(pathname))
       const filename = target.path?.basename?.(pathname) || pathname.split('/').pop() || pathname
+      console.info('[tauri:runtime-bridge] openMarkdownDocuments:dispatch', {
+        index,
+        pathname,
+        filename,
+        markdownLength: markdown.length,
+        selected: index === 0
+      })
       eventBus.send('mt::open-new-tab', {
         pathname,
         filename,
@@ -482,6 +493,7 @@ const createTauriElectronFacade = (target, tauri) => {
         isMixedLineEndings: false
       }, {}, index === 0)
     }
+    console.info('[tauri:runtime-bridge] openMarkdownDocuments:done', { count: paths.filter(Boolean).length })
   }
   const importPandocDocument = async(pathname) => {
     if (!pathname) return false

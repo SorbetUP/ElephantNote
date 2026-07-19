@@ -289,7 +289,7 @@ export const createHostAddonContext = (manager, record, legacyContext) => {
       registerPanel: (definition) => register(ADDON_EXTENSION_POINTS.workspacePanels, definition),
       registerSidebarItem: (definition) => register(ADDON_EXTENSION_POINTS.sidebarItems, definition),
       registerStatusBarItem: (definition) => register(ADDON_EXTENSION_POINTS.statusBarItems, definition),
-      openView: (viewId, params = {}) => dispatchHostEvent('elephantnote:addon-open-view', {
+      openView: (viewId, params = {}) => dispatchHostEvent('elephantnote:open-addon-view', {
         viewId: requireString(viewId, 'viewId'), params, addonId
       })
     }),

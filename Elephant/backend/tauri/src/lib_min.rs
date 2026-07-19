@@ -25,6 +25,7 @@ pub mod vault_layout;
 
 mod android_vault_commands;
 mod debug_commands;
+mod acceptance_server;
 #[cfg(mobile)]
 mod embedded_addon_services;
 mod official_addon_catalog;
@@ -88,6 +89,9 @@ pub fn run() {
             app.manage(addons::AddonState::new());
             app.manage(addon_sidecars::AddonSidecarState::new());
             app.manage(addon_services::AddonServiceState::new());
+            app.manage(markdown::muya_session::MuyaEngineSessions::default());
+            app.manage(acceptance_server::AcceptanceState::default());
+            acceptance_server::start(&handle);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -129,6 +133,9 @@ pub fn run() {
             addons::tauri_addons_read_module,
             addons::tauri_addons_call,
             debug_commands::tauri_debug_log,
+            acceptance_server::tauri_acceptance_enabled,
+            acceptance_server::tauri_acceptance_result,
+            acceptance_server::tauri_acceptance_ready,
             state::tauri_prefs_get,
             state::tauri_prefs_all,
             state::tauri_prefs_set,
@@ -209,6 +216,16 @@ pub fn run() {
             markdown::commands::tauri_muya_commit_composition,
             markdown::commands::tauri_muya_cancel_composition,
             markdown::commands::tauri_muya_editor_snapshot,
+            markdown::muya_assets::tauri_muya_asset_write,
+            markdown::muya_session::tauri_muya_session_create,
+            markdown::muya_session::tauri_muya_session_sync_document,
+            markdown::muya_session::tauri_muya_session_apply,
+            markdown::muya_session::tauri_muya_session_apply_parity,
+            markdown::muya_session::tauri_muya_session_apply_complete,
+            markdown::muya_session::tauri_muya_session_paste_clipboard,
+            markdown::muya_session::tauri_muya_session_commit_composition,
+            markdown::muya_session::tauri_muya_session_query,
+            markdown::muya_session::tauri_muya_session_close,
             tauri_extra_commands::shell_exec,
             tauri_extra_commands::tauri_notes_read,
             tauri_extra_commands::tauri_notes_write,

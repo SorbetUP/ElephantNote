@@ -117,7 +117,7 @@ const closeSettings = async (page) => {
 
 const openNote = async (page, title) => {
   await card(page, title).click()
-  const editor = page.getByTestId('muya-rust-runtime-editor')
+  const editor = page.getByTestId('muya-runtime-editor')
   await expect(editor).toBeVisible()
   await expect(page.locator('.en-note-topbar')).toBeVisible()
   await expect(page.getByRole('textbox', { name: 'Note title' })).toBeVisible()
@@ -354,7 +354,7 @@ test.describe('Linux production-renderer usage regressions', () => {
     }).toContain('Addon action updated this note 4421.')
     await closeSettings(page)
     await expect(page.locator('.en-note-topbar')).toBeVisible()
-    await expect(page.getByTestId('muya-rust-runtime-editor')).toContainText('Addon action updated this note 4421.')
+    await expect(page.getByTestId('muya-runtime-editor')).toContainText('Addon action updated this note 4421.')
     await checkpoint('linux-addon-action-note-result')
     await closeNote(page)
     await expect(card(page, 'Project Alpha')).toContainText('Addon action updated this note 4421.')
@@ -387,7 +387,7 @@ test.describe('Linux production-renderer usage regressions', () => {
     await openNote(page, 'Getting Started')
     await checkpointState('linux-navigation-stress-state', async () => ({
       cycles: 3,
-      editorVisible: await page.getByTestId('muya-rust-runtime-editor').isVisible(),
+      editorVisible: await page.getByTestId('muya-runtime-editor').isVisible(),
       editorChromeVisible: await page.locator('.en-note-topbar').isVisible(),
       errors: []
     }))

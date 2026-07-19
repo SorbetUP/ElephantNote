@@ -33,13 +33,14 @@ fn assert_workspace_frontend_hook(config: &Value, pointer: &str) {
 }
 
 #[test]
-fn desktop_tauri_config_excludes_optional_addon_runtimes() {
+fn desktop_tauri_config_bundles_controlled_official_addon_runtimes() {
   let config = read_json("Elephant/backend/tauri/tauri.conf.json");
   let resources = config
     .pointer("/bundle/resources")
     .and_then(Value::as_array)
     .expect("desktop resources must be an array");
-  assert!(resources.is_empty(), "core desktop bundle must not include optional addon runtime binaries");
+  assert_eq!(resources.len(), 1, "desktop should bundle one controlled addon resource root");
+  assert_eq!(resources[0].as_str(), Some("resources/official-addons"), "desktop addon resources must use the controlled staging root");
   assert_workspace_frontend_hook(&config, "/build/beforeBuildCommand");
 
   let icons = config.pointer("/bundle/icon").and_then(Value::as_array).expect("desktop icons must be an array");

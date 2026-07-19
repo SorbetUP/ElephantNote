@@ -8,20 +8,11 @@
       <runtime-editor
         :markdown="markdown"
         :cursor="cursor"
-        :source-code="sourceCode"
         :text-direction="textDirection"
         :platform="platform"
         :to-editor-markdown="toEditorMarkdown"
         :from-editor-markdown="fromEditorMarkdown"
         :rust-runtime-factory="rustRuntimeFactory"
-      />
-      <source-code
-        v-if="sourceCode"
-        :markdown="markdown"
-        :muya-index-cursor="muyaIndexCursor"
-        :text-direction="textDirection"
-        :to-editor-markdown="toEditorMarkdown"
-        :from-editor-markdown="fromEditorMarkdown"
       />
     </div>
     <tab-notifications />
@@ -33,7 +24,6 @@ import { useLayoutStore } from '@/store/layout'
 import { storeToRefs } from 'pinia'
 import Tabs from './tabs.vue'
 import RuntimeEditor from './runtimeEditor.vue'
-import SourceCode from './sourceCode.vue'
 import TabNotifications from './notifications.vue'
 
 defineProps({
@@ -49,10 +39,6 @@ defineProps({
   },
   muyaIndexCursor: {
     type: Object
-  },
-  sourceCode: {
-    type: Boolean,
-    required: true
   },
   showTabBar: {
     type: Boolean,

@@ -265,10 +265,20 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
 
     applyPayload(payload) {
       if (!payload || payload.canceled) return
+      const previousActiveVaultId = this.activeVaultId
+      const previousOpenedNotePath = this.openedNotePath
+      const previousOpenedNotes = this.openedNotes
+      const preservesActiveNote = Boolean(
+        previousActiveVaultId &&
+        previousActiveVaultId === payload.activeVaultId &&
+        previousOpenedNotePath
+      )
       log.info('[vault] applyPayload', {
         vaultCount: Array.isArray(payload.vaults) ? payload.vaults.length : 0,
         entryCount: Array.isArray(payload.entries) ? payload.entries.length : 0,
-        activeVaultId: payload.activeVaultId || null
+        activeVaultId: payload.activeVaultId || null,
+        preservesActiveNote,
+        openedNotePath: previousOpenedNotePath || null
       })
       this.vaults = entryArray(payload.vaults)
       this.activeVaultId = payload.activeVaultId || null
@@ -276,12 +286,18 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       this.workspace = payload.workspace || null
       this.entries = entryArray(payload.entries)
       this.rootEntries = entryArray(payload.entries)
-      this.openedNotePath = ''
-      this.openedNotes = []
+      this.openedNotePath = preservesActiveNote ? previousOpenedNotePath : ''
+      this.openedNotes = preservesActiveNote ? previousOpenedNotes : []
       this.wikiRecords = []
       this.currentPath = ''
       this.activeWorkspaceView = 'notes'
       this.loadPinnedNotes()
+      window.dispatchEvent(new CustomEvent('elephantnote:vault-active-changed', {
+        detail: {
+          activeVaultId: this.activeVaultId,
+          activeVaultPath: this.activeVault?.path || null
+        }
+      }))
     },
 
     async load() {
@@ -393,6 +409,11 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
     },
 
     async openDirectory(relativePath = '', options = {}) {
+      log.info('[vault] openDirectory:start', {
+        relativePath,
+        previousOpenedNotePath: this.openedNotePath || null,
+        previousCurrentPath: this.currentPath || ''
+      })
       this.currentPath = relativePath
       this.openedNotePath = ''
       this.activeWorkspaceView = 'notes'
@@ -406,6 +427,11 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
           ? { type: 'folder', id: relativePath, path: relativePath }
           : { type: 'all_notes' })
       }
+      log.info('[vault] openDirectory:done', {
+        relativePath,
+        entryCount: this.entries.length,
+        openedNotePath: this.openedNotePath || null
+      })
     },
 
     async loadWiki({ regenerate = false } = {}) {
@@ -493,7 +519,16 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
     },
 
     openNote(entry, options = {}) {
-      if (this.openedNotePath === entry.path) return
+      log.info('[vault] openNote:start', {
+        path: entry?.path || null,
+        previousOpenedNotePath: this.openedNotePath || null,
+        activeVaultId: this.activeVaultId || null,
+        record: options.record !== false
+      })
+      if (this.openedNotePath === entry.path) {
+        log.info('[vault] openNote:skip-already-open', { path: entry.path })
+        return
+      }
       this.openedNotePath = entry.path
       this.rememberNote(entry)
       window.tauri.ipcRenderer.send('mt::open-file', `${this.activeVault.path}/${entry.path}`, {})
@@ -505,13 +540,24 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
           title: entry.title
         })
       }
+      log.info('[vault] openNote:done', {
+        path: this.openedNotePath,
+        currentPath: this.currentPath || null,
+        openedNotesCount: this.openedNotes.length
+      })
     },
 
     closeNote() {
+      log.info('[vault] closeNote', { previousOpenedNotePath: this.openedNotePath || null })
       this.openedNotePath = ''
     },
 
     setWorkspaceView(view, options = {}) {
+      log.info('[vault] setWorkspaceView:start', {
+        view,
+        previousView: this.activeWorkspaceView,
+        previousOpenedNotePath: this.openedNotePath || null
+      })
       this.activeWorkspaceView = WORKSPACE_VIEWS.includes(view)
         ? view
         : 'notes'
@@ -519,6 +565,10 @@ export const useVaultStore = defineStore('elephantnoteVaults', {
       if (options.record !== false) {
         useNavigationStore().push({ type: view })
       }
+      log.info('[vault] setWorkspaceView:done', {
+        view: this.activeWorkspaceView,
+        openedNotePath: this.openedNotePath || null
+      })
     },
 
     openChatSidebar() {

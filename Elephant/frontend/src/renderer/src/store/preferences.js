@@ -140,6 +140,12 @@ export const usePreferencesStore = defineStore('preferences', {
       }
     },
     SET_MODE({ type, checked }) {
+      if (type === 'sourceCode') {
+        // The desktop editor is Rust Muya-only. Keep legacy IPC/preferences
+        // messages from remounting the editor as the removed CodeMirror view.
+        this.sourceCode = false
+        return
+      }
       this[type] = checked
     },
     TOGGLE_VIEW_MODE(entryName) {
@@ -217,6 +223,10 @@ export const usePreferencesStore = defineStore('preferences', {
     // Toggle a view option and notify main process to toggle menu item.
     LISTEN_TOGGLE_VIEW() {
       bus.on('view:toggle-view-entry', (entryName) => {
+        if (entryName === 'sourceCode') {
+          this.sourceCode = false
+          return
+        }
         this.TOGGLE_VIEW_MODE(entryName)
         this.DISPATCH_EDITOR_VIEW_STATE({ [entryName]: this[entryName] })
       })

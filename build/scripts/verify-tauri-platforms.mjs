@@ -22,6 +22,7 @@ const vaultConfig = readText('Elephant/backend/tauri/src/vault/config.rs')
 const coreCommands = readText('Elephant/backend/tauri/src/core_commands.rs')
 const libMin = readText('Elephant/backend/tauri/src/lib_min.rs')
 const addonServices = readText('Elephant/backend/tauri/src/addon_services.rs')
+const desktopAcceptanceWorkflow = readText('.github/workflows/tauri-desktop-acceptance.yml')
 
 const assertWorkspaceBuildHook = (config, label) => {
   const command = config.build?.beforeBuildCommand
@@ -60,8 +61,29 @@ assert(
 )
 assertWorkspaceBuildHook(baseConfig, 'Core Tauri build')
 assert(
-  Array.isArray(baseConfig.bundle?.resources) && baseConfig.bundle.resources.length === 0,
-  'Core desktop bundle resources must exclude optional addon binaries'
+  Array.isArray(baseConfig.bundle?.resources) &&
+    baseConfig.bundle.resources.length === 1 &&
+    baseConfig.bundle.resources[0] === 'resources/official-addons',
+  'Core desktop bundle must include only the controlled official addon resource root'
+)
+assert(
+  typeof packageJson.scripts['tauri:web:build'] === 'string' &&
+    packageJson.scripts['tauri:web:build'].includes('prepare-tauri-addon-resources.mjs'),
+  'Tauri production builds must prepare official addon resources before bundling'
+)
+assert(
+  existsSync(absolute('build/scripts/prepare-tauri-addon-resources.mjs')),
+  'The Tauri official addon resource preparation script must exist'
+)
+for (const platform of ['linux-x86_64', 'windows-x86_64', 'macos-x86_64', 'macos-aarch64']) {
+  assert(
+    desktopAcceptanceWorkflow.includes(`name: ${platform}`),
+    `Tauri desktop acceptance workflow must cover ${platform}`
+  )
+}
+assert(
+  desktopAcceptanceWorkflow.includes('test:desktop:acceptance:packaged'),
+  'Tauri desktop acceptance workflow must execute the packaged scenario'
 )
 
 assert(

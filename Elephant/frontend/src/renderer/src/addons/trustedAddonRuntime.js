@@ -200,7 +200,7 @@ export const createTrustedAddonApi = (record, context, sessionDisposables = [], 
       registerStatusBarItem: context.addStatusBarItem,
       registerContribution: register,
       openView(viewId, params = {}) {
-        target?.dispatchEvent?.(new CustomEvent('elephantnote:addon-open-view', {
+        target?.dispatchEvent?.(new CustomEvent('elephantnote:open-addon-view', {
           detail: { viewId, params, addonId: manifest.id }
         }))
       }

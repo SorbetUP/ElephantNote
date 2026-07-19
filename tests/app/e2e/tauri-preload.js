@@ -194,6 +194,7 @@ const invoke = async (command, payload = {}) => {
   const params = payload || {}
   switch (command) {
     case 'healthcheck': return 'ok'
+    case 'tauri_acceptance_enabled': return false
     // Renderer diagnostics are best-effort in the Electron/Tauri compatibility
     // harness. Rejecting them turns harmless startup logging into unhandled
     // promise errors and can prevent addon scenarios from reaching the test.

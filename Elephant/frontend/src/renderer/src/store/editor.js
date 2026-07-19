@@ -681,8 +681,7 @@ export const useEditorStore = defineStore('editor', {
           markdownList,
           lineEnding,
           sideBarVisibility,
-          tabBarVisibility,
-          sourceCodeModeEnabled
+          tabBarVisibility
         } = config
 
       window.tauri.ipcRenderer.send('mt::window-initialized')
@@ -694,10 +693,7 @@ export const useEditorStore = defineStore('editor', {
           showTabBar: !!tabBarVisibility
         })
         layoutStore.DISPATCH_LAYOUT_MENU_ITEMS()
-        preferencesStore.SET_MODE({
-          type: 'sourceCode',
-          checked: !!sourceCodeModeEnabled
-        })
+        preferencesStore.SET_MODE({ type: 'sourceCode', checked: false })
 
         if (addBlankTab) {
           this.NEW_UNTITLED_TAB({ selected: true })
@@ -1054,6 +1050,15 @@ export const useEditorStore = defineStore('editor', {
      * and optional whether the tab should become the selected tab (true if not set).
      */
     NEW_TAB_WITH_CONTENT({ markdownDocument, options = {}, selected }) {
+      console.info('[elephantnote:editor] NEW_TAB_WITH_CONTENT:start', {
+        pathname: markdownDocument?.pathname || null,
+        filename: markdownDocument?.filename || null,
+        markdownLength: typeof markdownDocument?.markdown === 'string' ? markdownDocument.markdown.length : 0,
+        selected: selected !== false,
+        currentFileId: this.currentFile?.id || null,
+        currentFilePath: this.currentFile?.pathname || null,
+        tabCount: this.tabs.length
+      })
       if (!markdownDocument) {
         console.warn('Cannot create a file tab without a markdown document!')
         this.NEW_UNTITLED_TAB({})
@@ -1068,6 +1073,11 @@ export const useEditorStore = defineStore('editor', {
       const { pathname } = markdownDocument
       const existingTab = tabs.find((t) => window.fileUtils.isSamePathSync(t.pathname, pathname))
       if (existingTab) {
+        console.info('[elephantnote:editor] NEW_TAB_WITH_CONTENT:existing-tab', {
+          pathname,
+          tabId: existingTab.id,
+          previousCurrentFileId: currentFile?.id || null
+        })
         this.UPDATE_CURRENT_FILE(existingTab)
         return
       }
@@ -1097,6 +1107,14 @@ export const useEditorStore = defineStore('editor', {
         this.updateTabIdToIndex()
         debouncedSendBufferedState()
       }
+      console.info('[elephantnote:editor] NEW_TAB_WITH_CONTENT:done', {
+        id,
+        pathname,
+        selected,
+        currentFileId: this.currentFile?.id || null,
+        currentFilePath: this.currentFile?.pathname || null,
+        tabCount: this.tabs.length
+      })
 
       if (isMixedLineEndings) {
         const { filename, lineEnding } = markdownDocument

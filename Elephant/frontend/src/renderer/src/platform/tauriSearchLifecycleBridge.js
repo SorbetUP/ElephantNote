@@ -7,6 +7,15 @@ const unavailable = (capability) => {
   throw new Error(`${capability} requires the optional Search addon.`)
 }
 
+const emptyInspection = () => ({
+  indexPath: '',
+  documents: [],
+  folders: [],
+  semanticLinks: [],
+  graph: null,
+  generatedAt: new Date().toISOString()
+})
+
 export const installTauriSearchLifecycleBridge = ({ target = globalThis, client = null } = {}) => {
   const bridgeSearch = target?.elephantnote?.search
   const clientSearch = client?.search
@@ -33,7 +42,11 @@ export const installTauriSearchLifecycleBridge = ({ target = globalThis, client 
 
   const lifecycle = {
     initVault,
-    inspect: () => unavailable('Search inspection'),
+    inspect: async() => {
+      const info = target?.console?.info || console.info
+      info.call(target?.console || console, '[tauri-search] inspect:unavailable', { reason: 'optional-search-addon-missing' })
+      return emptyInspection()
+    },
     rebuild: () => initVault(activeVaultPath),
     clear: () => unavailable('Clearing the semantic index'),
     disable: () => unavailable('Disabling semantic search'),

@@ -24,7 +24,7 @@
       <div class="en-note-editor-shell">
         <div class="en-editor-host">
           <editor-with-tabs
-            :markdown="visibleMarkdown"
+            :markdown="markdown"
             :cursor="cursor"
             :muya-index-cursor="muyaIndexCursor"
             :source-code="sourceCode"
@@ -183,11 +183,23 @@ const getActiveNoteFile = () => {
 const activeNoteFile = computed(
   () => getActiveNoteFile() || (openedNoteAbsolutePath.value ? null : currentFile.value)
 )
-const markdown = computed(() => activeNoteFile.value?.markdown || '')
-const cursor = computed(() => activeNoteFile.value?.cursor || {})
-const muyaIndexCursor = computed(() => activeNoteFile.value?.muyaIndexCursor || {})
+const markdown = computed(() => {
+  if (typeof activeNoteFile.value?.markdown === 'string') return activeNoteFile.value.markdown
+  if (typeof currentFile.value?.markdown === 'string') {
+    pushEditorLog('warn', '[elephantnote:editor] active-note-fallback-current-file', {
+      openedNotePath: store.openedNotePath || null,
+      currentFileId: currentFile.value?.id || null,
+      currentFilePath: currentFile.value?.pathname || null,
+      markdownLength: currentFile.value.markdown.length
+    })
+    return currentFile.value.markdown
+  }
+  return ''
+})
+const cursor = computed(() => activeNoteFile.value?.cursor || currentFile.value?.cursor || {})
+const muyaIndexCursor = computed(() => activeNoteFile.value?.muyaIndexCursor || currentFile.value?.muyaIndexCursor || {})
 const fallbackTitle = computed(
-  () => activeNoteFile.value?.filename?.replace(/\.md$/i, '') || 'Untitled'
+  () => activeNoteFile.value?.filename?.replace(/\.md$/i, '') || currentFile.value?.filename?.replace(/\.md$/i, '') || 'Untitled'
 )
 const documentToEditorMarkdown = (documentMarkdown) =>
   toEditorMarkdown(documentMarkdown, fallbackTitle.value)
@@ -231,6 +243,18 @@ const currentNoteRelativePath = computed(() => {
     return ''
   return relativePath
 })
+const relativePathForFile = (file) => {
+  const pathname = file?.pathname
+  const vaultPath = store.activeVault?.path
+  if (!pathname || !vaultPath) return ''
+  const normalizePrivatePath = (value) => String(value || '').replace(/^\/private\//, '/')
+  const relativePath = window.path.relative(
+    normalizePrivatePath(vaultPath),
+    normalizePrivatePath(pathname)
+  )
+  if (!relativePath || relativePath.startsWith('..') || window.path.isAbsolute(relativePath)) return ''
+  return relativePath
+}
 const isPinned = computed(() => {
   const pathname = currentNoteRelativePath.value
   return !!pathname && store.pinnedNotePaths.includes(pathname)
@@ -621,7 +645,7 @@ const rememberObservedMarkdown = (notePath, nextMarkdown, file, reason = 'observ
 
 const pollActiveMarkdownSave = (reason = 'poll') => {
   const file = getActiveNoteFile() || currentFile.value
-  const notePath = currentNoteRelativePath.value || store.openedNotePath
+  const notePath = relativePathForFile(file) || currentNoteRelativePath.value || store.openedNotePath
   const nextMarkdown = file?.markdown
   if (!notePath || !file?.id || typeof nextMarkdown !== 'string') return
   if (lastSeenNotePath !== notePath) {
@@ -640,12 +664,14 @@ const flushActiveNoteSave = async (reason = 'flush') => {
     noteSaveTimer = null
   }
   const file = getActiveNoteFile() || currentFile.value
-  const notePath = currentNoteRelativePath.value || store.openedNotePath
+  const notePath = relativePathForFile(file) || lastSeenNotePath || lastSavedNotePath || currentNoteRelativePath.value || store.openedNotePath
   const nextMarkdown = file?.markdown
   if (!notePath || !file?.id || typeof nextMarkdown !== 'string') return false
   if (lastSavedNotePath === notePath && lastSavedMarkdown === nextMarkdown) return true
   pushEditorLog('info', '[elephantnote:save] flush active note', {
     notePath,
+    filePath: file?.pathname || null,
+    openedNotePath: store.openedNotePath || null,
     reason,
     length: nextMarkdown.length
   })
@@ -790,6 +816,36 @@ const toggleTheme = () => {
   shellTheme.value = next
   setShellTheme(next)
 }
+
+watch(
+  [currentNoteRelativePath, () => activeNoteFile.value?.id, () => currentFile.value?.id, () => store.openedNotePath],
+  ([notePath, activeFileId, currentFileId, openedPath], previous) => {
+    pushEditorLog('info', '[elephantnote:editor] identity-change', {
+      notePath: notePath || null,
+      activeFileId: activeFileId || null,
+      currentFileId: currentFileId || null,
+      openedPath: openedPath || null,
+      previous: previous ? {
+        notePath: previous[0] || null,
+        activeFileId: previous[1] || null,
+        currentFileId: previous[2] || null,
+        openedPath: previous[3] || null
+      } : null,
+      tabCount: editorStore.tabs.length,
+      activeVaultId: store.activeVaultId || null
+    })
+    pushEditorLog('info', '[elephantnote:editor] input-state', {
+      notePath: notePath || null,
+      activeFileId: activeFileId || null,
+      markdownLength: typeof activeNoteFile.value?.markdown === 'string'
+        ? activeNoteFile.value.markdown.length
+        : null,
+      visibleMarkdownLength: visibleMarkdown.value.length,
+      hasEditorDocument: Boolean(activeFileId && typeof activeNoteFile.value?.markdown === 'string')
+    })
+  },
+  { immediate: true }
+)
 
 onMounted(() => {
   pushEditorLog('info', '[elephantnote:editor] mounted', {

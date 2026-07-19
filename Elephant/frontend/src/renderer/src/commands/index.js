@@ -566,12 +566,6 @@ const commands = [
   // View
 
   {
-    id: 'view.source-code-mode',
-    execute: async() => {
-      bus.emit('view:toggle-view-entry', 'sourceCode')
-    }
-  },
-  {
     id: 'view.typewriter-mode',
     execute: async() => {
       focusEditorAndExecute(() => bus.emit('view:toggle-view-entry', 'typewriter'))

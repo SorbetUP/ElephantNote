@@ -138,6 +138,31 @@ describe('hash-bound trusted approval', () => {
 })
 
 describe('trusted addon host API', () => {
+  it('opens addon workspace views through the AppShell event contract', () => {
+    const target = { document: {}, dispatchEvent: vi.fn() }
+    const context = {
+      addonHost: null,
+      router: {},
+      pinia: {},
+      services: {},
+      runtime: 'tauri',
+      addons: {},
+      vueApp: {}
+    }
+    const api = createTrustedAddonApi({ manifest: { id: 'com.example.view' }, packageHash: 'hash' }, context, [], target)
+
+    api.workspace.openView('com.example.view.workspace', { source: 'acceptance' })
+
+    expect(target.dispatchEvent).toHaveBeenCalledOnce()
+    const event = target.dispatchEvent.mock.calls[0][0]
+    expect(event.type).toBe('elephantnote:open-addon-view')
+    expect(event.detail).toEqual({
+      viewId: 'com.example.view.workspace',
+      params: { source: 'acceptance' },
+      addonId: 'com.example.view'
+    })
+  })
+
   it('exposes deep application context, patches resources and restores everything', () => {
     const removed = vi.fn()
     const appended = []

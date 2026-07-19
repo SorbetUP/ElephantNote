@@ -55,6 +55,13 @@ export default [
       'build/android/**/build/**',
       'build/ios/.build/**',
       'Elephant/backend/tauri/target/**',
+      '**/target/**',
+      'Elephant/backend/tauri/gen/**',
+      'Elephant/backend/tauri-plugin-elephant-android-vault/android/.tauri/**',
+      'Elephant/backend/tauri-plugin-elephant-android-vault/android/build/**',
+      '.cache/elephant-addons/**',
+      'addons/**',
+      'packs/**',
       '**/.build/**',
       '**/test-results/**',
       '**/playwright-report/**',
@@ -64,6 +71,7 @@ export default [
       'blinko-offline/**',
       'Elephant/frontend/src/muya/lib/assets/libs/**',
       'Elephant/frontend/src/muya/lib/parser/marked/urlify.js',
+      'Elephant/frontend/src/muya/lib/rust/generated/**',
       'Elephant/frontend/src/renderer/src/assets/symbolIcon/index.js'
     ]
   },

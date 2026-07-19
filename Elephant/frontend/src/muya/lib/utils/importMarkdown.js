@@ -458,41 +458,46 @@ const importRegister = (ContentState) => {
    */
   ContentState.prototype.getMuyaIndexCursor = function() {
     const blocks = this.getBlocks()
-    const { anchor, focus } = this.cursor
-    const anchorBlock = this.getBlock(anchor.key)
-    const focusBlock = this.getBlock(focus.key)
+    // Source-code mode stores { anchor, focus }; the regular Muya UI stores
+    // { start, end }. Rust-owned editing uses the regular UI cursor.
+    const { anchor, focus, start, end } = this.cursor || {}
+    const resolvedAnchor = anchor || start
+    const resolvedFocus = focus || end
+    const anchorBlock = resolvedAnchor && this.getBlock(resolvedAnchor.key)
+    const focusBlock = resolvedFocus && this.getBlock(resolvedFocus.key)
     if (!anchorBlock || !focusBlock) {
       console.warn('Can not find anchor block or focus block in getMuyaIndexCursor')
       return null
     }
     const { text: anchorText } = anchorBlock
     const { text: focusText } = focusBlock
-    if (anchor.key === focus.key) {
-      const minOffset = Math.min(anchor.offset, focus.offset)
-      const maxOffset = Math.max(anchor.offset, focus.offset)
+    if (resolvedAnchor.key === resolvedFocus.key) {
+      const minOffset = Math.min(resolvedAnchor.offset, resolvedFocus.offset)
+      const maxOffset = Math.max(resolvedAnchor.offset, resolvedFocus.offset)
       const firstTextPart = anchorText.substring(0, minOffset)
       const secondTextPart = anchorText.substring(minOffset, maxOffset)
       const thirdTextPart = anchorText.substring(maxOffset)
       anchorBlock.text =
         firstTextPart +
-        (anchor.offset <= focus.offset ? CURSOR_ANCHOR_DNA : CURSOR_FOCUS_DNA) +
+        (resolvedAnchor.offset <= resolvedFocus.offset ? CURSOR_ANCHOR_DNA : CURSOR_FOCUS_DNA) +
         secondTextPart +
-        (anchor.offset <= focus.offset ? CURSOR_FOCUS_DNA : CURSOR_ANCHOR_DNA) +
+        (resolvedAnchor.offset <= resolvedFocus.offset ? CURSOR_FOCUS_DNA : CURSOR_ANCHOR_DNA) +
         thirdTextPart
     } else {
       anchorBlock.text =
-        anchorText.substring(0, anchor.offset) +
+        anchorText.substring(0, resolvedAnchor.offset) +
         CURSOR_ANCHOR_DNA +
-        anchorText.substring(anchor.offset)
+        anchorText.substring(resolvedAnchor.offset)
       focusBlock.text =
-        focusText.substring(0, focus.offset) + CURSOR_FOCUS_DNA + focusText.substring(focus.offset)
+        focusText.substring(0, resolvedFocus.offset) + CURSOR_FOCUS_DNA + focusText.substring(resolvedFocus.offset)
     }
 
     const { isGitlabCompatibilityEnabled, listIndentation } = this
     const markdown = new ExportMarkdown(
       blocks,
       listIndentation,
-      isGitlabCompatibilityEnabled
+      isGitlabCompatibilityEnabled,
+      true
     ).generate()
     const cursor = markdown.split('\n').reduce(
       (acc, line, index) => {

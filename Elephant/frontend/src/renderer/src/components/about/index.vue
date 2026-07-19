@@ -44,7 +44,7 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useMainStore } from '@/store'
 import bus from '../../bus'
-import ElephantNoteLogo from '../../assets/images/logo.png'
+import ElephantNoteLogo from '../../../../../../assets/static/icon.png'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()

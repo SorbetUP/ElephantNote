@@ -7,7 +7,7 @@ use std::{
   path::{Component, Path, PathBuf},
   time::Duration,
 };
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 use url::Url;
 use zip::{write::SimpleFileOptions, CompressionMethod, ZipWriter};
 
@@ -183,6 +183,23 @@ fn catalog() -> R<Vec<CatalogAddon>> {
     fetch_catalog_bytes()?
   };
   parse_catalog(&bytes)
+}
+
+fn bundled_addons_root(app: &AppHandle) -> Option<PathBuf> {
+  let resource_dir = app.path().resource_dir().ok()?;
+  [resource_dir.join("official-addons"), resource_dir.join("resources/official-addons")]
+    .into_iter()
+    .find(|root| root.join("catalog.json").is_file())
+}
+
+fn catalog_for_app(app: &AppHandle) -> R<(Vec<CatalogAddon>, Option<PathBuf>)> {
+  if let Some(root) = bundled_addons_root(app) {
+    println!("[official-addon-catalog] source=bundled root={}", root.display());
+    let bytes = fs::read(root.join("catalog.json")).map_err(|error| error.to_string())?;
+    return Ok((parse_catalog(&bytes)?, Some(root)));
+  }
+  println!("[official-addon-catalog] source=local-or-remote");
+  Ok((catalog()?, None))
 }
 
 fn safe_official_path(value: &str) -> R<String> {

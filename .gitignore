@@ -40,6 +40,7 @@ build/android/captures/
 # Tauri / Rust build artifacts
 Elephant/backend/tauri/target/
 Elephant/backend/tauri/gen/
+Elephant/backend/tauri/resources/
 
 # Swift Package Manager generated files
 build/ios/.build/

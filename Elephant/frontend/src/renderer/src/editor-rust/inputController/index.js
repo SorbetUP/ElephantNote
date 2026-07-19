@@ -99,6 +99,13 @@ export class ElephantRustInputController {
   }
 
   handleBeforeInput(event) {
+    console.info('[elephantnote:rust-input] beforeinput', {
+      inputType: event.inputType || null,
+      dataLength: typeof event.data === 'string' ? event.data.length : 0,
+      hasDataTransfer: Boolean(event.dataTransfer),
+      revision: this.bridge.revision,
+      selection: this.readSelectionSafelyForLog()
+    })
     if (event.inputType === 'insertCompositionText') {
       if (!this.composition) startComposition(this)
       event.preventDefault()
@@ -226,6 +233,14 @@ export class ElephantRustInputController {
       return readDomSelection(this.renderer)
     } catch (error) {
       if (!isSelectionBoundaryError(error)) this.onError(error)
+      return null
+    }
+  }
+
+  readSelectionSafelyForLog() {
+    try {
+      return this.readSelection()
+    } catch {
       return null
     }
   }

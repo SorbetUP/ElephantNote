@@ -38,8 +38,11 @@ fn collect_remote_files(item: &CatalogAddon) -> R<BTreeMap<String, Vec<u8>>> {
   Ok(files)
 }
 
-fn package_files(item: &CatalogAddon) -> R<BTreeMap<String, Vec<u8>>> {
-  let local = local_package_directory(item)?;
+fn package_files(item: &CatalogAddon, bundled_root: Option<&Path>) -> R<BTreeMap<String, Vec<u8>>> {
+  let local = match bundled_root {
+    Some(root) => bundled_package_directory(item, root)?,
+    None => local_package_directory(item)?,
+  };
   if local.is_dir() {
     let manifest_bytes = fs::read(local.join("manifest.json")).map_err(|error| error.to_string())?;
     assert_mobile_compatibility(&manifest_bytes)?;
@@ -174,11 +177,11 @@ fn prebuilt_package(item: &CatalogAddon) -> R<Option<PathBuf>> {
   Ok(None)
 }
 
-fn temporary_package(item: &CatalogAddon) -> R<PathBuf> {
+fn temporary_package(item: &CatalogAddon, bundled_root: Option<&Path>) -> R<PathBuf> {
   if let Some(package) = prebuilt_package(item)? {
     return Ok(package);
   }
-  let files = package_files(item)?;
+  let files = package_files(item, bundled_root)?;
   let path = temporary_package_path(item);
   let file = fs::File::create(&path).map_err(|error| error.to_string())?;
   let mut archive = ZipWriter::new(file);
@@ -192,9 +195,9 @@ fn temporary_package(item: &CatalogAddon) -> R<PathBuf> {
 }
 
 #[tauri::command]
-pub fn tauri_official_addons_catalog_list() -> R<Vec<CatalogAddon>> {
+pub fn tauri_official_addons_catalog_list(app: AppHandle) -> R<Vec<CatalogAddon>> {
   let platform = platform_key();
-  let mut addons = catalog()?;
+  let (mut addons, _) = catalog_for_app(&app)?;
   addons.retain(|item| available_for_platform(item, &platform));
   Ok(addons)
 }
@@ -206,11 +209,12 @@ pub fn tauri_official_addons_catalog_install(
   addon_id: String,
 ) -> R<InstalledAddon> {
   let platform = platform_key();
-  let item = catalog()?
+  let (catalog, bundled_root) = catalog_for_app(&app)?;
+  let item = catalog
     .into_iter()
     .find(|item| item.id == addon_id && available_for_platform(item, &platform))
     .ok_or_else(|| format!("Official addon is not available for {platform}: {addon_id}"))?;
-  let package_path = temporary_package(&item)?;
+  let package_path = temporary_package(&item, bundled_root.as_deref())?;
   let result = addons::tauri_addons_install(app, state, package_path.to_string_lossy().to_string());
   let _ = fs::remove_file(package_path);
   let mut record = result?;

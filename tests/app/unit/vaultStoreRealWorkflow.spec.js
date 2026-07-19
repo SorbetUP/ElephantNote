@@ -155,6 +155,23 @@ describe('real vault store workflow build/coverage', () => {
     expect(sentMessages[0][1]).toBe('/vault/Alpha.md')
   })
 
+  it('preserves the open note when the active vault payload is refreshed', async() => {
+    const { useVaultStore } = await import('../../../Elephant/frontend/app/stores/vaultStore.js')
+    const store = useVaultStore()
+    await store.load()
+    store.openNote(entries[0])
+    const openedNotes = store.openedNotes
+    store.applyPayload({
+      vaults: [{ id: 'v1', name: 'Vault', path: '/vault' }],
+      activeVaultId: 'v1',
+      activeVault: { id: 'v1', name: 'Vault', path: '/vault' },
+      workspace,
+      entries
+    })
+    expect(store.openedNotePath).toBe('Alpha.md')
+    expect(store.openedNotes).toBe(openedNotes)
+  })
+
   it('creates a note in the current directory and opens it', async() => {
     const { useVaultStore } = await import('../../../Elephant/frontend/app/stores/vaultStore.js')
     const store = useVaultStore()

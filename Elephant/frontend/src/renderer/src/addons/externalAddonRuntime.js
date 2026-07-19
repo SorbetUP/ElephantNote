@@ -316,9 +316,11 @@ export class ExternalAddonController {
     this.manager = manager
     this.logger = options.logger
     this.records = new Map()
+    this.loaded = false
   }
 
   async load() {
+    if (this.loaded) return [...this.records.values()]
     const installedRecords = await externalAddonApi.list()
     let records = installedRecords
     try {
@@ -330,7 +332,10 @@ export class ExternalAddonController {
     }
     const communityEnabled = await externalAddonApi.getCommunityEnabled()
     const safeMode = await getTrustedSafeMode()
-    for (const record of records) this.register(record)
+    for (const record of records) {
+      if (!this.manager.get(record.manifest.id)) this.register(record)
+      this.records.set(record.manifest.id, record)
+    }
     const enabledRecords = new Map(records.filter((record) => record.enabled).map((record) => [record.manifest.id, record]))
     const enabling = new Set()
     const enableWithDependencies = async (record) => {
@@ -369,7 +374,13 @@ export class ExternalAddonController {
         this.logger?.error?.('external addon startup failed', { id: record.manifest.id, error: error?.message || String(error) })
       }
     }
+    this.loaded = true
     return records
+  }
+
+  async reload() {
+    this.loaded = false
+    return this.load()
   }
 
   async repairOfficialPackage(record) {
@@ -448,6 +459,23 @@ export class ExternalAddonController {
 export const installExternalAddonRuntime = (manager, options = {}) => {
   const controller = new ExternalAddonController(manager, options)
   manager.external = controller
-  void controller.load().catch((error) => manager.logger.error('external addon registry failed to load', error))
+  const windowObject = options.window || manager.host?.get?.('window') || globalThis.window
+  const load = async() => controller.load().catch((error) => {
+    const message = error?.message || String(error)
+    if (message === 'No active ElephantNote vault.') {
+      manager.logger.warn('external addon registry deferred until a vault is active', { error: message })
+      return false
+    }
+    manager.logger.error('external addon registry failed to load', error)
+    return false
+  })
+  controller.retry = load
+  const retryOnVaultActivation = (event) => {
+    if (controller.loaded || !event?.detail?.activeVaultPath) return
+    manager.logger.info('external addon registry retrying after vault activation')
+    void load()
+  }
+  windowObject?.addEventListener?.('elephantnote:vault-active-changed', retryOnVaultActivation)
+  void load()
   return controller
 }

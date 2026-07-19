@@ -33,6 +33,7 @@ const mode = toRef(props, 'mode')
 const runtime = useMuyaRuntimeEditor({ markdown, mode })
 const { rootRef, runtimeRef, ready } = runtime
 let inputSyncTimer = null
+const LIVE_INPUT_DEBOUNCE_MS = 16
 
 const syncAndEmit = () => {
   const next = runtime.syncFromRuntime()
@@ -44,7 +45,7 @@ const handleInput = () => {
   inputSyncTimer = setTimeout(() => {
     inputSyncTimer = null
     syncAndEmit()
-  }, 0)
+  }, LIVE_INPUT_DEBOUNCE_MS)
 }
 
 const handleKeydown = (event) => {

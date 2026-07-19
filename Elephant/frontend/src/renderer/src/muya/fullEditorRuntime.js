@@ -38,8 +38,20 @@ export const createMuyaFullEditorRuntime = (root, markdown = '', options = {}) =
       getDocument: () => options.document || globalThis.document
     })
     const result = blockResult || live.renderNow()
-    const after = jsonStateToMarkdown(state)
-    if (result && after !== before) pushGroupedHistory(history, before, after, group)
+    // Browser editing can create temporary <div> blocks for Enter. The DOM is
+    // the authoritative user input at this point; do not return the previous
+    // JSON state when a block-local renderer handled the event.
+    const after = domToMarkdown(root)
+    state = markdownToJsonState(after)
+    const normalized = jsonStateToMarkdown(state)
+    console.info('[elephantnote:muya-js] input-sync', {
+      group,
+      beforeLength: before.length,
+      domMarkdownLength: after.length,
+      normalizedLength: normalized.length,
+      html: root.innerHTML.slice(0, 1000)
+    })
+    if (result && normalized !== before) pushGroupedHistory(history, before, normalized, group)
     return state
   }
 

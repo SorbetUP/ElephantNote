@@ -49,6 +49,7 @@ export class ElephantAddonManager {
     this.records = new Map()
     this.contributions = new Map()
     this.listeners = new Map()
+    this.activationPromises = new Map()
   }
 
   register(addonDefinition) {
@@ -127,6 +128,18 @@ export class ElephantAddonManager {
   async enable(id) {
     const record = this.requireRecord(id)
     if (record.enabled) return createSnapshot(record)
+    const pending = this.activationPromises.get(id)
+    if (pending) return pending
+    const activation = this.enableRecord(id, record)
+    this.activationPromises.set(id, activation)
+    try {
+      return await activation
+    } finally {
+      if (this.activationPromises.get(id) === activation) this.activationPromises.delete(id)
+    }
+  }
+
+  async enableRecord(id, record) {
     this.assertDependenciesEnabled(record)
 
     record.status = ADDON_STATUS.activating
@@ -189,6 +202,21 @@ export class ElephantAddonManager {
     const normalizedAddonId = requireString(addonId, 'addonId')
     const normalizedArea = requireString(area, 'area')
     const record = this.requireRecord(normalizedAddonId)
+
+    const contributionKey = getContributionId({ contribution })
+    const existing = this.getContributions(normalizedArea).find((entry) =>
+      entry.addonId === normalizedAddonId &&
+      contributionKey &&
+      getContributionId(entry) === contributionKey
+    )
+    if (existing) {
+      this.logger.warn('duplicate addon contribution ignored', {
+        addonId: normalizedAddonId,
+        area: normalizedArea,
+        contributionId: contributionKey
+      })
+      return () => {}
+    }
 
     if (!this.contributions.has(normalizedArea)) {
       this.contributions.set(normalizedArea, [])

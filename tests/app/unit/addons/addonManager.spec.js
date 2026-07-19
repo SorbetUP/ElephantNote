@@ -43,6 +43,43 @@ describe('ElephantAddonManager', () => {
     expect(manager.getContributionMap()[ADDON_EXTENSION_POINTS.actions]).toHaveLength(1)
   })
 
+  it('ignores duplicate contribution ids from the same addon and area', () => {
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+    const manager = new ElephantAddonManager({ logger })
+    manager.register(createTestAddon())
+
+    manager.registerContribution('test.addon', ADDON_EXTENSION_POINTS.layoutZones, {
+      id: 'chat-sidebar',
+      zone: 'shell.right'
+    })
+    manager.registerContribution('test.addon', ADDON_EXTENSION_POINTS.layoutZones, {
+      id: 'chat-sidebar',
+      zone: 'shell.right'
+    })
+
+    expect(manager.getContributions(ADDON_EXTENSION_POINTS.layoutZones)).toHaveLength(1)
+    expect(logger.warn).toHaveBeenCalledWith('duplicate addon contribution ignored', {
+      addonId: 'test.addon',
+      area: ADDON_EXTENSION_POINTS.layoutZones,
+      contributionId: 'chat-sidebar'
+    })
+  })
+
+  it('shares one activation when enable is called concurrently', async () => {
+    const manager = new ElephantAddonManager()
+    let release
+    const activate = vi.fn(() => new Promise((resolve) => { release = resolve }))
+    manager.register(createTestAddon({ activate }))
+
+    const first = manager.enable('test.addon')
+    const second = manager.enable('test.addon')
+    expect(activate).toHaveBeenCalledOnce()
+    release()
+
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2)
+    expect(manager.get('test.addon').enabled).toBe(true)
+  })
+
   it('runs executable addon actions', async () => {
     const manager = new ElephantAddonManager()
     const run = vi.fn((payload, meta) => ({ payload, meta }))

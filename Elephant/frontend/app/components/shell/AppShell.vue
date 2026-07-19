@@ -192,9 +192,18 @@ const themeClassId = computed(() => theme.value.replace(/[^a-z0-9-]/gi, '-'))
 const availableAddonViewIds = computed(() => addonsStore.getContributions('views')
   .map((entry) => entry?.contribution?.id)
   .filter(Boolean))
-const shellRightZones = computed(() => addonsStore.getContributions('layout.zones')
-  .filter((entry) => entry?.contribution?.zone === 'shell.right' && entry?.contribution?.component)
-  .sort((left, right) => Number(left.contribution.order || 0) - Number(right.contribution.order || 0)))
+const shellRightZones = computed(() => {
+  const seen = new Set()
+  return addonsStore.getContributions('layout.zones')
+    .filter((entry) => entry?.contribution?.zone === 'shell.right' && entry?.contribution?.component)
+    .filter((entry) => {
+      const id = entry?.contribution?.id || `${entry?.addonId || 'addon'}:shell.right`
+      if (seen.has(id)) return false
+      seen.add(id)
+      return true
+    })
+    .sort((left, right) => Number(left.contribution.order || 0) - Number(right.contribution.order || 0))
+})
 const shellStyle = computed(() => ({
   ...activeThemeTokens.value,
   '--en-sidebar-width': `${sidebarWidth.value}px`,

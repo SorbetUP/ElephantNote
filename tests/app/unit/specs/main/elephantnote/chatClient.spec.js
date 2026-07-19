@@ -34,7 +34,7 @@ describe('package-owned chat boundary', () => {
 
     expect(chat).toContain('openNote(citation)')
     expect(chat).toContain("store?.openNote")
-    expect(chat).toContain("node(documentRef, 'button', 'elephant-chat-citation',")
+    expect(chat).toContain("node(documentRef, 'button', 'en-chat-citation elephant-chat-citation',")
     expect(chat).toContain("button.setAttribute('aria-label'")
     expect(chat).toContain("'[ai-chat] citation opened'")
   })

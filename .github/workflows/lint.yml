@@ -24,10 +24,12 @@ jobs:
           set -o pipefail
           pnpm lint 2>&1 | tee eslint-output.txt
 
-      - name: Upload ESLint output
+      - name: Upload ESLint output and resolved lockfile
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: eslint-output
-          path: eslint-output.txt
+          path: |
+            eslint-output.txt
+            pnpm-lock.yaml
           if-no-files-found: ignore

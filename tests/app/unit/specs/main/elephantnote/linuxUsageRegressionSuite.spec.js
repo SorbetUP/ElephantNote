@@ -5,12 +5,12 @@ import { describe, expect, it } from 'vitest'
 const root = process.cwd()
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 const catalog = JSON.parse(read('tests/app/usage/linux/scenarios.json'))
-const suite = read('tests/app/e2e/linux-usage-regressions.spec.js')
-const helpers = read('tests/app/e2e/helpers.js')
-const electronMain = read('tests/app/e2e/electron-main.js')
-const preloadEntry = read('tests/app/e2e/tauri-preload-entry.js')
+const runner = read('build/scripts/run-desktop-acceptance.mjs')
+const server = read('Elephant/backend/tauri/src/acceptance_server.rs')
+const client = read('build/scripts/elephant-automation-client.mjs')
+const enhancements = read('Elephant/frontend/src/renderer/src/platform/automationBridgeEnhancements.js')
 const workflow = read('.github/workflows/e2e.yml')
-const config = read('tests/app/e2e/playwright.config.js')
+const packageJson = JSON.parse(read('package.json'))
 const appPage = read('Elephant/frontend/src/renderer/src/pages/app.vue')
 
 const expectedIds = [
@@ -30,6 +30,15 @@ const expectedIds = [
   'addon-install-enable-action',
   'reload-preserves-vault',
   'navigation-stress'
+]
+
+const removedPlaywrightFiles = [
+  'tests/app/e2e/playwright.config.js',
+  'tests/app/e2e/helpers.js',
+  'tests/app/e2e/electron-main.js',
+  'tests/app/e2e/tauri-preload-entry.js',
+  'tests/app/e2e/official-addons-regressions.spec.js',
+  'tests/app/e2e/linux-usage-regressions.spec.js'
 ]
 
 describe('progressive Linux application usage simulations', () => {
@@ -52,48 +61,63 @@ describe('progressive Linux application usage simulations', () => {
     }
   })
 
-  it('connects every catalog entry to a real Electron workflow', () => {
-    for (const id of expectedIds) {
-      expect(suite).toContain(`defineUsageTest('${id}'`)
-      expect(suite).toContain(`[linux-usage:${'${id}'}]`)
+  it('covers the catalog surfaces through the real Tauri automation runner', () => {
+    for (const marker of [
+      "readDom', '.en-empty-card'",
+      "selectVault', vaultRoot",
+      'listBefore',
+      'listView',
+      'sortedLibrary',
+      'sidebarToggled',
+      'searchUi',
+      'searchEmptyUi',
+      'settingsSearch',
+      'themeToggled',
+      "openNote', 'Getting Started/Welcome.md'",
+      'Live Tauri body edit 9173.',
+      "click', '[aria-label=\"Close note\"]'",
+      "click', '[aria-label=\"Pin note\"]'",
+      "installOfficialAddon', addonId",
+      'restartPersistence',
+      'navigationCycles'
+    ]) {
+      expect(runner).toContain(marker)
     }
-    expect(suite).toContain("require('playwright/test')")
-    expect(suite).toContain("require('node:crypto')")
-    expect(suite).toContain('createSeededVaultFixture')
-    expect(suite).toContain('launchElectron')
-    expect(suite).toContain('page.screenshot')
-    expect(suite).toContain('pixel-identical')
-    expect(suite).toContain('checkpointState')
-    expect(suite).toContain("page.on('pageerror'")
-    expect(suite).toContain("message.type() === 'error'")
-    expect(suite).toContain("getByTestId('muya-runtime-editor')")
-    expect(suite).toContain("getByRole('textbox', { name: 'Note title' })")
-    expect(suite).toContain('Preview updated by Rust editor 9173.')
-    expect(suite).toContain('E2E Note Tools')
-    expect(suite).toContain('Append CI marker')
-    expect(helpers).toContain('installVisibleErrorObserver')
-    expect(helpers).toContain('.en-addons-feedback.error')
-    expect(helpers).toContain('[e2e-visible-addon-error]')
-    expect(helpers).toContain('electron-main.js')
-    expect(electronMain).toContain('tauri-preload-entry.js')
-    expect(preloadEntry).toContain('tauri-preload.js')
+    expect(runner).toContain("'[data-testid=\"muya-rust-runtime-editor\"]'")
+    expect(runner).toContain("command('logs')")
+    expect(runner).toContain("runtime: 'tauri'")
   })
 
-  it('does not bypass the real NoteEditorHost with a second full-window Rust editor', () => {
+  it('exposes authenticated semantic UI and log inspection for agents', () => {
+    expect(server).toContain('ELEPHANT_AUTOMATION_PORT')
+    expect(server).toContain('Authorization: Bearer <token>')
+    expect(server).toContain('"/v1/ui"')
+    expect(server).toContain('"/v1/logs"')
+    expect(server).toContain('"/v1/batch"')
+    expect(client).toContain('export class ElephantAutomationClient')
+    expect(client).toContain('authorization: `Bearer ${this.token}`')
+    expect(enhancements).toContain('api.uiSnapshot =')
+    expect(enhancements).toContain('api.assertUi =')
+    expect(enhancements).toContain('api.assertLogs =')
+  })
+
+  it('removes Playwright and runs the packaged app API under Xvfb', () => {
+    for (const file of removedPlaywrightFiles) {
+      expect(fs.existsSync(path.join(root, file)), file).toBe(false)
+    }
+    expect(packageJson.devDependencies?.playwright).toBeUndefined()
+    expect(packageJson.scripts['test:e2e']).toBe('pnpm test:automation')
+    expect(workflow).toContain('Linux packaged app automation and official addon scenarios')
+    expect(workflow).toContain('xvfb-run --auto-servernum env')
+    expect(workflow).toContain('pnpm test:automation:raw')
+    expect(workflow).toContain('test-results/acceptance/**')
+    expect(workflow).not.toContain('playwright')
+  })
+
+  it('does not bypass the real NoteEditorHost with a second full-window editor', () => {
     expect(appPage).toContain('<app-shell v-if="init" />')
     expect(appPage).not.toContain('MuyaRuntimeEditor')
     expect(appPage).not.toContain('muya-runtime-production-editor')
     expect(appPage).not.toContain('muya-runtime-underlay')
-  })
-
-  it('runs against the production renderer under Xvfb and retains diagnostics', () => {
-    expect(workflow).toContain('ubuntu-24.04')
-    expect(workflow).toContain('xvfb-run --auto-servernum pnpm test:e2e')
-    expect(workflow).toContain('test-results/**')
-    expect(workflow).toContain('playwright-report/**')
-    expect(workflow).toContain('e2e-results.json')
-    expect(config).toContain("['json', { outputFile: path.join(resultsRoot, 'e2e-results.json') }]")
-    expect(config).toContain("screenshot: exhaustiveEvidence ? 'on' : 'only-on-failure'")
-    expect(config).toContain("trace: exhaustiveEvidence ? 'on' : 'retain-on-failure'")
   })
 })

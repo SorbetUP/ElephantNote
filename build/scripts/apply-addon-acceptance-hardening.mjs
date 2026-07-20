@@ -9,9 +9,7 @@ let source = readFileSync(target, 'utf8')
 
 const replaceOnce = (before, after, label) => {
   const occurrences = source.split(before).length - 1
-  if (occurrences !== 1) {
-    throw new Error(`[acceptance-hardening] expected exactly one ${label} target, found ${occurrences}`)
-  }
+  if (occurrences !== 1) throw new Error(`[acceptance-hardening] expected exactly one ${label} target, found ${occurrences}`)
   source = source.replace(before, after)
 }
 
@@ -62,6 +60,8 @@ replaceOnce(
   }
   const restartPersistence = { health: restartedHealth, capabilities: restartedCapabilities, state: restartedState, notes: restartedNotes, note: restartedNote, addons: restartedAddonState, addonCoverage: restartedAddonCoverage }
 
+  const baselineResourceCount = addonState.resources.length
+  const baselineActionCount = addonState.actions.length
   const disabledOfficialAddons = {}
   for (const addonId of officialAddonIds) {
     disabledOfficialAddons[addonId] = await command('invokeTauri', 'tauri_addons_set_enabled', { addonId, enabled: false })
@@ -76,8 +76,8 @@ replaceOnce(
   if (officialAddonIds.some((id) => !disabledAddonCoverage[id].installed || disabledAddonCoverage[id].enabled || disabledAddonCoverage[id].error)) {
     throw new Error(\`Official addon disable lifecycle failed: \${JSON.stringify(disabledAddonCoverage)}\`)
   }
-  if (disabledAddonState.resources.length !== 0 || disabledAddonState.actions.length !== 0) {
-    throw new Error(\`Disabled official addons left active resources or actions: \${JSON.stringify(disabledAddonState)}\`)
+  if (disabledAddonState.resources.length !== baselineResourceCount || disabledAddonState.actions.length !== baselineActionCount) {
+    throw new Error(\`Disabled official addons did not restore the clean addon surface: \${JSON.stringify({ baselineResourceCount, baselineActionCount, disabledAddonState })}\`)
   }
 
   const uninstalledOfficialAddons = {}
@@ -90,8 +90,8 @@ replaceOnce(
   if (officialAddonIds.some((id) => uninstalledAddonState.addons.some((entry) => entry.id === id))) {
     throw new Error(\`Official addon uninstall lifecycle left installed packages: \${JSON.stringify(uninstalledAddonState)}\`)
   }
-  if (uninstalledAddonState.resources.length !== 0 || uninstalledAddonState.actions.length !== 0) {
-    throw new Error(\`Uninstalled official addons left active resources or actions: \${JSON.stringify(uninstalledAddonState)}\`)
+  if (uninstalledAddonState.resources.length !== baselineResourceCount || uninstalledAddonState.actions.length !== baselineActionCount) {
+    throw new Error(\`Uninstalled official addons did not restore the clean addon surface: \${JSON.stringify({ baselineResourceCount, baselineActionCount, uninstalledAddonState })}\`)
   }
 
   const reinstalledOfficialAddons = {}
@@ -109,6 +109,8 @@ replaceOnce(
     throw new Error(\`Official addon reinstall lifecycle failed: \${JSON.stringify(reinstalledAddonCoverage)}\`)
   }
   const addonLifecycle = {
+    baselineResourceCount,
+    baselineActionCount,
     disabledOfficialAddons,
     disabledAddonState,
     disabledAddonCoverage,

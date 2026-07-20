@@ -61,9 +61,10 @@ for (const relativePath of forbiddenPaths) {
   }
 }
 
-const testFiles = walk(testsRoot).filter(isTestFile)
+const allTestFiles = walk(testsRoot)
+const testFiles = allTestFiles.filter(isTestFile)
 inventory.testFiles = testFiles.length
-inventory.scannedFiles = walk(testsRoot).length
+inventory.scannedFiles = allTestFiles.length
 
 for (const path of testFiles) {
   const file = normalized(path)
@@ -96,12 +97,14 @@ for (const path of testFiles) {
   }
 
   const sourceTextOnly = /readFileSync|\bread\s*\([^)]*\.(?:vue|js|ts|rs|yml|yaml|json)['"`]/.test(source) && /toContain|includes\s*\(/.test(source)
-  if (sourceTextOnly) inventory.sourceTextContractFiles.push(file)
+  if (sourceTextOnly) {
+    inventory.sourceTextContractFiles.push(file)
+    failures.push(`${file}: source-text behavior simulation is forbidden; use an explicit static guard or a real application scenario`)
+  }
   if (/\bvi\.mock\s*\(|\bjest\.mock\s*\(|mockImplementation\s*\(/.test(source)) inventory.mockedFiles.push(file)
   if (/\bjsdom\b|document\.createElement|globalThis\.document/.test(source)) inventory.jsdomFiles.push(file)
 
   if (file.startsWith('tests/trusted/')) {
-    if (sourceTextOnly) failures.push(`${file}: trusted tests may not prove behavior by reading source text`)
     if (/\bvi\.mock\s*\(|\bjest\.mock\s*\(/.test(source)) failures.push(`${file}: trusted tests may not mock the subsystem being claimed`)
     if (/function\s+(?:toolbarState|statusText|panelVisibility|editorModeLabel)\b/.test(source)) failures.push(`${file}: trusted tests may not recreate fake product behavior locally`)
   }
@@ -189,7 +192,7 @@ const report = {
 writeFileSync(join(reportRoot, 'test-inventory.json'), `${JSON.stringify(report, null, 2)}\n`, 'utf8')
 
 console.log(`[test-trust] files=${inventory.testFiles} direct-declarations=${inventory.directTestDeclarations}`)
-console.log(`[test-trust] legacy-source-text-contracts=${inventory.sourceTextContractFiles.length}`)
+console.log(`[test-trust] forbidden-source-text-tests=${inventory.sourceTextContractFiles.length}`)
 console.log(`[test-trust] mocked-files=${inventory.mockedFiles.length} jsdom-files=${inventory.jsdomFiles.length}`)
 console.log(`[test-trust] report=${normalized(join(reportRoot, 'test-inventory.json'))}`)
 

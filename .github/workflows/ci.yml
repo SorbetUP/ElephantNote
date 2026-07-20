@@ -165,7 +165,7 @@ jobs:
         shell: bash
         run: |
           if ! cargo tauri --version >/dev/null 2>&1; then
-            cargo install tauri-cli --version '^2.10.0' --locked
+            cargo install tauri-cli --version '2.11.2' --locked
           fi
 
       - name: Install exact wasm-bindgen CLI
@@ -176,6 +176,9 @@ jobs:
           if ! wasm-bindgen --version 2>/dev/null | grep -q "${VERSION}$"; then
             cargo install wasm-bindgen-cli --version "$VERSION" --locked
           fi
+
+      - name: Prepare embedded Tauri addon resources for macOS
+        run: node build/scripts/prepare-tauri-addon-resources.mjs
 
       - name: Cargo check macOS Apple Silicon target
         run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --target aarch64-apple-darwin
@@ -219,6 +222,9 @@ jobs:
       - name: Materialize official addons
         run: node build/scripts/sync-elephant-addons.mjs
 
+      - name: Prepare embedded Tauri addon resources for Rust checks
+        run: node build/scripts/prepare-tauri-addon-resources.mjs
+
       - name: Install Tauri Linux dependencies
         shell: bash
         run: |
@@ -243,8 +249,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-tauri-
 
-      - name: Rust formatting diagnostic
-        continue-on-error: true
+      - name: Rust formatting
         run: cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml --all -- --check
 
       - name: Cargo check

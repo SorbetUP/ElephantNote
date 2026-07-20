@@ -1,0 +1,55 @@
+name: Apply addon acceptance hardening
+
+on:
+  push:
+    branches:
+      - agent/addon-runtime-stabilization
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-addon-acceptance-hardening
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/addon-runtime-stabilization
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Apply the deterministic acceptance patch
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if ! grep -Fq "savedFromDisk.content === manualSaveMarkdown" build/scripts/run-desktop-acceptance.mjs; then
+            echo "Acceptance hardening is already applied."
+            exit 0
+          fi
+          node build/scripts/apply-addon-acceptance-hardening.mjs
+          node --check build/scripts/run-desktop-acceptance.mjs
+          git diff --check
+          git diff -- build/scripts/run-desktop-acceptance.mjs
+
+      - name: Commit the generated runner change
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if git diff --quiet -- build/scripts/run-desktop-acceptance.mjs; then
+            echo "No generated change to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add build/scripts/run-desktop-acceptance.mjs
+          git commit -m "test: harden real addon acceptance"
+          git push origin HEAD:agent/addon-runtime-stabilization

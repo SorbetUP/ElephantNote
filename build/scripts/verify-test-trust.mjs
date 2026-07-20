@@ -163,13 +163,16 @@ if (testWorkflow.includes('pnpm test:legacy') || testWorkflow.includes('pnpm tes
   failures.push('.github/workflows/test.yml: legacy Vitest diagnostics may not be the product test gate')
 }
 
-const agents = read(join(root, 'AGENTS.md'))
+const agentRules = [join(root, 'AGENTS.md'), join(root, 'tests', 'AGENTS.md')]
+  .filter(existsSync)
+  .map(read)
+  .join('\n')
 for (const marker of [
   'Legacy diagnostics are not product proof.',
   'Generated test cases are forbidden.',
   'Markdown editor changes require the real Tauri editor trust scenarios.'
 ]) {
-  if (!agents.includes(marker)) failures.push(`AGENTS.md: missing mandatory test-trust rule ${JSON.stringify(marker)}`)
+  if (!agentRules.includes(marker)) failures.push(`AGENTS rules: missing mandatory test-trust rule ${JSON.stringify(marker)}`)
 }
 
 mkdirSync(reportRoot, { recursive: true })

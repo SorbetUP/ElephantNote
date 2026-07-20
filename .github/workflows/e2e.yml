@@ -32,6 +32,15 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
+      - name: Install pinned Tauri CLI
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if ! cargo tauri --version 2>/dev/null | grep -Fq '2.11.2'; then
+            cargo install tauri-cli --version 2.11.2 --locked
+          fi
+          cargo tauri --version
+
       - name: Install System Dependencies
         shell: bash
         run: |

@@ -11,12 +11,14 @@ import {
 import { join, relative, resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '../..')
-const testsRoot = join(root, 'tests')
 const workflowsRoot = join(root, '.github', 'workflows')
 const reportRoot = join(root, 'test-results', 'trust')
+const ignoredDirectories = new Set([
+  '.git', '.pnpm', 'node_modules', 'target', 'dist', 'coverage', '.cache'
+])
 const failures = []
 const inventory = {
-  scannedTestFiles: 0,
+  scannedRepositoryFiles: 0,
   forbiddenLegacyTestFiles: [],
   forbiddenWorkflowReferences: [],
   forbiddenPackageScripts: [],
@@ -32,14 +34,20 @@ const walk = (directory) => {
   for (const entry of readdirSync(directory)) {
     const path = join(directory, entry)
     const stats = statSync(path)
-    if (stats.isDirectory()) files.push(...walk(path))
-    else files.push(path)
+    if (stats.isDirectory()) {
+      if (ignoredDirectories.has(entry)) continue
+      if (normalized(path) === 'build/out') continue
+      files.push(...walk(path))
+    } else {
+      files.push(path)
+    }
   }
   return files
 }
 
-const legacyTests = walk(testsRoot).filter((path) => /\.(?:spec|test)\.[cm]?[jt]sx?$/.test(path))
-inventory.scannedTestFiles = walk(testsRoot).length
+const repositoryFiles = walk(root)
+const legacyTests = repositoryFiles.filter((path) => /\.(?:spec|test)\.[cm]?[jt]sx?$/.test(path))
+inventory.scannedRepositoryFiles = repositoryFiles.length
 for (const path of legacyTests) {
   const file = normalized(path)
   inventory.forbiddenLegacyTestFiles.push(file)
@@ -173,6 +181,7 @@ const report = {
 }
 writeFileSync(join(reportRoot, 'test-inventory.json'), `${JSON.stringify(report, null, 2)}\n`, 'utf8')
 
+console.log(`[test-trust] scanned-repository-files=${inventory.scannedRepositoryFiles}`)
 console.log(`[test-trust] forbidden-legacy-test-files=${inventory.forbiddenLegacyTestFiles.length}`)
 console.log(`[test-trust] forbidden-workflow-references=${inventory.forbiddenWorkflowReferences.length}`)
 console.log(`[test-trust] forbidden-package-scripts=${inventory.forbiddenPackageScripts.length}`)
@@ -185,4 +194,4 @@ if (failures.length > 0) {
   process.exit(1)
 }
 
-console.log('[test-trust] OK: no legacy JavaScript test suite remains; product proof uses the real application and proves mutation sensitivity')
+console.log('[test-trust] OK: no legacy JavaScript test suite remains anywhere in the repository; product proof uses the real application and proves mutation sensitivity')

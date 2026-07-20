@@ -1,4 +1,4 @@
-name: Finalize Playwright-free lockfile
+name: Locate legacy Muya imports
 
 on:
   pull_request:
@@ -6,79 +6,60 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: finalize-playwright-free-lockfile
-  cancel-in-progress: false
+  group: locate-legacy-muya-imports
+  cancel-in-progress: true
 
 jobs:
-  finalize:
+  locate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: agent/addon-runtime-stabilization
-          fetch-depth: 0
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Capture the exact Rust ownership workflow
+      - name: Locate every import rejected by Rust Editor Ownership
         shell: bash
         run: |
           set -euxo pipefail
           python3 - <<'PY'
-          import json
-          import pathlib
-          import urllib.request
-          request = urllib.request.Request(
-              'https://api.github.com/repos/SorbetUP/ElephantNote/actions/workflows/311691094',
-              headers={'Accept': 'application/vnd.github+json', 'User-Agent': 'Elephant-CI'}
+          from pathlib import Path
+          import re
+
+          roots = [
+              Path('Elephant/frontend/app'),
+              Path('Elephant/frontend/src/renderer/src'),
+              Path('addons/official'),
+          ]
+          extensions = {'.js', '.mjs', '.ts', '.vue'}
+          module_pattern = re.compile(
+              r"(?:from\s+|import\s*\(|import\s+)[\"'](?P<module>[^\"']+)[\"']"
           )
-          with urllib.request.urlopen(request) as response:
-              metadata = json.load(response)
-          path = pathlib.Path(metadata['path'])
-          pathlib.Path('rust-editor-ownership-workflow.json').write_text(json.dumps(metadata, indent=2))
-          pathlib.Path('rust-editor-ownership-workflow.yml').write_text(path.read_text())
-          print(f'RUST_OWNERSHIP_WORKFLOW_PATH={path}')
+          violations = []
+          for root in roots:
+              for path in root.rglob('*'):
+                  if path.suffix not in extensions:
+                      continue
+                  if path.name.endswith(('.spec.js', '.test.js')):
+                      continue
+                  relative = path.as_posix()
+                  text = path.read_text(errors='ignore')
+                  for match in module_pattern.finditer(text):
+                      module = match.group('module')
+                      if module == 'muya' or module.startswith('muya/'):
+                          violations.append(f'{relative}: legacy package import {module!r}')
+                      if 'frontend/src/muya' in module:
+                          violations.append(f'{relative}: direct legacy source import {module!r}')
+          Path('muya-import-violations.txt').write_text(
+              '\n'.join(sorted(set(violations))) + ('\n' if violations else '')
+          )
+          print(Path('muya-import-violations.txt').read_text() or 'No violations.')
           PY
 
-      - name: Regenerate the exact lockfile
-        shell: bash
-        run: |
-          set -euxo pipefail
-          corepack enable
-          corepack prepare pnpm@10.33.4 --activate
-          pnpm install --lockfile-only --ignore-scripts
-          if grep -nE '^ {6}playwright:' pnpm-lock.yaml; then
-            echo 'Root Playwright dependency is still present in the lockfile.' >&2
-            exit 1
-          fi
-
-      - name: Upload ownership definition and resolved lockfile
+      - name: Upload exact violations
         uses: actions/upload-artifact@v4
         with:
-          name: automation-finalization-evidence
-          path: |
-            pnpm-lock.yaml
-            rust-editor-ownership-workflow.json
-            rust-editor-ownership-workflow.yml
+          name: legacy-muya-import-violations
+          path: muya-import-violations.txt
           if-no-files-found: error
-
-      - name: Commit only the resolved lockfile
-        shell: bash
-        run: |
-          set -euxo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add pnpm-lock.yaml
-          git diff --cached --check
-          if git diff --cached --quiet; then
-            echo 'Lockfile already matches package.json.'
-            exit 0
-          fi
-          git commit -m 'chore(automation): finalize Playwright-free dependencies'
-          git push origin HEAD:agent/addon-runtime-stabilization

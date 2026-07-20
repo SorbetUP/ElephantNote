@@ -56,7 +56,7 @@ describe('Android release recovery', () => {
     expect(main).not.toContain('setTimeout(() => { throw error }, 0)')
   })
 
-  it('uses one mobile vault shell and opens documents through the real NoteEditorHost', () => {
+  it('uses one mobile vault shell and opens documents through the shared Rust NoteEditorHost', () => {
     const page = read('Elephant/frontend/src/renderer/src/pages/app.vue')
     const mainContent = read('Elephant/frontend/app/components/shell/MainContent.vue')
     const noteEditor = read('Elephant/frontend/app/components/editor/NoteEditorHost.vue')
@@ -71,8 +71,11 @@ describe('Android release recovery', () => {
     expect(mainContent).toContain('v-if="hasOpenNote"')
     expect(noteEditor).toContain('<note-editor-top-bar')
     expect(noteEditor).toContain('<editor-with-tabs')
-    expect(runtimeEditor).toContain("import Muya from 'muya/lib'")
-    expect(runtimeEditor).toContain('editor.value = new Muya(ele, options)')
+    expect(runtimeEditor).toContain("import { RustMuyaRuntimeEditor } from '@/muya'")
+    expect(runtimeEditor).toContain('<RustMuyaRuntimeEditor')
+    expect(runtimeEditor).toContain('mode="rust"')
+    expect(runtimeEditor).toContain("host.provide('editor.runtime', editorRuntimeBinding.resource)")
+    expect(runtimeEditor).not.toContain("import Muya from 'muya/lib'")
   })
 
   it('registers every vault binary command used by the Android file facade', () => {

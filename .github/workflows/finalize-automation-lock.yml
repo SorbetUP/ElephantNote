@@ -1,4 +1,3 @@
-# One-shot workflow: it deletes itself after committing the exact lockfile.
 name: Finalize Playwright-free lockfile
 
 on:
@@ -27,7 +26,7 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Print the exact Rust ownership workflow
+      - name: Capture the exact Rust ownership workflow
         shell: bash
         run: |
           set -euxo pipefail
@@ -42,8 +41,9 @@ jobs:
           with urllib.request.urlopen(request) as response:
               metadata = json.load(response)
           path = pathlib.Path(metadata['path'])
+          pathlib.Path('rust-editor-ownership-workflow.json').write_text(json.dumps(metadata, indent=2))
+          pathlib.Path('rust-editor-ownership-workflow.yml').write_text(path.read_text())
           print(f'RUST_OWNERSHIP_WORKFLOW_PATH={path}')
-          print(path.read_text())
           PY
 
       - name: Regenerate the exact lockfile
@@ -58,53 +58,27 @@ jobs:
             exit 1
           fi
 
-      - name: Restore the normal lint workflow
-        shell: bash
-        run: |
-          cat > .github/workflows/lint.yml <<'YAML'
-          name: Lint
+      - name: Upload ownership definition and resolved lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: automation-finalization-evidence
+          path: |
+            pnpm-lock.yaml
+            rust-editor-ownership-workflow.json
+            rust-editor-ownership-workflow.yml
+          if-no-files-found: error
 
-          on:
-            pull_request:
-              types: [opened, synchronize, reopened]
-
-          concurrency:
-            group: ${{ github.workflow }}-${{ github.ref }}
-            cancel-in-progress: true
-
-          permissions:
-            contents: read
-
-          jobs:
-            lint:
-              runs-on: ubuntu-latest
-              steps:
-                - uses: actions/checkout@v4
-                - uses: ./.github/actions/setup
-
-                - name: Run ESLint
-                  shell: bash
-                  run: |
-                    set -o pipefail
-                    pnpm lint 2>&1 | tee eslint-output.txt
-
-                - name: Upload ESLint output
-                  if: always()
-                  uses: actions/upload-artifact@v4
-                  with:
-                    name: eslint-output
-                    path: eslint-output.txt
-                    if-no-files-found: ignore
-          YAML
-
-      - name: Commit only the final lockfile and cleanup
+      - name: Commit only the resolved lockfile
         shell: bash
         run: |
           set -euxo pipefail
-          rm .github/workflows/finalize-automation-lock.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add pnpm-lock.yaml .github/workflows/lint.yml .github/workflows/finalize-automation-lock.yml
+          git add pnpm-lock.yaml
           git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'Lockfile already matches package.json.'
+            exit 0
+          fi
           git commit -m 'chore(automation): finalize Playwright-free dependencies'
           git push origin HEAD:agent/addon-runtime-stabilization

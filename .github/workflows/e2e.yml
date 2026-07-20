@@ -55,6 +55,12 @@ jobs:
 
       - uses: ./.github/actions/setup
 
+      - name: Reject fake or inflated tests
+        shell: bash
+        run: |
+          set -euxo pipefail
+          pnpm test:trust:guard 2>&1 | tee test-trust.txt
+
       - name: Validate complete feature and addon scenario matrix
         shell: bash
         run: |
@@ -113,6 +119,24 @@ jobs:
             pnpm build:linux 2>&1 | tee tauri-linux-build.txt
           test -x Elephant/backend/tauri/target/release/Elephant
 
+      - name: Run trusted Markdown editor behavior through the external API
+        shell: bash
+        run: |
+          set -euxo pipefail
+          xvfb-run --auto-servernum env \
+            ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
+            ELEPHANT_ACCEPTANCE_APP_PATH="$PWD/Elephant/backend/tauri/target/release/Elephant" \
+            pnpm test:markdown:trusted:raw 2>&1 | tee markdown-trust.txt
+          test -s test-results/trusted/markdown-editor/latest.json
+          node - <<'NODE'
+          const fs = require('fs')
+          const payload = JSON.parse(fs.readFileSync('test-results/trusted/markdown-editor/latest.json', 'utf8'))
+          if (payload.status !== 'PROVEN') throw new Error(`Markdown trust suite is not proven: ${JSON.stringify(payload)}`)
+          const failed = (payload.scenarios || []).filter((scenario) => scenario.ok !== true)
+          if (failed.length) throw new Error(`Markdown trust scenarios failed: ${JSON.stringify(failed)}`)
+          if ((payload.scenarios || []).length < 9) throw new Error(`Markdown trust suite is incomplete: ${JSON.stringify(payload.scenarios)}`)
+          NODE
+
       - name: Run the exhaustive suite through the external app API
         shell: bash
         run: |
@@ -154,9 +178,13 @@ jobs:
         with:
           name: linux-app-and-official-addon-automation-diagnostics
           path: |
+            test-trust.txt
+            markdown-trust.txt
             official-addon-native-build.txt
             tauri-linux-build.txt
             automation-tests.txt
+            test-results/trust/**
+            test-results/trusted/**
             test-results/observability/**
             test-results/acceptance/**
             official-addon-evidence/**

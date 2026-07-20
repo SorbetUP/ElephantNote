@@ -219,12 +219,10 @@ const attachAutomationApi = (target, api) => {
   return api
 }
 
-export const installAutomationEnhancementsWhenReady = ({
-  target = globalThis,
-  timeoutMs = 60_000
-} = {}) => {
+const primeAutomationProperty = (target) => {
   const existing = target.__ELEPHANT_ACCEPTANCE_TEST__
-  if (existing) return Promise.resolve(attachAutomationApi(target, existing))
+  if (existing) return attachAutomationApi(target, existing)
+  if (target.__ELEPHANT_AUTOMATION_PROPERTY_PRIMED__ === true) return null
 
   let value
   const descriptor = Object.getOwnPropertyDescriptor(target, '__ELEPHANT_ACCEPTANCE_TEST__')
@@ -237,7 +235,20 @@ export const installAutomationEnhancementsWhenReady = ({
         value = attachAutomationApi(target, api)
       }
     })
+    Object.defineProperty(target, '__ELEPHANT_AUTOMATION_PROPERTY_PRIMED__', {
+      value: true,
+      enumerable: false
+    })
   }
+  return null
+}
+
+export const installAutomationEnhancementsWhenReady = ({
+  target = globalThis,
+  timeoutMs = 60_000
+} = {}) => {
+  const existing = primeAutomationProperty(target)
+  if (existing) return Promise.resolve(existing)
 
   const startedAt = Date.now()
   return new Promise((resolve, reject) => {
@@ -255,7 +266,10 @@ export const installAutomationEnhancementsWhenReady = ({
 }
 
 if (typeof globalThis.document !== 'undefined' && typeof globalThis.__TAURI__?.core?.invoke === 'function') {
-  void installAutomationEnhancementsWhenReady().catch((error) => {
-    console.error('[automation-api] renderer enhancement failed', error)
-  })
+  primeAutomationProperty(globalThis)
+  void globalThis.__TAURI__.core.invoke('tauri_acceptance_enabled')
+    .then((enabled) => enabled ? installAutomationEnhancementsWhenReady() : null)
+    .catch((error) => {
+      console.error('[automation-api] renderer enablement check failed', error)
+    })
 }

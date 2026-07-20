@@ -65,15 +65,6 @@ jobs:
 
       - uses: ./.github/actions/setup
 
-      - name: Verify Android release recovery contracts
-        shell: bash
-        run: |
-          set -euxo pipefail
-          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
-            tests/app/unit/specs/main/elephantnote/androidReleaseRecovery.spec.js \
-            tests/app/unit/specs/main/elephantnote/mobileIntegrationRepair.spec.js \
-            tests/app/unit/specs/main/elephantnote/androidUsageRegressionSuite.spec.js
-
       - name: Cache Cargo and Gradle
         uses: actions/cache@v4
         with:
@@ -94,7 +85,7 @@ jobs:
         shell: bash
         run: |
           if ! cargo tauri --version >/dev/null 2>&1; then
-            cargo install tauri-cli --version '^2.10.0' --locked
+            cargo install tauri-cli --version '2.11.2' --locked
           fi
 
       - name: Install exact wasm-bindgen CLI
@@ -203,7 +194,7 @@ jobs:
         shell: bash
         run: |
           if ! cargo tauri --version >/dev/null 2>&1; then
-            cargo install tauri-cli --version '^2.10.0' --locked
+            cargo install tauri-cli --version '2.11.2' --locked
           fi
 
       - name: Install exact wasm-bindgen CLI

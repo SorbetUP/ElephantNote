@@ -2,9 +2,8 @@
 name: Finalize Playwright-free lockfile
 
 on:
-  push:
-    branches:
-      - agent/addon-runtime-stabilization
+  pull_request:
+    types: [synchronize]
   workflow_dispatch:
 
 permissions:
@@ -104,7 +103,7 @@ jobs:
           set -euxo pipefail
           rm .github/workflows/finalize-automation-lock.yml
           git config user.name 'github-actions[bot]'
-          git config user.email '4186758+github-actions[bot]@users.noreply.github.com'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add pnpm-lock.yaml .github/workflows/lint.yml .github/workflows/finalize-automation-lock.yml
           git diff --cached --check
           git commit -m 'chore(automation): finalize Playwright-free dependencies'

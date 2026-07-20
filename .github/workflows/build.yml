@@ -40,44 +40,66 @@ jobs:
 
       - name: Install Linux Build Dependencies
         if: matrix.platform == 'linux'
-        run: sudo apt-get update && sudo apt-get install -y icnsutils graphicsmagick xz-utils libx11-dev libxkbfile-dev gnome-keyring libsecret-1-dev libfontconfig-dev rpm
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            icnsutils graphicsmagick xz-utils rpm \
+            libayatana-appindicator3-dev librsvg2-dev libwebkit2gtk-4.1-dev \
+            libx11-dev libxkbfile-dev libsecret-1-dev libfontconfig-dev \
+            libgtk-3-0 libgbm1 libnss3 libasound2t64 patchelf unzip
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install pinned Tauri CLI
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if ! cargo tauri --version 2>/dev/null | grep -Fq '2.11.2'; then
+            cargo install tauri-cli --version 2.11.2 --locked
+          fi
+          cargo tauri --version
 
       - uses: ./.github/actions/setup
 
       # Must be set before postinstall runs
       - name: Set C++20 for MacOS
         if: matrix.platform == 'macos'
+        shell: bash
         run: |
-          echo "CXXFLAGS=-std=gnu++20 -stdlib=libc++" >> $GITHUB_ENV
+          echo "CXXFLAGS=-std=gnu++20 -stdlib=libc++" >> "$GITHUB_ENV"
 
-      # Run the full postinstall and locale minification.
-      - name: Run postinstall diagnostic
-        continue-on-error: true
+      - name: Run postinstall
+        shell: bash
         run: node build/scripts/postinstall.js
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           npm_config_user_agent: 'pnpm'
           USE_ELECTRON_CLANG: ${{ matrix.platform == 'linux' && '0' || '' }}
 
-      - name: build-linux diagnostic
+      - name: Build Linux package
         if: matrix.platform == 'linux'
-        continue-on-error: true
+        shell: bash
         run: pnpm run build:linux
 
-      - name: build-mac diagnostic
+      - name: Build macOS package
         if: matrix.platform == 'macos'
-        continue-on-error: true
+        shell: bash
         run: pnpm run build:mac -- --${{ matrix.arch }}
 
-      - name: build-win diagnostic
+      - name: Build Windows package
         if: matrix.platform == 'windows'
-        continue-on-error: true
+        shell: bash
         run: pnpm run build:win
 
       - name: Upload artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: marktext-${{ matrix.name }}
+          name: elephant-${{ matrix.name }}
           retention-days: 30
           path: |
             dist/*.exe
@@ -88,4 +110,5 @@ jobs:
             dist/*.deb
             dist/*.rpm
             dist/*.tar.gz
-          if-no-files-found: ignore
+            Elephant/backend/tauri/target/release/bundle/**
+          if-no-files-found: warn

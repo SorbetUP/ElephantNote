@@ -1,8 +1,9 @@
-name: Test and performance hardening
+name: Production hardening
 
 on:
   push:
     branches:
+      - develop
       - develop_next-unified-candidate2
       - develop_next-unified-recovery
       - develop_next-mobile-recovery
@@ -17,14 +18,12 @@ permissions:
   contents: read
 
 jobs:
-  critical-contracts:
-    name: Critical contracts and coverage
+  production-contracts:
+    name: Rust contracts and production renderer
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -41,60 +40,40 @@ jobs:
             cargo install wasm-bindgen-cli --version "$VERSION" --locked
           fi
 
-      - name: Reject fake or disabled test additions
-        run: node build/scripts/verify-test-integrity.mjs
-        env:
-          TEST_INTEGRITY_BASE: ${{ github.event.pull_request.base.sha || 'origin/develop_next' }}
+      - name: Enforce test trust policy
+        run: pnpm test:trust:guard
 
-      - name: Run critical utility contracts with coverage
-        id: critical-coverage
+      - name: Test Rust Markdown core and WASM protocol
         shell: bash
         run: |
-          set +e
           set -o pipefail
-          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
-            --config vitest.critical.config.js --coverage \
-            2>&1 | tee critical-coverage-output.txt
-          status=${PIPESTATUS[0]}
-          echo "status=${status}" >> "$GITHUB_OUTPUT"
-          echo "Critical coverage command exited with status ${status}."
-          exit 0
+          cargo test --manifest-path Elephant/crates/muya-core/Cargo.toml 2>&1 | tee markdown-core-contracts.txt
+          cargo test --manifest-path Elephant/crates/muya-wasm/Cargo.toml 2>&1 | tee markdown-wasm-contracts.txt
 
-      - name: Inspect focused coverage report
-        id: coverage-report
-        if: always()
+      - name: Check Tauri Rust backend
         shell: bash
         run: |
-          if [ -d build/coverage-critical ] && find build/coverage-critical -type f -print -quit | grep -q .; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-            echo "Focused coverage report generated:"
-            find build/coverage-critical -maxdepth 2 -type f -print | sort
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::notice title=Focused coverage report unavailable::Vitest failed before producing build/coverage-critical. The preserved terminal output remains the source of truth for this run."
-          fi
+          set -o pipefail
+          node build/scripts/prepare-tauri-addon-resources.mjs
+          cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features \
+            2>&1 | tee tauri-rust-check.txt
 
       - name: Build production renderer
-        run: pnpm tauri:web:build
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm tauri:web:build 2>&1 | tee production-renderer-build.txt
 
-      - name: Upload focused coverage and diagnostics
+      - name: Upload production diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: critical-coverage
+          name: production-hardening
           path: |
-            build/coverage-critical/
-            critical-coverage-output.txt
+            test-results/trust/**
+            markdown-core-contracts.txt
+            markdown-wasm-contracts.txt
+            tauri-rust-check.txt
+            production-renderer-build.txt
           if-no-files-found: warn
           retention-days: 14
-
-      - name: Enforce critical coverage result
-        if: always()
-        shell: bash
-        env:
-          CRITICAL_COVERAGE_STATUS: ${{ steps.critical-coverage.outputs.status }}
-        run: |
-          if [ "${CRITICAL_COVERAGE_STATUS:-1}" -ne 0 ]; then
-            echo "::error title=Critical contracts or coverage failed::See critical-coverage-output.txt in the uploaded critical-coverage artifact."
-            exit "${CRITICAL_COVERAGE_STATUS:-1}"
-          fi

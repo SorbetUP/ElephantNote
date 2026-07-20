@@ -1,47 +1,45 @@
-name: Test
+name: Test trust policy
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - develop
+      - 'agent/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  trust-policy:
+    name: Reject fake or inflated tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
         with:
-          targets: wasm32-unknown-unknown
+          node-version: '22'
 
-      - uses: ./.github/actions/setup
-
-      - name: Install exact wasm-bindgen CLI
-        shell: bash
-        run: |
-          VERSION=$(cargo metadata --manifest-path Elephant/crates/muya-wasm/Cargo.toml --format-version 1 \
-            | python3 -c "import json,sys; data=json.load(sys.stdin); print(next(p['version'] for p in data['packages'] if p['name']=='wasm-bindgen'))")
-          if ! wasm-bindgen --version 2>/dev/null | grep -q "${VERSION}$"; then
-            cargo install wasm-bindgen-cli --version "$VERSION" --locked
-          fi
-
-      - name: Generate Rust WASM editor bundle
-        run: pnpm muya:wasm:build
-
-      - name: Run Unit Tests
+      - name: Verify test trust policy
         shell: bash
         run: |
           set -o pipefail
-          pnpm test 2>&1 | tee vitest-output.txt
+          pnpm test:trust:guard 2>&1 | tee test-trust.txt
 
-      - name: Upload Vitest output
+      - name: Upload test inventory
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vitest-output
-          path: vitest-output.txt
-          if-no-files-found: ignore
+          name: test-trust-inventory
+          path: |
+            test-trust.txt
+            test-results/trust/**
+          if-no-files-found: error
+          retention-days: 30

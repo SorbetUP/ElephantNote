@@ -8,27 +8,23 @@ import {
   statSync,
   writeFileSync
 } from 'node:fs'
-import { basename, join, relative, resolve } from 'node:path'
+import { join, relative, resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '../..')
 const testsRoot = join(root, 'tests')
+const workflowsRoot = join(root, '.github', 'workflows')
 const reportRoot = join(root, 'test-results', 'trust')
 const failures = []
 const inventory = {
-  scannedFiles: 0,
-  testFiles: 0,
-  directTestDeclarations: 0,
-  sourceTextContractFiles: [],
-  mockedFiles: [],
-  jsdomFiles: [],
-  dynamicallyGeneratedFiles: [],
-  forbiddenFilesPresent: []
+  scannedTestFiles: 0,
+  forbiddenLegacyTestFiles: [],
+  forbiddenWorkflowReferences: [],
+  forbiddenPackageScripts: [],
+  forbiddenDevDependencies: []
 }
 
 const normalized = (path) => relative(root, path).replaceAll('\\', '/')
-const isTestFile = (path) => /\.(?:spec|test)\.[cm]?[jt]sx?$/.test(path)
 const read = (path) => readFileSync(path, 'utf8')
-
 const walk = (directory) => {
   if (!existsSync(directory)) return []
   const files = []
@@ -41,96 +37,50 @@ const walk = (directory) => {
   return files
 }
 
-const forbiddenPaths = [
-  'tests/app/unit/interfaceEditorSurfaceGenerated.spec.js',
-  'tests/app/unit/interfaceParityGenerated.spec.js',
-  'tests/app/unit/pageFeatureCardsAndModelsGenerated.spec.js',
-  'tests/app/unit/editorInputAndClipboardGenerated.spec.js',
-  'tests/app/e2e/playwright.config.js',
-  'tests/app/e2e/helpers.js',
-  'tests/app/e2e/electron-main.js',
-  'tests/app/e2e/tauri-preload-entry.js',
-  'tests/app/e2e/linux-usage-regressions.spec.js',
-  'tests/app/e2e/official-addons-regressions.spec.js'
-]
-
-for (const relativePath of forbiddenPaths) {
-  if (existsSync(join(root, relativePath))) {
-    inventory.forbiddenFilesPresent.push(relativePath)
-    failures.push(`${relativePath}: forbidden fake/legacy application test path is present`)
-  }
-}
-
-const allTestFiles = walk(testsRoot)
-const testFiles = allTestFiles.filter(isTestFile)
-inventory.testFiles = testFiles.length
-inventory.scannedFiles = allTestFiles.length
-
-for (const path of testFiles) {
+const legacyTests = walk(testsRoot).filter((path) => /\.(?:spec|test)\.[cm]?[jt]sx?$/.test(path))
+inventory.scannedTestFiles = walk(testsRoot).length
+for (const path of legacyTests) {
   const file = normalized(path)
-  const name = basename(path)
-  const source = read(path)
-  const directTests = [...source.matchAll(/\b(?:it|test)\s*\(/g)].length
-  inventory.directTestDeclarations += directTests
+  inventory.forbiddenLegacyTestFiles.push(file)
+  failures.push(`${file}: legacy JavaScript test files are forbidden; use a Rust contract test or a real Tauri automation scenario`)
+}
 
-  if (/generated|paritygenerated/i.test(name)) {
-    failures.push(`${file}: generated test filenames are forbidden`)
+const packageJson = JSON.parse(read(join(root, 'package.json')))
+const scripts = packageJson.scripts || {}
+for (const name of Object.keys(scripts)) {
+  const value = String(scripts[name] || '')
+  if (/vitest|test:legacy|test:unit|coverage:unit/.test(`${name} ${value}`)) {
+    inventory.forbiddenPackageScripts.push({ name, value })
+    failures.push(`package.json: forbidden legacy test script ${name}=${JSON.stringify(value)}`)
   }
-  if (/\bdescribe\s*\(\s*['"`]generated\b/i.test(source) || /\b(?:it|test)\s*\(\s*[`'"]generated\b/i.test(source)) {
-    failures.push(`${file}: generated test titles are forbidden`)
-  }
-
-  const countedLoop = [...source.matchAll(/for\s*\([^)]*<\s*(\d{2,})[^)]*\)\s*\{[\s\S]{0,2500}?\b(?:it|test)\s*\(/g)]
-    .map((match) => Number(match[1]))
-    .filter((count) => count >= 20)
-  const generatedArray = [...source.matchAll(/Array\.from\s*\(\s*\{\s*length\s*:\s*(\d{2,})/g)]
-    .map((match) => Number(match[1]))
-    .filter((count) => count >= 20)
-  const callbackTests = /(?:forEach|map)\s*\([^)]*=>\s*\{?[\s\S]{0,1200}?\b(?:it|test)\s*\(/.test(source)
-  const dynamic = countedLoop.length > 0 || (generatedArray.length > 0 && /for\s*\([^)]*\bof\b[^)]*\)[\s\S]{0,2500}?\b(?:it|test)\s*\(/.test(source)) || callbackTests
-  if (dynamic) {
-    inventory.dynamicallyGeneratedFiles.push({ file, countedLoop, generatedArray, callbackTests })
-    failures.push(`${file}: dynamically generated test cases are forbidden; exercise representative inputs inside one named behavior test`)
-  }
-  if (directTests > 100) {
-    failures.push(`${file}: ${directTests} direct test declarations is test-count inflation; split by real behavior or reduce duplication`)
-  }
-
-  const sourceTextOnly = /readFileSync|\bread\s*\([^)]*\.(?:vue|js|ts|rs|yml|yaml|json)['"`]/.test(source) && /toContain|includes\s*\(/.test(source)
-  if (sourceTextOnly) {
-    inventory.sourceTextContractFiles.push(file)
-    failures.push(`${file}: source-text behavior simulation is forbidden; use an explicit static guard or a real application scenario`)
-  }
-  if (/\bvi\.mock\s*\(|\bjest\.mock\s*\(|mockImplementation\s*\(/.test(source)) inventory.mockedFiles.push(file)
-  if (/\bjsdom\b|document\.createElement|globalThis\.document/.test(source)) inventory.jsdomFiles.push(file)
-
-  if (file.startsWith('tests/trusted/')) {
-    if (/\bvi\.mock\s*\(|\bjest\.mock\s*\(/.test(source)) failures.push(`${file}: trusted tests may not mock the subsystem being claimed`)
-    if (/function\s+(?:toolbarState|statusText|panelVisibility|editorModeLabel)\b/.test(source)) failures.push(`${file}: trusted tests may not recreate fake product behavior locally`)
+}
+for (const dependency of ['vitest', '@vitest/coverage-v8', 'jsdom']) {
+  if (packageJson.devDependencies?.[dependency] || packageJson.dependencies?.[dependency]) {
+    inventory.forbiddenDevDependencies.push(dependency)
+    failures.push(`package.json: forbidden legacy test dependency ${dependency}`)
   }
 }
 
-const packagePath = join(root, 'package.json')
-const packageJson = JSON.parse(read(packagePath))
-const scripts = packageJson.scripts || {}
+const forbiddenWorkflowPattern = /\bvitest\b|tests\/app\/unit|tests\/elephant\/unit|test:unit|test:legacy|coverage:unit/g
+for (const path of walk(workflowsRoot).filter((candidate) => /\.ya?ml$/.test(candidate))) {
+  const source = read(path)
+  const matches = [...source.matchAll(forbiddenWorkflowPattern)].map((match) => match[0])
+  if (matches.length === 0) continue
+  const file = normalized(path)
+  inventory.forbiddenWorkflowReferences.push({ file, matches: [...new Set(matches)] })
+  failures.push(`${file}: workflow still references the removed legacy JS test system (${[...new Set(matches)].join(', ')})`)
+}
+
 const requiredScripts = {
   'test:trust:guard': 'verify-test-trust.mjs',
-  'test:markdown:trusted:raw': 'run-markdown-editor-trust.mjs',
-  'test:legacy:raw': 'vitest run'
+  'test:markdown:trusted:raw': 'run-markdown-editor-trust.mjs'
 }
 for (const [name, marker] of Object.entries(requiredScripts)) {
   if (!String(scripts[name] || '').includes(marker)) failures.push(`package.json: script ${name} must contain ${marker}`)
 }
 const defaultTestChain = [scripts.test, scripts['test:raw'], scripts['test:markdown:trusted']].join(' ')
-if (!defaultTestChain.includes('test:trust:guard')) {
-  failures.push('package.json: default test chain must run the test-trust guard')
-}
-if (!defaultTestChain.includes('test:markdown:trusted')) {
-  failures.push('package.json: default test chain must run the real Markdown editor trust suite')
-}
-if (String(scripts.test || '').includes('vitest') || String(scripts['test:raw'] || '').includes('vitest')) {
-  failures.push('package.json: default test command may not use the legacy Vitest count as product proof')
-}
+if (!defaultTestChain.includes('test:trust:guard')) failures.push('package.json: default test chain must run the test-trust guard')
+if (!defaultTestChain.includes('test:markdown:trusted')) failures.push('package.json: default test chain must run the real Markdown editor trust suite')
 
 const manifestPath = join(root, 'tests', 'trust', 'required-scenarios.json')
 const runnerPath = join(root, 'build', 'scripts', 'run-markdown-editor-trust.mjs')
@@ -165,9 +115,6 @@ if (!e2eWorkflow.includes('pnpm test:markdown:trusted:raw')) failures.push('.git
 
 const testWorkflow = read(join(root, '.github', 'workflows', 'test.yml'))
 if (!testWorkflow.includes('pnpm test:trust:guard')) failures.push('.github/workflows/test.yml: must run the test-trust guard')
-if (testWorkflow.includes('pnpm test:legacy') || testWorkflow.includes('pnpm test 2>&1 | tee vitest-output')) {
-  failures.push('.github/workflows/test.yml: legacy Vitest diagnostics may not be the product test gate')
-}
 
 const agentRules = [join(root, 'AGENTS.md'), join(root, 'tests', 'AGENTS.md')]
   .filter(existsSync)
@@ -185,15 +132,15 @@ mkdirSync(reportRoot, { recursive: true })
 const report = {
   at: new Date().toISOString(),
   status: failures.length === 0 ? 'PROVEN' : 'FAILED',
-  note: 'Legacy test counts are diagnostics only and are not product proof.',
+  note: 'Only Rust contract tests and real application automation may be used as evidence.',
   inventory,
   failures
 }
 writeFileSync(join(reportRoot, 'test-inventory.json'), `${JSON.stringify(report, null, 2)}\n`, 'utf8')
 
-console.log(`[test-trust] files=${inventory.testFiles} direct-declarations=${inventory.directTestDeclarations}`)
-console.log(`[test-trust] forbidden-source-text-tests=${inventory.sourceTextContractFiles.length}`)
-console.log(`[test-trust] mocked-files=${inventory.mockedFiles.length} jsdom-files=${inventory.jsdomFiles.length}`)
+console.log(`[test-trust] forbidden-legacy-test-files=${inventory.forbiddenLegacyTestFiles.length}`)
+console.log(`[test-trust] forbidden-workflow-references=${inventory.forbiddenWorkflowReferences.length}`)
+console.log(`[test-trust] forbidden-package-scripts=${inventory.forbiddenPackageScripts.length}`)
 console.log(`[test-trust] report=${normalized(join(reportRoot, 'test-inventory.json'))}`)
 
 if (failures.length > 0) {
@@ -202,4 +149,4 @@ if (failures.length > 0) {
   process.exit(1)
 }
 
-console.log('[test-trust] OK: the default product gate is real application behavior, not a generated Vitest count')
+console.log('[test-trust] OK: no legacy JavaScript test suite remains; product proof uses the real application')

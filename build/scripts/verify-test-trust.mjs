@@ -113,16 +113,19 @@ const scripts = packageJson.scripts || {}
 const requiredScripts = {
   'test:trust:guard': 'verify-test-trust.mjs',
   'test:markdown:trusted:raw': 'run-markdown-editor-trust.mjs',
-  'test:legacy:raw': 'vitest run',
-  test: 'test:trust:guard'
+  'test:legacy:raw': 'vitest run'
 }
 for (const [name, marker] of Object.entries(requiredScripts)) {
   if (!String(scripts[name] || '').includes(marker)) failures.push(`package.json: script ${name} must contain ${marker}`)
 }
-if (!String(scripts.test || '').includes('test:markdown:trusted')) {
-  failures.push('package.json: default test command must run the real Markdown editor trust suite')
+const defaultTestChain = [scripts.test, scripts['test:raw'], scripts['test:markdown:trusted']].join(' ')
+if (!defaultTestChain.includes('test:trust:guard')) {
+  failures.push('package.json: default test chain must run the test-trust guard')
 }
-if (String(scripts.test || '').includes('vitest')) {
+if (!defaultTestChain.includes('test:markdown:trusted')) {
+  failures.push('package.json: default test chain must run the real Markdown editor trust suite')
+}
+if (String(scripts.test || '').includes('vitest') || String(scripts['test:raw'] || '').includes('vitest')) {
   failures.push('package.json: default test command may not use the legacy Vitest count as product proof')
 }
 

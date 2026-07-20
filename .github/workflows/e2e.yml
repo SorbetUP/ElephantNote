@@ -119,6 +119,18 @@ jobs:
             pnpm build:linux 2>&1 | tee tauri-linux-build.txt
           test -x Elephant/backend/tauri/target/release/Elephant
 
+      - name: Prove the Markdown suite turns red when Enter is broken
+        shell: bash
+        run: |
+          set -euxo pipefail
+          xvfb-run --auto-servernum env \
+            ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
+            ELEPHANT_ACCEPTANCE_APP_PATH="$PWD/Elephant/backend/tauri/target/release/Elephant" \
+            node build/scripts/verify-markdown-trust-sensitivity.mjs \
+            2>&1 | tee markdown-trust-sensitivity.txt
+          grep -F '[markdown-trust-sensitivity] PASS: swallowing Enter makes plain-return red' \
+            markdown-trust-sensitivity.txt
+
       - name: Run trusted Markdown editor behavior through the external API
         shell: bash
         run: |
@@ -179,6 +191,7 @@ jobs:
           name: linux-app-and-official-addon-automation-diagnostics
           path: |
             test-trust.txt
+            markdown-trust-sensitivity.txt
             markdown-trust.txt
             official-addon-native-build.txt
             tauri-linux-build.txt

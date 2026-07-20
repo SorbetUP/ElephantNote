@@ -49,7 +49,7 @@ describe('Rust editor addon runtime', () => {
     }))
   })
 
-  it('removes production dependency on Muya DOM selectors', () => {
+  it('keeps addons on the semantic Rust editor resource without DOM fallbacks', () => {
     const codeExecution = read('addons/official/code-execution/main.js')
     const trusted = read('Elephant/frontend/src/renderer/src/addons/trustedAddonRuntime.js')
     const renderer = read('Elephant/frontend/src/muya/lib/rust/domRenderer/elements.js')
@@ -57,11 +57,14 @@ describe('Rust editor addon runtime', () => {
 
     expect(codeExecution).not.toMatch(/muya-code-block|data-function-type=.fencecode|ag-code-block/)
     expect(codeExecution).toContain("queryBlocks?.({ kind: 'code_block' })")
+    expect(codeExecution).toContain("runtime?.engine === 'rust'")
+    expect(codeExecution).not.toContain('muya-js')
+    expect(codeExecution).not.toContain('MutationObserver')
     expect(trusted).not.toContain("host?.get('muya')")
     expect(trusted).toContain("host?.get('editor.runtime')")
-    expect(renderer).toContain("data-elephant-editor-kind")
-    expect(runtime).toContain("host.provide('editor.runtime'")
-    expect(runtime).toContain("node.classList.contains('ag-fence-code')")
-    expect(codeExecution).toContain("runtime?.engine === 'muya-js'")
+    expect(renderer).toContain('data-elephant-editor-kind')
+    expect(runtime).toContain("import { RustMuyaRuntimeEditor } from '@/muya'")
+    expect(runtime).toContain("host.provide('editor.runtime', editorRuntimeBinding.resource)")
+    expect(runtime).not.toContain("import Muya from 'muya/lib'")
   })
 })

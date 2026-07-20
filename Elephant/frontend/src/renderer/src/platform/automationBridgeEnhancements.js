@@ -1,3 +1,5 @@
+import { listen } from '@tauri-apps/api/event'
+
 const DEFAULT_NODE_LIMIT = 250
 const DEFAULT_TEXT_LIMIT = 2000
 const DEFAULT_LOG_LIMIT = 500
@@ -177,25 +179,73 @@ export const enhanceAutomationApi = ({ target = globalThis, api } = {}) => {
   return api
 }
 
+const answerAutomationCommand = async(target, api, payload) => {
+  const requestId = payload?.request_id
+  const command = payload?.command
+  const args = Array.isArray(payload?.args) ? payload.args : []
+  try {
+    if (!requestId || typeof api[command] !== 'function') throw new Error(`Unknown automation command: ${command}`)
+    const result = await api[command](...args)
+    await target.__TAURI__?.core?.invoke('tauri_acceptance_result', {
+      requestId,
+      result: result ?? null,
+      error: null
+    })
+  } catch (error) {
+    await target.__TAURI__?.core?.invoke('tauri_acceptance_result', {
+      requestId,
+      result: null,
+      error: error?.stack || error?.message || String(error)
+    })
+  }
+}
+
+const installAutomationTransport = (target, api) => {
+  if (target.__ELEPHANT_AUTOMATION_TRANSPORT__) return
+  target.__ELEPHANT_AUTOMATION_TRANSPORT__ = listen(
+    'elephant:automation:command',
+    ({ payload }) => answerAutomationCommand(target, api, payload)
+  ).catch((error) => {
+    delete target.__ELEPHANT_AUTOMATION_TRANSPORT__
+    throw error
+  })
+}
+
+const attachAutomationApi = (target, api) => {
+  enhanceAutomationApi({ target, api })
+  target.__ELEPHANT_AUTOMATION__ = api
+  installAutomationTransport(target, api)
+  console.info('[automation-api] renderer inspection surface ready')
+  return api
+}
+
 export const installAutomationEnhancementsWhenReady = ({
   target = globalThis,
   timeoutMs = 60_000
 } = {}) => {
-  const startedAt = Date.now()
-  const attach = () => {
-    const api = target.__ELEPHANT_ACCEPTANCE_TEST__
-    if (!api) return false
-    enhanceAutomationApi({ target, api })
-    target.__ELEPHANT_AUTOMATION__ = api
-    console.info('[automation-api] renderer inspection surface ready')
-    return true
+  const existing = target.__ELEPHANT_ACCEPTANCE_TEST__
+  if (existing) return Promise.resolve(attachAutomationApi(target, existing))
+
+  let value
+  const descriptor = Object.getOwnPropertyDescriptor(target, '__ELEPHANT_ACCEPTANCE_TEST__')
+  if (!descriptor || descriptor.configurable) {
+    Object.defineProperty(target, '__ELEPHANT_ACCEPTANCE_TEST__', {
+      configurable: true,
+      enumerable: false,
+      get: () => value,
+      set: (api) => {
+        value = attachAutomationApi(target, api)
+      }
+    })
   }
-  if (attach()) return Promise.resolve(target.__ELEPHANT_AUTOMATION__)
+
+  const startedAt = Date.now()
   return new Promise((resolve, reject) => {
     const timer = target.setInterval(() => {
-      if (attach()) {
+      const api = target.__ELEPHANT_ACCEPTANCE_TEST__
+      if (api) {
         target.clearInterval(timer)
-        resolve(target.__ELEPHANT_AUTOMATION__)
+        resolve(attachAutomationApi(target, api))
       } else if (Date.now() - startedAt >= timeoutMs) {
         target.clearInterval(timer)
         reject(new Error('Timed out waiting for the Elephant renderer automation bridge'))

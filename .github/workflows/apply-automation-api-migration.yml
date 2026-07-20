@@ -1,0 +1,212 @@
+name: Apply Elephant Automation API migration
+
+on:
+  push:
+    branches:
+      - agent/addon-runtime-stabilization
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-elephant-automation-api-migration
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/addon-runtime-stabilization
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Patch the renderer bridge, runner, scripts and CI
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          import json
+          import re
+
+          def replace_once(path, before, after):
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(before)
+              if count != 1:
+                  raise RuntimeError(f'{path}: expected one replacement target, found {count}: {before[:120]!r}')
+              file.write_text(text.replace(before, after, 1))
+
+          bridge_path = Path('Elephant/frontend/src/renderer/src/platform/acceptanceTestBridge.js')
+          bridge = bridge_path.read_text()
+          import_line = "import { listen } from '@tauri-apps/api/event'\n"
+          enhancement_import = import_line + "import { enhanceAutomationApi } from './automationBridgeEnhancements'\n"
+          if "automationBridgeEnhancements" not in bridge:
+              bridge = bridge.replace(import_line, enhancement_import, 1)
+          marker = "  target.__ELEPHANT_ACCEPTANCE_TEST__ = api\n"
+          if "enhanceAutomationApi({ target, api })" not in bridge:
+              bridge = bridge.replace(marker, "  enhanceAutomationApi({ target, api })\n  target.__ELEPHANT_ACCEPTANCE_TEST__ = api\n", 1)
+          start = bridge.index("  void listen('elephant:acceptance:command'")
+          end = bridge.index("  return api\n", start)
+          transport = """  const handleTransportCommand = async({ payload }) => {
+              const requestId = payload?.request_id
+              const command = payload?.command
+              const args = Array.isArray(payload?.args) ? payload.args : []
+              log(target, 'transport:command:start', { requestId, command, argsCount: args.length, args })
+              try {
+                if (!requestId || typeof api[command] !== 'function') throw new Error(`Unknown automation command: ${command}`)
+                const result = await api[command](...args)
+                await target.__TAURI__?.core?.invoke('tauri_acceptance_result', { requestId, result: result ?? null, error: null })
+                log(target, 'transport:command:done', {
+                  requestId,
+                  command,
+                  result: command === 'logs' ? { logCount: Array.isArray(result) ? result.length : 0 } : result ?? null
+                })
+              } catch (error) {
+                const message = error?.stack || error?.message || String(error)
+                log(target, 'transport:command:error', { requestId, command, error: message })
+                await target.__TAURI__?.core?.invoke('tauri_acceptance_result', { requestId, result: null, error: message })
+              }
+            }
+            void Promise.all([
+              listen('elephant:automation:command', handleTransportCommand),
+              listen('elephant:acceptance:command', handleTransportCommand)
+            ]).then(() => target.__TAURI__?.core?.invoke('tauri_acceptance_ready'))
+              .then(() => log(target, 'transport:ready', { protocolVersion: 1 }))
+              .catch((error) => log(target, 'transport:listen:error', { error: error?.message || String(error) }))
+          """
+          bridge = bridge[:start] + transport + bridge[end:]
+          bridge_path.write_text(bridge)
+
+          runner_path = Path('build/scripts/run-desktop-acceptance.mjs')
+          runner = runner_path.read_text()
+          if "node:crypto" not in runner:
+              runner = runner.replace("import { tmpdir } from 'node:os'\n", "import { tmpdir } from 'node:os'\nimport { randomUUID } from 'node:crypto'\nimport { ElephantAutomationClient } from './elephant-automation-client.mjs'\n", 1)
+          runner = runner.replace("if (process.env.ELEPHANT_ACCEPTANCE_SKIP_BUILD !== '1') {", "if (process.env.ELEPHANT_AUTOMATION_SKIP_BUILD !== '1' && process.env.ELEPHANT_ACCEPTANCE_SKIP_BUILD !== '1') {", 1)
+          runner = runner.replace("let endpoint\nlet output = ''", "let endpoint\nlet client\nconst automationToken = process.env.ELEPHANT_AUTOMATION_TOKEN || randomUUID()\nlet output = ''", 1)
+          runner = runner.replace("const appPath = process.env.ELEPHANT_ACCEPTANCE_APP_PATH || './build/scripts/build_dev.sh'", "const appPath = process.env.ELEPHANT_AUTOMATION_APP_PATH || process.env.ELEPHANT_ACCEPTANCE_APP_PATH || './build/scripts/build_dev.sh'", 1)
+          runner = runner.replace("ELEPHANTNOTE_CONFIG_DIR: configRoot, ELEPHANT_ACCEPTANCE_TAURI_PORT: '0'", "ELEPHANTNOTE_CONFIG_DIR: configRoot, ELEPHANT_AUTOMATION_PORT: '0', ELEPHANT_AUTOMATION_TOKEN: automationToken", 1)
+          runner = runner.replace("match(/ELEPHANT_ACCEPTANCE_TAURI_PORT=(\\d+)/)", "match(/ELEPHANT_(?:AUTOMATION_PORT|ACCEPTANCE_TAURI_PORT)=(\\d+)/)", 1)
+          runner = runner.replace("endpoint = `http://127.0.0.1:${Number(match[1])}`\n      return endpoint", "endpoint = `http://127.0.0.1:${Number(match[1])}`\n      client = new ElephantAutomationClient({ endpoint, token: automationToken })\n      return endpoint", 1)
+          helper_start = runner.index('const command = async(commandName, ...args) => {')
+          helper_end = runner.index('const officialAddonIds = [', helper_start)
+          helpers = """const command = async(commandName, ...args) => {
+            const startedAt = Date.now()
+            try {
+              const result = await client.command(commandName, ...args)
+              console.log(`[automation-runner] command ${commandName} ok ${JSON.stringify({ durationMs: Date.now() - startedAt })}`)
+              return result
+            } catch (error) {
+              console.log(`[automation-runner] command ${commandName} failed ${JSON.stringify({ durationMs: Date.now() - startedAt, error: error?.message || String(error) })}`)
+              throw error
+            }
+          }
+
+          const expectCommandFailure = async(commandName, ...args) => {
+            const startedAt = Date.now()
+            try {
+              await client.command(commandName, ...args)
+            } catch (error) {
+              console.log(`[automation-runner] command ${commandName} expected-failure ${JSON.stringify({ durationMs: Date.now() - startedAt, error: error?.message || String(error) })}`)
+              return error.payload || { ok: false, error: error?.message || String(error) }
+            }
+            throw new Error(`Expected ${commandName} to fail`)
+          }
+
+          const health = await client.health()
+          if (health.transport !== 'tauri' || health.protocolVersion !== 1) throw new Error(`Automation transport is invalid: ${JSON.stringify(health)}`)
+
+          """
+          runner = runner[:helper_start] + helpers + runner[helper_end:]
+          runner = runner.replace("const restartedHealth = await fetch(`${endpoint}/health`).then((response) => response.json())", "const restartedHealth = await client.health()", 1)
+          runner = runner.replace("const packagedRun = Boolean(process.env.ELEPHANT_ACCEPTANCE_APP_PATH)", "const packagedRun = Boolean(process.env.ELEPHANT_AUTOMATION_APP_PATH || process.env.ELEPHANT_ACCEPTANCE_APP_PATH)", 1)
+          success_write = "writeFileSync(join(artifactRoot, 'latest.json'), JSON.stringify({ at: new Date().toISOString(), runtime: 'tauri', result }, null, 2))"
+          runner = runner.replace(success_write, success_write + "\n  writeFileSync(join(artifactRoot, 'result.json'), JSON.stringify({ at: new Date().toISOString(), runtime: 'tauri', success: true, logs, result }, null, 2))", 1)
+          failure_write = "writeFileSync(join(artifactRoot, 'latest.json'), JSON.stringify({ at: new Date().toISOString(), runtime: 'tauri', ok: false, error: error?.stack || String(error) }, null, 2))"
+          runner = runner.replace(failure_write, failure_write + "\n  writeFileSync(join(artifactRoot, 'result.json'), JSON.stringify({ at: new Date().toISOString(), runtime: 'tauri', success: false, error: error?.stack || String(error) }, null, 2))", 1)
+          runner_path.write_text(runner)
+
+          package_path = Path('package.json')
+          package = json.loads(package_path.read_text())
+          scripts = package['scripts']
+          scripts['test:automation:raw'] = 'node build/scripts/run-desktop-acceptance.mjs'
+          scripts['test:automation'] = 'node build/scripts/run-observable.mjs --label automation-e2e -- pnpm test:automation:raw'
+          scripts['test:e2e:raw'] = 'pnpm test:automation:raw'
+          scripts['test:e2e'] = 'pnpm test:automation'
+          scripts['test:official-addons:e2e:raw'] = 'pnpm test:automation:raw'
+          scripts['test:official-addons:e2e'] = 'pnpm test:automation'
+          package.get('devDependencies', {}).pop('playwright', None)
+          package_path.write_text(json.dumps(package, ensure_ascii=False, indent=2) + '\n')
+
+          ci_path = Path('.github/workflows/ci.yml')
+          ci = ci_path.read_text()
+          mac_target = """      - name: Cargo check macOS Apple Silicon target
+                run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --target aarch64-apple-darwin
+          """
+          if 'Prepare embedded Tauri addon resources for macOS' not in ci:
+              ci = ci.replace(mac_target, """      - name: Prepare embedded Tauri addon resources for macOS
+                run: node build/scripts/prepare-tauri-addon-resources.mjs
+
+                - name: Cargo check macOS Apple Silicon target
+                run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --target aarch64-apple-darwin
+          """, 1)
+          rust_target = """      - name: Materialize official addons
+                run: node build/scripts/sync-elephant-addons.mjs
+          """
+          if 'Prepare embedded Tauri addon resources for Rust checks' not in ci:
+              ci = ci.replace(rust_target, rust_target + """
+                - name: Prepare embedded Tauri addon resources for Rust checks
+                run: node build/scripts/prepare-tauri-addon-resources.mjs
+          """, 1)
+          ci_path.write_text(ci)
+
+          e2e_dir = Path('tests/app/e2e')
+          if e2e_dir.exists():
+              import shutil
+              shutil.rmtree(e2e_dir)
+          PY
+
+      - name: Refresh the pnpm lockfile without Playwright
+        shell: bash
+        run: |
+          set -euxo pipefail
+          corepack enable
+          corepack prepare pnpm@10.33.4 --activate
+          pnpm install --lockfile-only --ignore-scripts
+          if grep -R -n 'playwright' package.json pnpm-lock.yaml; then
+            echo 'Playwright is still present after lockfile refresh.' >&2
+            exit 1
+          fi
+
+      - name: Validate focused source contracts
+        shell: bash
+        run: |
+          set -euxo pipefail
+          node --check build/scripts/elephant-automation-client.mjs
+          node --check build/scripts/run-desktop-acceptance.mjs
+          grep -F "listen('elephant:automation:command'" Elephant/frontend/src/renderer/src/platform/acceptanceTestBridge.js
+          grep -F 'enhanceAutomationApi({ target, api })' Elephant/frontend/src/renderer/src/platform/acceptanceTestBridge.js
+          grep -F 'ELEPHANT_AUTOMATION_PORT' build/scripts/run-desktop-acceptance.mjs
+          grep -F 'Prepare embedded Tauri addon resources for macOS' .github/workflows/ci.yml
+          grep -F 'Prepare embedded Tauri addon resources for Rust checks' .github/workflows/ci.yml
+          test ! -d tests/app/e2e
+          git diff --check
+
+      - name: Commit the migration and remove this one-shot workflow
+        shell: bash
+        run: |
+          set -euxo pipefail
+          rm .github/workflows/apply-automation-api-migration.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --stat
+          git commit -m 'feat(automation): replace Playwright with external app API'
+          git push origin HEAD:agent/addon-runtime-stabilization

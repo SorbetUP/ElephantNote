@@ -46,10 +46,15 @@ for (const path of legacyTests) {
   failures.push(`${file}: legacy JavaScript test files are forbidden; use a Rust contract test or a real Tauri automation scenario`)
 }
 
-for (const relativePath of ['vitest.config.js', 'vitest.critical.config.js']) {
+for (const relativePath of [
+  'vitest.config.js',
+  'vitest.critical.config.js',
+  'build/scripts/verify-test-integrity.mjs',
+  'build/scripts/test-integrity-core.mjs'
+]) {
   if (!existsSync(join(root, relativePath))) continue
   inventory.forbiddenConfigFiles.push(relativePath)
-  failures.push(`${relativePath}: obsolete JavaScript test configuration is forbidden`)
+  failures.push(`${relativePath}: obsolete JavaScript test configuration or synthetic counter is forbidden`)
 }
 
 const packageJson = JSON.parse(read(join(root, 'package.json')))

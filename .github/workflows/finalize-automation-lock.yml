@@ -1,0 +1,110 @@
+name: Finalize Playwright-free lockfile
+
+on:
+  push:
+    branches:
+      - agent/addon-runtime-stabilization
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: finalize-playwright-free-lockfile
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/addon-runtime-stabilization
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Print the exact Rust ownership workflow
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import urllib.request
+          request = urllib.request.Request(
+              'https://api.github.com/repos/SorbetUP/ElephantNote/actions/workflows/311691094',
+              headers={'Accept': 'application/vnd.github+json', 'User-Agent': 'Elephant-CI'}
+          )
+          with urllib.request.urlopen(request) as response:
+              metadata = json.load(response)
+          path = pathlib.Path(metadata['path'])
+          print(f'RUST_OWNERSHIP_WORKFLOW_PATH={path}')
+          print(path.read_text())
+          PY
+
+      - name: Regenerate the exact lockfile
+        shell: bash
+        run: |
+          set -euxo pipefail
+          corepack enable
+          corepack prepare pnpm@10.33.4 --activate
+          pnpm install --lockfile-only --ignore-scripts
+          if grep -nE '^ {6}playwright:' pnpm-lock.yaml; then
+            echo 'Root Playwright dependency is still present in the lockfile.' >&2
+            exit 1
+          fi
+
+      - name: Restore the normal lint workflow
+        shell: bash
+        run: |
+          cat > .github/workflows/lint.yml <<'YAML'
+          name: Lint
+
+          on:
+            pull_request:
+              types: [opened, synchronize, reopened]
+
+          concurrency:
+            group: ${{ github.workflow }}-${{ github.ref }}
+            cancel-in-progress: true
+
+          permissions:
+            contents: read
+
+          jobs:
+            lint:
+              runs-on: ubuntu-latest
+              steps:
+                - uses: actions/checkout@v4
+                - uses: ./.github/actions/setup
+
+                - name: Run ESLint
+                  shell: bash
+                  run: |
+                    set -o pipefail
+                    pnpm lint 2>&1 | tee eslint-output.txt
+
+                - name: Upload ESLint output
+                  if: always()
+                  uses: actions/upload-artifact@v4
+                  with:
+                    name: eslint-output
+                    path: eslint-output.txt
+                    if-no-files-found: ignore
+          YAML
+
+      - name: Commit only the final lockfile and cleanup
+        shell: bash
+        run: |
+          set -euxo pipefail
+          rm .github/workflows/finalize-automation-lock.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add pnpm-lock.yaml .github/workflows/lint.yml .github/workflows/finalize-automation-lock.yml
+          git diff --cached --check
+          git commit -m 'chore(automation): finalize Playwright-free dependencies'
+          git push origin HEAD:agent/addon-runtime-stabilization

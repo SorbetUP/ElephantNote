@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   e2e:
-    name: Linux production app and official addon usage simulations
+    name: Linux packaged app automation and official addon scenarios
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
@@ -41,7 +41,7 @@ jobs:
           fi
           cargo tauri --version
 
-      - name: Install System Dependencies
+      - name: Install system dependencies
         shell: bash
         run: |
           set -euxo pipefail
@@ -72,34 +72,6 @@ jobs:
             cargo install wasm-bindgen-cli --version "$VERSION" --locked
           fi
           wasm-bindgen --version
-
-      - name: Install Electron test binary
-        shell: bash
-        run: |
-          set -euxo pipefail
-          electron_package="$(NODE_PATH=Elephant/node_modules node - <<'NODE'
-          const path = require('path')
-          const roots = [process.cwd(), path.join(process.cwd(), 'Elephant')]
-          let resolved = ''
-          for (const root of roots) {
-            try {
-              resolved = require.resolve('electron/package.json', { paths: [root] })
-              break
-            } catch {}
-          }
-          if (!resolved) process.exit(1)
-          process.stdout.write(resolved)
-          NODE
-          )"
-          electron_root="$(dirname "$electron_package")"
-          echo "Electron package: $electron_root" | tee electron-install.txt
-          node "$electron_root/install.js" 2>&1 | tee -a electron-install.txt
-          test -s "$electron_root/path.txt"
-          cat "$electron_root/path.txt"
-
-      - name: Install Playwright Chromium
-        shell: bash
-        run: NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/playwright install chromium
 
       - name: Run postinstall with complete output
         shell: bash
@@ -133,33 +105,35 @@ jobs:
           test "$built" -gt 0
           find build/out/addons/releases -maxdepth 3 -type f -print -exec ls -lh {} \; | tee -a official-addon-native-build.txt
 
-      - name: Build Rust renderer for Linux usage simulations
-        shell: bash
-        run: |
-          set -euxo pipefail
-          node build/scripts/run-observable.mjs --label e2e-renderer-build -- \
-            pnpm build \
-            2>&1 | tee e2e-build.txt
-          test -f build/out/renderer/index.html
-          ls -lh build/out/renderer/index.html
-
-      - name: Run every core and official addon application scenario
-        shell: bash
-        run: |
-          set -euxo pipefail
-          xvfb-run --auto-servernum pnpm test:e2e 2>&1 | tee e2e-tests.txt
-
-      - name: Build and run the packaged Tauri desktop acceptance scenario
+      - name: Build packaged Tauri application
         shell: bash
         run: |
           set -euxo pipefail
           node build/scripts/run-observable.mjs --label tauri-linux-build -- \
             pnpm build:linux 2>&1 | tee tauri-linux-build.txt
           test -x Elephant/backend/tauri/target/release/Elephant
+
+      - name: Run external automation API suite against the packaged app
+        shell: bash
+        run: |
+          set -euxo pipefail
           xvfb-run --auto-servernum env \
-            ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
-            ELEPHANT_ACCEPTANCE_APP_PATH="$PWD/Elephant/backend/tauri/target/release/Elephant" \
-            pnpm test:desktop:acceptance 2>&1 | tee tauri-acceptance-tests.txt
+            ELEPHANT_AUTOMATION_SKIP_BUILD=1 \
+            ELEPHANT_AUTOMATION_APP_PATH="$PWD/Elephant/backend/tauri/target/release/Elephant" \
+            pnpm test:automation:raw 2>&1 | tee automation-tests.txt
+
+      - name: Verify automation evidence and absence of renderer errors
+        shell: bash
+        run: |
+          set -euxo pipefail
+          test -s test-results/acceptance/result.json
+          node - <<'NODE'
+          const fs = require('fs')
+          const result = JSON.parse(fs.readFileSync('test-results/acceptance/result.json', 'utf8'))
+          if (!result?.success) throw new Error(`Automation suite did not report success: ${JSON.stringify(result)}`)
+          const errors = (result.logs || []).filter((entry) => String(entry.level || '').toLowerCase() === 'error')
+          if (errors.length) throw new Error(`Automation logs contain ${errors.length} error(s): ${JSON.stringify(errors.slice(0, 10))}`)
+          NODE
 
       - name: Collect explicit official addon evidence
         if: always()
@@ -173,23 +147,17 @@ jobs:
           done < <(find test-results -type f -name '*native-package-evidence.json' -print 2>/dev/null || true)
           find official-addon-evidence -maxdepth 1 -type f -print -exec cat {} \; || true
 
-      - name: Upload complete Linux usage diagnostics
+      - name: Upload complete Linux automation diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: linux-app-and-official-addon-usage-diagnostics
+          name: linux-app-and-official-addon-automation-diagnostics
           path: |
-            electron-install.txt
             official-addon-native-build.txt
-            e2e-build.txt
-            e2e-tests.txt
             tauri-linux-build.txt
-            tauri-acceptance-tests.txt
+            automation-tests.txt
             test-results/observability/**
-            test-results/e2e-results.json
-            test-results/e2e-junit.xml
-            test-results/**
-            playwright-report/**
+            test-results/acceptance/**
             official-addon-evidence/**
             build/out/addons/releases/**
           if-no-files-found: warn

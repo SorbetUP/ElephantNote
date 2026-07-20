@@ -16,6 +16,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Capture Rust ownership workflow definition
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import urllib.request
+          url = 'https://api.github.com/repos/SorbetUP/ElephantNote/actions/workflows/311691094'
+          request = urllib.request.Request(url, headers={
+              'Accept': 'application/vnd.github+json',
+              'User-Agent': 'Elephant-CI-diagnostics'
+          })
+          with urllib.request.urlopen(request) as response:
+              metadata = json.load(response)
+          path = pathlib.Path(metadata['path'])
+          pathlib.Path('rust-editor-ownership-workflow.json').write_text(json.dumps(metadata, indent=2))
+          pathlib.Path('rust-editor-ownership-workflow.yml').write_text(path.read_text())
+          print(path)
+          PY
+
       - uses: ./.github/actions/setup
 
       - name: Run ESLint
@@ -24,7 +46,7 @@ jobs:
           set -o pipefail
           pnpm lint 2>&1 | tee eslint-output.txt
 
-      - name: Upload ESLint output and resolved lockfile
+      - name: Upload ESLint output, resolved lockfile and ownership diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -32,4 +54,6 @@ jobs:
           path: |
             eslint-output.txt
             pnpm-lock.yaml
+            rust-editor-ownership-workflow.json
+            rust-editor-ownership-workflow.yml
           if-no-files-found: ignore

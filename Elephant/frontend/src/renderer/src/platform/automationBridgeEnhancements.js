@@ -78,6 +78,7 @@ const logText = (entry) => JSON.stringify(entry)
 
 export const enhanceAutomationApi = ({ target = globalThis, api } = {}) => {
   if (!api || typeof api !== 'object') throw new TypeError('enhanceAutomationApi requires an API object')
+  if (api.__elephantAutomationEnhanced === true) return api
 
   api.queryAll = (selector, limit = DEFAULT_NODE_LIMIT) => {
     if (!selector || typeof selector !== 'string') throw new TypeError('queryAll requires a CSS selector')
@@ -92,12 +93,11 @@ export const enhanceAutomationApi = ({ target = globalThis, api } = {}) => {
     const root = target.document?.querySelector?.(selector)
     const nodeLimit = Math.max(1, Math.min(2000, Number(options?.nodeLimit) || DEFAULT_NODE_LIMIT))
     const includeHidden = options?.includeHidden === true
-    const elements = root
-      ? [...root.querySelectorAll(semanticSelector)]
-        .filter((element) => includeHidden || isVisible(target, element))
-        .slice(0, nodeLimit)
-        .map((element, index) => elementSnapshot(target, element, `${selector} semantic[${index}]`))
-      : []
+    const candidates = root ? [...root.querySelectorAll(semanticSelector)] : []
+    const elements = candidates
+      .filter((element) => includeHidden || isVisible(target, element))
+      .slice(0, nodeLimit)
+      .map((element, index) => elementSnapshot(target, element, `${selector} semantic[${index}]`))
     const active = target.document?.activeElement
     return {
       protocolVersion: 1,
@@ -113,7 +113,7 @@ export const enhanceAutomationApi = ({ target = globalThis, api } = {}) => {
         ? elementSnapshot(target, active, ':active-element')
         : null,
       elements,
-      truncated: Boolean(root && root.querySelectorAll(semanticSelector).length > nodeLimit)
+      truncated: candidates.length > nodeLimit
     }
   }
 
@@ -170,5 +170,42 @@ export const enhanceAutomationApi = ({ target = globalThis, api } = {}) => {
     return { ok: true, count: entries.length, entries }
   }
 
+  Object.defineProperty(api, '__elephantAutomationEnhanced', {
+    value: true,
+    enumerable: false
+  })
   return api
+}
+
+export const installAutomationEnhancementsWhenReady = ({
+  target = globalThis,
+  timeoutMs = 60_000
+} = {}) => {
+  const startedAt = Date.now()
+  const attach = () => {
+    const api = target.__ELEPHANT_ACCEPTANCE_TEST__
+    if (!api) return false
+    enhanceAutomationApi({ target, api })
+    target.__ELEPHANT_AUTOMATION__ = api
+    console.info('[automation-api] renderer inspection surface ready')
+    return true
+  }
+  if (attach()) return Promise.resolve(target.__ELEPHANT_AUTOMATION__)
+  return new Promise((resolve, reject) => {
+    const timer = target.setInterval(() => {
+      if (attach()) {
+        target.clearInterval(timer)
+        resolve(target.__ELEPHANT_AUTOMATION__)
+      } else if (Date.now() - startedAt >= timeoutMs) {
+        target.clearInterval(timer)
+        reject(new Error('Timed out waiting for the Elephant renderer automation bridge'))
+      }
+    }, 25)
+  })
+}
+
+if (typeof globalThis.document !== 'undefined' && typeof globalThis.__TAURI__?.core?.invoke === 'function') {
+  void installAutomationEnhancementsWhenReady().catch((error) => {
+    console.error('[automation-api] renderer enhancement failed', error)
+  })
 }

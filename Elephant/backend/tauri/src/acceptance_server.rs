@@ -54,6 +54,11 @@ fn configured_port() -> Option<String> {
         .or_else(|| std::env::var("ELEPHANT_ACCEPTANCE_TAURI_PORT").ok())
 }
 
+fn legacy_acceptance_mode() -> bool {
+    std::env::var_os("ELEPHANT_AUTOMATION_PORT").is_none()
+        && std::env::var_os("ELEPHANT_ACCEPTANCE_TAURI_PORT").is_some()
+}
+
 fn command_timeout() -> Duration {
     let milliseconds = std::env::var("ELEPHANT_AUTOMATION_TIMEOUT_MS")
         .ok()
@@ -269,7 +274,7 @@ fn command_response(stream: &mut TcpStream, app: &AppHandle, request: CommandReq
     }
 }
 
-fn handle_connection(mut stream: TcpStream, app: AppHandle, token: String) {
+fn handle_connection(mut stream: TcpStream, app: AppHandle, token: String, legacy_mode: bool) {
     let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
     let request = match read_request(&mut stream) {
         Ok(request) => request,
@@ -316,7 +321,8 @@ fn handle_connection(mut stream: TcpStream, app: AppHandle, token: String) {
         return;
     }
 
-    if !authorized(&request, &token) {
+    let legacy_command = legacy_mode && request.method == "POST" && path == "/command";
+    if !legacy_command && !authorized(&request, &token) {
         write_response(
             &mut stream,
             "401 Unauthorized",
@@ -493,6 +499,7 @@ pub fn start(app: &AppHandle) {
     let Some(raw_port) = configured_port() else {
         return;
     };
+    let legacy_mode = legacy_acceptance_mode();
     let port = raw_port.parse::<u16>().unwrap_or(0);
     let listener = std::net::TcpListener::bind(("127.0.0.1", port))
         .expect("failed to bind Elephant automation server");
@@ -508,6 +515,7 @@ pub fn start(app: &AppHandle) {
         .unwrap_or_else(|| generated_token(actual_port));
 
     println!("ELEPHANT_AUTOMATION_PORT={actual_port}");
+    println!("ELEPHANT_ACCEPTANCE_TAURI_PORT={actual_port}");
     if supplied_token.is_none() {
         println!("ELEPHANT_AUTOMATION_TOKEN={token}");
     }
@@ -523,7 +531,7 @@ pub fn start(app: &AppHandle) {
                 };
                 let app = handle.clone();
                 let token = token.clone();
-                std::thread::spawn(move || handle_connection(stream, app, token));
+                std::thread::spawn(move || handle_connection(stream, app, token, legacy_mode));
             }
         })
         .expect("failed to start Elephant automation server thread");
@@ -560,5 +568,16 @@ mod tests {
             .headers
             .insert("x-elephant-automation-token".into(), "secret".into());
         assert!(authorized(&request, "secret"));
+    }
+
+    #[test]
+    fn legacy_mode_is_never_enabled_by_the_public_automation_variable() {
+        let request = HttpRequest {
+            method: "POST".into(),
+            target: "/command".into(),
+            headers: HashMap::new(),
+            body: Vec::new(),
+        };
+        assert!(!authorized(&request, "secret"));
     }
 }

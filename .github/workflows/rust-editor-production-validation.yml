@@ -15,9 +15,9 @@ on:
       - 'Elephant/frontend/src/renderer/src/muya/**'
       - 'Elephant/frontend/src/renderer/src/components/editorWithTabs/**'
       - 'build/scripts/build-muya-wasm.mjs'
+      - 'build/scripts/verify-rust-editor-ownership.mjs'
       - 'tests/app/unit/specs/muya/**'
       - 'tests/app/unit/muya*.spec.js'
-      - 'tests/app/unit/addons/rustEditorAddonRuntime.spec.js'
       - 'vite.tauri.config.mjs'
       - 'package.json'
   pull_request:
@@ -30,9 +30,9 @@ on:
       - 'Elephant/frontend/src/renderer/src/muya/**'
       - 'Elephant/frontend/src/renderer/src/components/editorWithTabs/**'
       - 'build/scripts/build-muya-wasm.mjs'
+      - 'build/scripts/verify-rust-editor-ownership.mjs'
       - 'tests/app/unit/specs/muya/**'
       - 'tests/app/unit/muya*.spec.js'
-      - 'tests/app/unit/addons/rustEditorAddonRuntime.spec.js'
       - 'vite.tauri.config.mjs'
       - 'package.json'
 
@@ -106,18 +106,13 @@ jobs:
           test -s Elephant/frontend/src/muya/lib/rust/generated/muya_wasm.js
           test -s Elephant/frontend/src/muya/lib/rust/generated/muya_wasm_bg.wasm
 
-      - name: Reject legacy production mutation ownership
+      - name: Verify production Rust editor ownership
         shell: bash
         run: |
           set -o pipefail
-          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
-            tests/app/unit/specs/muya/rustNoFallbackOwnership.spec.js \
-            tests/app/unit/specs/muya/rustProductionOwnership.spec.js \
-            tests/app/unit/specs/muya/rustEditorNeutralNamespace.spec.js \
-            tests/app/unit/addons/rustEditorAddonRuntime.spec.js \
-            2>&1 | tee rust-editor-ownership-tests.txt
+          node build/scripts/verify-rust-editor-ownership.mjs 2>&1 | tee rust-editor-ownership.txt
 
-      - name: Run complete JavaScript versus Rust differential suite
+      - name: Run JavaScript versus Rust differential diagnostics
         shell: bash
         env:
           ELEPHANT_EXPERIMENTAL_RUST_EDITOR: '1'
@@ -127,7 +122,7 @@ jobs:
             tests/app/unit/specs/muya/rustDifferential*.spec.js \
             2>&1 | tee rust-editor-differential-tests.txt
 
-      - name: Validate browser and Vue production integration
+      - name: Run browser adapter diagnostics
         shell: bash
         run: |
           set -o pipefail
@@ -165,7 +160,7 @@ jobs:
           path: |
             rust-editor-core-tests.txt
             rust-editor-wasm-tests.txt
-            rust-editor-ownership-tests.txt
+            rust-editor-ownership.txt
             rust-editor-differential-tests.txt
             rust-editor-browser-tests.txt
           if-no-files-found: warn

@@ -36,12 +36,12 @@ globalThis.fetch = async(input, init = {}) => {
   }
 
   if (
-    process.env.ELEPHANT_TRUST_MUTATION === 'ignore-save' &&
+    process.env.ELEPHANT_TRUST_MUTATION === 'ignore-insert-text' &&
     isCommand &&
-    payload?.command === 'save'
+    payload?.command === 'insertText'
   ) {
-    process.stderr.write('[markdown-trust-mutation] swallowed real save command\n')
-    return mutationResponse('ignore-save')
+    process.stderr.write('[markdown-trust-mutation] swallowed real insertText command\n')
+    return mutationResponse('ignore-insert-text')
   }
 
   return originalFetch(input, init)

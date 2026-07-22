@@ -119,7 +119,7 @@ jobs:
             pnpm build:linux 2>&1 | tee tauri-linux-build.txt
           test -x Elephant/backend/tauri/target/release/Elephant
 
-      - name: Prove the Markdown suite turns red when Enter is broken
+      - name: Prove the Markdown suite turns red under deliberate mutations
         shell: bash
         run: |
           set -euxo pipefail
@@ -128,7 +128,7 @@ jobs:
             ELEPHANT_ACCEPTANCE_APP_PATH="$PWD/Elephant/backend/tauri/target/release/Elephant" \
             node build/scripts/verify-markdown-trust-sensitivity.mjs \
             2>&1 | tee markdown-trust-sensitivity.txt
-          grep -F '[markdown-trust-sensitivity] PASS: swallowing Enter makes plain-return red' \
+          grep -F '[markdown-trust-sensitivity] PASS: all deliberate mutations made the real suite red' \
             markdown-trust-sensitivity.txt
 
       - name: Run trusted Markdown editor behavior through the external API
@@ -146,7 +146,7 @@ jobs:
           if (payload.status !== 'PROVEN') throw new Error(`Markdown trust suite is not proven: ${JSON.stringify(payload)}`)
           const failed = (payload.scenarios || []).filter((scenario) => scenario.ok !== true)
           if (failed.length) throw new Error(`Markdown trust scenarios failed: ${JSON.stringify(failed)}`)
-          if ((payload.scenarios || []).length < 9) throw new Error(`Markdown trust suite is incomplete: ${JSON.stringify(payload.scenarios)}`)
+          if ((payload.scenarios || []).length < 12) throw new Error(`Markdown trust suite is incomplete: ${JSON.stringify(payload.scenarios)}`)
           NODE
 
       - name: Run the exhaustive suite through the external app API

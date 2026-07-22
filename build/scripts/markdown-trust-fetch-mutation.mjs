@@ -9,26 +9,40 @@ const parseBody = (body) => {
   }
 }
 
+const mutationResponse = (mutation) => new Response(JSON.stringify({
+  ok: true,
+  result: {
+    mutated: true,
+    mutation
+  }
+}), {
+  status: 200,
+  headers: { 'content-type': 'application/json' }
+})
+
 globalThis.fetch = async(input, init = {}) => {
   const url = typeof input === 'string' ? input : input?.url
   const payload = parseBody(init?.body)
+  const isCommand = String(url || '').endsWith('/v1/command')
+
   if (
     process.env.ELEPHANT_TRUST_MUTATION === 'ignore-enter' &&
-    String(url || '').endsWith('/v1/command') &&
+    isCommand &&
     payload?.command === 'press' &&
     payload?.args?.[1] === 'Enter'
   ) {
     process.stderr.write('[markdown-trust-mutation] swallowed real Enter command\n')
-    return new Response(JSON.stringify({
-      ok: true,
-      result: {
-        mutated: true,
-        mutation: 'ignore-enter'
-      }
-    }), {
-      status: 200,
-      headers: { 'content-type': 'application/json' }
-    })
+    return mutationResponse('ignore-enter')
   }
+
+  if (
+    process.env.ELEPHANT_TRUST_MUTATION === 'ignore-save' &&
+    isCommand &&
+    payload?.command === 'save'
+  ) {
+    process.stderr.write('[markdown-trust-mutation] swallowed real save command\n')
+    return mutationResponse('ignore-save')
+  }
+
   return originalFetch(input, init)
 }

@@ -20,10 +20,10 @@ const cases = [
     passLabel: 'swallowing Enter makes plain-return red'
   },
   {
-    mutation: 'ignore-save',
+    mutation: 'ignore-insert-text',
     scenarioId: 'plain-return',
-    outputMarker: '[markdown-trust-mutation] swallowed real save command',
-    passLabel: 'swallowing save makes plain-return red'
+    outputMarker: '[markdown-trust-mutation] swallowed real insertText command',
+    passLabel: 'swallowing insertText makes plain-return red'
   }
 ]
 

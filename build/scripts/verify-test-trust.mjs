@@ -1,21 +1,16 @@
 #!/usr/bin/env node
 
+import { execFileSync } from 'node:child_process'
 import {
   existsSync,
   mkdirSync,
   readFileSync,
-  readdirSync,
-  statSync,
   writeFileSync
 } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '../..')
-const workflowsRoot = join(root, '.github', 'workflows')
 const reportRoot = join(root, 'test-results', 'trust')
-const ignoredDirectories = new Set([
-  '.git', '.pnpm', 'node_modules', 'target', 'dist', 'coverage', '.cache'
-])
 const failures = []
 const inventory = {
   scannedRepositoryFiles: 0,
@@ -28,30 +23,33 @@ const inventory = {
 
 const normalized = (path) => relative(root, path).replaceAll('\\', '/')
 const read = (path) => readFileSync(path, 'utf8')
-const walk = (directory) => {
-  if (!existsSync(directory)) return []
-  const files = []
-  for (const entry of readdirSync(directory)) {
-    const path = join(directory, entry)
-    const stats = statSync(path)
-    if (stats.isDirectory()) {
-      if (ignoredDirectories.has(entry)) continue
-      if (normalized(path) === 'build/out') continue
-      files.push(...walk(path))
-    } else {
-      files.push(path)
-    }
+const trackedFiles = () => {
+  let output
+  try {
+    output = execFileSync('git', ['ls-files', '-z'], {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+  } catch (error) {
+    failures.push(`git ls-files failed: ${error?.stderr || error?.message || String(error)}`)
+    return []
   }
-  return files
+  return output
+    .split('\0')
+    .filter(Boolean)
+    .map((path) => join(root, path))
+    .filter(existsSync)
 }
 
-const repositoryFiles = walk(root)
-const legacyTests = repositoryFiles.filter((path) => /\.(?:spec|test)\.[cm]?[jt]sx?$/.test(path))
+const repositoryFiles = trackedFiles()
 inventory.scannedRepositoryFiles = repositoryFiles.length
+
+const legacyTests = repositoryFiles.filter((path) => /\.(?:spec|test)\.[cm]?[jt]sx?$/.test(path))
 for (const path of legacyTests) {
   const file = normalized(path)
   inventory.forbiddenLegacyTestFiles.push(file)
-  failures.push(`${file}: legacy JavaScript test files are forbidden; use a Rust contract test or a real Tauri automation scenario`)
+  failures.push(`${file}: tracked legacy JavaScript test files are forbidden; use a Rust contract test or a real Tauri automation scenario`)
 }
 
 for (const relativePath of [
@@ -60,7 +58,7 @@ for (const relativePath of [
   'build/scripts/verify-test-integrity.mjs',
   'build/scripts/test-integrity-core.mjs'
 ]) {
-  if (!existsSync(join(root, relativePath))) continue
+  if (!repositoryFiles.some((path) => normalized(path) === relativePath)) continue
   inventory.forbiddenConfigFiles.push(relativePath)
   failures.push(`${relativePath}: obsolete JavaScript test configuration or synthetic counter is forbidden`)
 }
@@ -82,7 +80,7 @@ for (const dependency of ['vitest', '@vitest/coverage-v8', 'jsdom']) {
 }
 
 const forbiddenWorkflowPattern = /\bvitest\b|tests\/app\/unit|tests\/elephant\/unit|test:unit|test:legacy|coverage:unit/g
-for (const path of walk(workflowsRoot).filter((candidate) => /\.ya?ml$/.test(candidate))) {
+for (const path of repositoryFiles.filter((candidate) => normalized(candidate).startsWith('.github/workflows/') && /\.ya?ml$/.test(candidate))) {
   const source = read(path)
   const matches = [...source.matchAll(forbiddenWorkflowPattern)].map((match) => match[0])
   if (matches.length === 0) continue
@@ -113,6 +111,15 @@ if (!existsSync(mutationPath)) failures.push('build/scripts/markdown-trust-fetch
 if (existsSync(manifestPath) && existsSync(runnerPath)) {
   const manifest = JSON.parse(read(manifestPath))
   const runner = read(runnerPath)
+  if (manifest.productProofCommand !== 'pnpm test') {
+    failures.push('tests/trust/required-scenarios.json: productProofCommand must remain exactly "pnpm test"')
+  }
+  if ('legacyDiagnosticCommand' in manifest) {
+    failures.push('tests/trust/required-scenarios.json: legacyDiagnosticCommand is forbidden because the legacy JS suite was removed')
+  }
+  if (!Array.isArray(manifest.markdownEditor) || manifest.markdownEditor.length === 0) {
+    failures.push('tests/trust/required-scenarios.json: markdownEditor must contain mandatory real-app scenarios')
+  }
   for (const scenario of manifest.markdownEditor || []) {
     if (!scenario?.id || !runner.includes(`'${scenario.id}'`)) {
       failures.push(`run-markdown-editor-trust.mjs: missing mandatory scenario ${JSON.stringify(scenario?.id)}`)
@@ -136,8 +143,9 @@ if (existsSync(sensitivityPath) && existsSync(mutationPath)) {
   const sensitivity = read(sensitivityPath)
   const mutation = read(mutationPath)
   for (const marker of [
-    "ELEPHANT_TRUST_MUTATION: 'ignore-enter'",
-    "plainReturn.ok !== false",
+    "mutation: 'ignore-enter'",
+    "mutation: 'ignore-save'",
+    "scenarioId: 'plain-return'",
     'result.status === 0'
   ]) {
     if (!sensitivity.includes(marker)) failures.push(`verify-markdown-trust-sensitivity.mjs: missing sensitivity marker ${marker}`)
@@ -145,16 +153,18 @@ if (existsSync(sensitivityPath) && existsSync(mutationPath)) {
   for (const marker of [
     "payload?.command === 'press'",
     "payload?.args?.[1] === 'Enter'",
-    'swallowed real Enter command'
+    "payload?.command === 'save'",
+    'swallowed real Enter command',
+    'swallowed real save command'
   ]) {
-    if (!mutation.includes(marker)) failures.push(`markdown-trust-fetch-mutation.mjs: missing Enter mutation marker ${marker}`)
+    if (!mutation.includes(marker)) failures.push(`markdown-trust-fetch-mutation.mjs: missing mutation marker ${marker}`)
   }
 }
 
 const e2eWorkflow = read(join(root, '.github', 'workflows', 'e2e.yml'))
 if (!e2eWorkflow.includes('pnpm test:trust:guard')) failures.push('.github/workflows/e2e.yml: must run the test-trust guard')
 if (!e2eWorkflow.includes('pnpm test:markdown:trusted:raw')) failures.push('.github/workflows/e2e.yml: must run the packaged Markdown trust suite')
-if (!e2eWorkflow.includes('verify-markdown-trust-sensitivity.mjs')) failures.push('.github/workflows/e2e.yml: must prove the Markdown suite turns red when Enter is broken')
+if (!e2eWorkflow.includes('verify-markdown-trust-sensitivity.mjs')) failures.push('.github/workflows/e2e.yml: must prove the Markdown suite turns red under deliberate mutations')
 
 const testWorkflow = read(join(root, '.github', 'workflows', 'test.yml'))
 if (!testWorkflow.includes('pnpm test:trust:guard')) failures.push('.github/workflows/test.yml: must run the test-trust guard')
@@ -175,13 +185,13 @@ mkdirSync(reportRoot, { recursive: true })
 const report = {
   at: new Date().toISOString(),
   status: failures.length === 0 ? 'PROVEN' : 'FAILED',
-  note: 'Only Rust contract tests and real application automation may be used as evidence.',
+  note: 'Only tracked repository tests are governed here. Materialized external add-on diagnostics are not product proof and are not part of Elephant test counts.',
   inventory,
   failures
 }
 writeFileSync(join(reportRoot, 'test-inventory.json'), `${JSON.stringify(report, null, 2)}\n`, 'utf8')
 
-console.log(`[test-trust] scanned-repository-files=${inventory.scannedRepositoryFiles}`)
+console.log(`[test-trust] scanned-tracked-files=${inventory.scannedRepositoryFiles}`)
 console.log(`[test-trust] forbidden-legacy-test-files=${inventory.forbiddenLegacyTestFiles.length}`)
 console.log(`[test-trust] forbidden-workflow-references=${inventory.forbiddenWorkflowReferences.length}`)
 console.log(`[test-trust] forbidden-package-scripts=${inventory.forbiddenPackageScripts.length}`)
@@ -194,4 +204,4 @@ if (failures.length > 0) {
   process.exit(1)
 }
 
-console.log('[test-trust] OK: no legacy JavaScript test suite remains anywhere in the repository; product proof uses the real application and proves mutation sensitivity')
+console.log('[test-trust] OK: no tracked legacy JavaScript test suite remains; product proof uses the real application and proves mutation sensitivity')

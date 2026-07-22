@@ -246,6 +246,47 @@ try {
     return { markdown: state.markdown }
   })
 
+  await runScenario('selection-replace', 'Replacing a real selection changes only the selected text and preserves the plain paragraph.', async() => {
+    await command('setMarkdown', 'alpha omega')
+    const editor = await command('waitFor', editorSelector, 10_000)
+    await command('selectText', editorSelector, 6, 11)
+    await command('insertText', editorSelector, 'beta')
+    const state = await waitForMarkdown(
+      (markdown) => markdown.trim() === 'alpha beta',
+      'selection-replace'
+    )
+    await assertNoCodeBlock('selection-replace')
+    return { markdown: state.markdown, selectedFrom: editor.text.slice(6, 11) }
+  })
+
+  await runScenario('multiline-insert', 'A multiline real input creates ordinary paragraphs without inheriting code formatting.', async() => {
+    await setMarkdownAndCaret('before')
+    await command('insertText', editorSelector, '\nline-one\nline-two')
+    const state = await waitForMarkdown(
+      (markdown) => markdown.includes('before') && markdown.includes('line-one') && markdown.includes('line-two') && (markdown.match(/\n/g) || []).length >= 2,
+      'multiline-insert'
+    )
+    if (normalize(state.markdown).includes('```')) throw new Error(`multiline-insert created a code fence: ${state.markdown}`)
+    await assertNoCodeBlock('multiline-insert')
+    return { markdown: state.markdown }
+  })
+
+  await runScenario('inline-code-boundary-return', 'Enter after inline code starts a plain line instead of extending code formatting.', async() => {
+    await setMarkdownAndCaret('before `code`')
+    await command('press', editorSelector, 'Enter')
+    await command('insertText', editorSelector, 'plain')
+    const state = await waitForMarkdown(
+      (markdown) => /before `code`\s*\nplain(?:\n|$)/.test(markdown),
+      'inline-code-boundary-return'
+    )
+    const markdown = normalize(state.markdown)
+    if ((markdown.match(/`/g) || []).length !== 2) {
+      throw new Error(`inline-code-boundary-return changed inline-code delimiters: ${markdown}`)
+    }
+    await assertNoCodeBlock('inline-code-boundary-return')
+    return { markdown }
+  })
+
   await runScenario('list-return', 'Enter continues a Markdown list through the real editor runtime.', async() => {
     await setMarkdownAndCaret('- first')
     await command('press', editorSelector, 'Enter')

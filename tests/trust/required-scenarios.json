@@ -1,7 +1,6 @@
 {
   "schemaVersion": 1,
   "productProofCommand": "pnpm test",
-  "legacyDiagnosticCommand": "pnpm test:legacy",
   "markdownEditor": [
     {
       "id": "app-starts",
@@ -18,6 +17,18 @@
     {
       "id": "arrow-cursor-return",
       "requires": ["real-arrow-keys", "real-keyboard-enter", "no-code-block", "no-crash"]
+    },
+    {
+      "id": "selection-replace",
+      "requires": ["real-selection", "real-input", "exact-markdown", "no-code-block"]
+    },
+    {
+      "id": "multiline-insert",
+      "requires": ["real-input", "multiple-line-breaks", "exact-markdown", "no-code-block"]
+    },
+    {
+      "id": "inline-code-boundary-return",
+      "requires": ["inline-code", "real-keyboard-enter", "plain-following-line", "no-code-block"]
     },
     {
       "id": "list-return",

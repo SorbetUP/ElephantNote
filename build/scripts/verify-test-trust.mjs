@@ -144,7 +144,7 @@ if (existsSync(sensitivityPath) && existsSync(mutationPath)) {
   const mutation = read(mutationPath)
   for (const marker of [
     "mutation: 'ignore-enter'",
-    "mutation: 'ignore-save'",
+    "mutation: 'ignore-insert-text'",
     "scenarioId: 'plain-return'",
     'result.status === 0'
   ]) {
@@ -153,9 +153,9 @@ if (existsSync(sensitivityPath) && existsSync(mutationPath)) {
   for (const marker of [
     "payload?.command === 'press'",
     "payload?.args?.[1] === 'Enter'",
-    "payload?.command === 'save'",
+    "payload?.command === 'insertText'",
     'swallowed real Enter command',
-    'swallowed real save command'
+    'swallowed real insertText command'
   ]) {
     if (!mutation.includes(marker)) failures.push(`markdown-trust-fetch-mutation.mjs: missing mutation marker ${marker}`)
   }

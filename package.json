@@ -113,7 +113,7 @@
     "codemirror": "^5.65.21",
     "command-exists": "^1.2.9",
     "deep-equal": "^2.2.3",
-    "dom-autoscroller": "^3.4.0",
+    "dom-autoscroller": "^2.3.4",
     "dompurify": "^3.4.3",
     "dragula": "^3.7.3",
     "element-plus": "^2.14.0",

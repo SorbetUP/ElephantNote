@@ -1,161 +1,99 @@
 #!/usr/bin/env node
 
-import { randomBytes } from 'node:crypto'
-import { execFileSync, spawn } from 'node:child_process'
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { createRealAppHarness } from './lib/real-app-harness.mjs'
 
-const root = resolve(import.meta.dirname, '../..')
-const artifactRoot = join(root, 'test-results', 'trusted', 'markdown-editor')
-const fixtureRoot = mkdtempSync(join(tmpdir(), 'elephant-markdown-trust-'))
-const vaultRoot = join(fixtureRoot, 'vault')
-const configRoot = join(fixtureRoot, 'config')
-const notePath = 'Markdown trust.md'
 const editorSelector = '[data-testid="muya-rust-runtime-editor"]'
-const token = randomBytes(32).toString('hex')
-const appPath = process.env.ELEPHANT_ACCEPTANCE_APP_PATH || './build/scripts/build_dev.sh'
-const scenarioResults = []
-let child
-let endpoint = ''
-let output = ''
-
-mkdirSync(artifactRoot, { recursive: true })
-mkdirSync(join(vaultRoot, '.elephantnote'), { recursive: true })
-mkdirSync(configRoot, { recursive: true })
-writeFileSync(join(vaultRoot, notePath), '# Markdown trust\n\nInitial\n', 'utf8')
-writeFileSync(
-  join(vaultRoot, '.elephantnote', 'workspace.json'),
-  JSON.stringify({ version: 1, vaultName: 'Markdown trust', sidebar: [] }),
-  'utf8'
-)
-writeFileSync(
-  join(configRoot, 'elephantnote.json'),
-  JSON.stringify({ vaults: [], activeVaultId: null }),
-  'utf8'
-)
-
-if (process.env.ELEPHANT_ACCEPTANCE_SKIP_BUILD !== '1') {
-  console.log('[markdown-trust] building the current Tauri renderer')
-  execFileSync('pnpm', ['tauri:web:build'], {
-    cwd: root,
-    stdio: 'inherit',
-    env: { ...process.env, ELEPHANT_ACCEPTANCE_BUILD: '1' }
-  })
-}
+const notePath = 'Markdown trust.md'
+const layer = 'frontend'
+const harness = createRealAppHarness({
+  suite: 'markdown-editor',
+  buildRenderer: true,
+  initialFiles: {
+    [notePath]: '# Markdown trust\n\nInitial\n'
+  }
+})
 
 const sleep = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds))
 const normalize = (value) => String(value || '').replace(/\r\n/g, '\n')
-const collect = (prefix, chunk) => {
-  const text = chunk.toString()
-  output += text
-  process.stdout.write(`${prefix}${text}`)
-}
 
-const stopChild = () => new Promise((resolvePromise) => {
-  if (!child || child.exitCode !== null) return resolvePromise()
-  const finish = () => resolvePromise()
-  child.once('close', finish)
-  try {
-    process.kill(-child.pid, 'SIGTERM')
-  } catch {
-    child.kill('SIGTERM')
-  }
-  setTimeout(finish, 5000)
-})
+const startChild = () => harness.start()
+const stopChild = () => harness.stop()
 
-const startChild = async() => {
-  const outputOffset = output.length
-  console.log(`[markdown-trust] launching ${appPath}`)
-  child = spawn(appPath, [], {
-    cwd: root,
-    env: {
-      ...process.env,
-      HOME: fixtureRoot,
-      ELEPHANTNOTE_CONFIG_DIR: configRoot,
-      ELEPHANT_AUTOMATION_PORT: '0',
-      ELEPHANT_AUTOMATION_TOKEN: token
-    },
-    detached: true,
-    stdio: ['ignore', 'pipe', 'pipe']
-  })
-  child.stdout.on('data', (chunk) => collect('[elephant] ', chunk))
-  child.stderr.on('data', (chunk) => collect('[elephant:error] ', chunk))
-
-  const portDeadline = Date.now() + 120_000
-  while (Date.now() < portDeadline) {
-    const match = output.slice(outputOffset).match(/ELEPHANT_AUTOMATION_PORT=(\d+)/)
-    if (match) {
-      endpoint = `http://127.0.0.1:${Number(match[1])}`
-      break
-    }
-    if (child.exitCode !== null) {
-      throw new Error(`Elephant exited before its automation API started (${child.exitCode})`)
-    }
-    await sleep(100)
-  }
-  if (!endpoint) throw new Error('Timed out waiting for the Elephant automation API port')
-
-  const readyDeadline = Date.now() + 120_000
-  while (Date.now() < readyDeadline) {
-    const health = await fetch(`${endpoint}/v1/health`).then((response) => response.json()).catch(() => null)
-    if (health?.ready === true && health?.transport === 'tauri') return
-    if (child.exitCode !== null) throw new Error(`Elephant exited before its renderer was ready (${child.exitCode})`)
-    await sleep(100)
-  }
-  throw new Error('Timed out waiting for the Elephant renderer automation bridge')
-}
-
-const request = async(path, { method = 'GET', body } = {}) => {
-  const response = await fetch(`${endpoint}${path}`, {
-    method,
-    headers: {
-      authorization: `Bearer ${token}`,
-      ...(body === undefined ? {} : { 'content-type': 'application/json' })
-    },
-    body: body === undefined ? undefined : JSON.stringify(body)
-  })
-  const payload = await response.json()
-  if (!response.ok || payload?.ok === false) {
-    throw new Error(`${method} ${path} failed: ${payload?.error || response.status}`)
-  }
-  return payload
-}
+const frontendCommands = new Set([
+  'insertText',
+  'logs',
+  'press',
+  'readDom',
+  'readState',
+  'selectText',
+  'waitFor',
+  'waitUntilGone'
+])
 
 const command = async(commandName, ...args) => {
-  const payload = await request('/v1/command', {
-    method: 'POST',
-    body: { command: commandName, args }
-  })
-  return payload.result
+  if (frontendCommands.has(commandName)) return harness.action(layer, commandName, ...args)
+  return harness.setup(commandName, ...args)
+}
+
+const visibleWords = (markdown) => normalize(markdown)
+  .split('\n')
+  .filter((line) => !/^\s*```/.test(line))
+  .map((line) => line
+    .replace(/^\s{0,3}#{1,6}\s+/, '')
+    .replace(/^\s*(?:[-+*]|\d+[.)])\s+/, '')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/[*_~`]/g, ''))
+  .join(' ')
+  .match(/\S+/g) || []
+
+const waitForRenderedMarkdown = async(markdown, label, timeoutMs = 10_000) => {
+  const expectedWords = visibleWords(markdown)
+  const deadline = Date.now() + timeoutMs
+  let previousText = null
+  let stableReads = 0
+  let last = null
+
+  while (Date.now() <= deadline) {
+    const state = await command('readState')
+    const editor = await command('readDom', editorSelector)
+    const actualWords = visibleWords(editor?.text || '')
+    const stateContainsInput = normalize(state?.markdown).includes(normalize(markdown))
+    const wordsMatch = JSON.stringify(actualWords) === JSON.stringify(expectedWords)
+
+    if (editor?.visible && stateContainsInput && wordsMatch) {
+      stableReads = previousText === editor.text ? stableReads + 1 : 1
+      previousText = editor.text
+      if (stableReads >= 2) return { state, editor, expectedWords, actualWords }
+    } else {
+      stableReads = 0
+      previousText = editor?.text || null
+    }
+    last = { state, editor, expectedWords, actualWords }
+    await sleep(50)
+  }
+
+  throw new Error(`${label}: renderer did not finish the real Markdown remount: ${JSON.stringify(last)}`)
+}
+
+const setMarkdownAndCaret = async(markdown, position = 'end') => {
+  await command('setMarkdown', markdown)
+  const synchronized = await waitForRenderedMarkdown(markdown, 'set-markdown-and-caret')
+  const offset = position === 'end' ? synchronized.editor.text.length : Number(position)
+  await command('selectText', editorSelector, offset, offset)
+  return synchronized.editor
 }
 
 const waitForMarkdown = async(predicate, label, timeoutMs = 10_000) => {
   const deadline = Date.now() + timeoutMs
-  let state
+  let state = null
   while (Date.now() <= deadline) {
     state = await command('readState')
     if (predicate(normalize(state?.markdown), state)) return state
     await sleep(50)
   }
   throw new Error(`${label}: Markdown state did not reach the expected value: ${JSON.stringify(state)}`)
-}
-
-const setMarkdownAndCaret = async(markdown, position = 'end') => {
-  await command('setMarkdown', markdown)
-  const editor = await command('waitFor', editorSelector, 10_000)
-  if (!editor?.exists || !editor?.visible) {
-    throw new Error(`Rust editor is not visible: ${JSON.stringify(editor)}`)
-  }
-  const offset = position === 'end' ? editor.text.length : Number(position)
-  await command('selectText', editorSelector, offset, offset)
-  return editor
 }
 
 const assertNoCodeBlock = async(label) => {
@@ -165,45 +103,25 @@ const assertNoCodeBlock = async(label) => {
   }
 }
 
-const runScenario = async(id, description, scenario) => {
-  const startedAt = Date.now()
-  try {
-    const evidence = await scenario()
-    const result = { id, description, ok: true, durationMs: Date.now() - startedAt, evidence }
-    scenarioResults.push(result)
-    console.log(`[markdown-trust] PASS ${id} ${result.durationMs}ms`)
-    return evidence
-  } catch (error) {
-    const result = {
-      id,
-      description,
-      ok: false,
-      durationMs: Date.now() - startedAt,
-      error: error?.stack || String(error)
-    }
-    scenarioResults.push(result)
-    console.error(`[markdown-trust] FAIL ${id}\n${result.error}`)
-    throw error
-  }
-}
+const waitForDisk = (predicate, timeoutMs = 15_000) => harness.waitForVaultFile(notePath, (content) => predicate(normalize(content)), timeoutMs)
 
+let failure = null
 let finalMarkdown = ''
 try {
   await startChild()
-  await runScenario('app-starts', 'The packaged Tauri renderer exposes a visible Rust editor.', async() => {
-    const health = await request('/v1/health')
-    await command('selectVault', vaultRoot)
+
+  await harness.runScenario('app-starts', layer, async() => {
+    await command('selectVault', harness.vaultRoot)
     const opened = await command('openNote', notePath)
     const editor = await command('waitFor', editorSelector, 10_000)
-    const ui = await request(`/v1/ui?selector=${encodeURIComponent(editorSelector)}`)
-    if (!opened?.rustEditorPresent || opened?.codeMirrorPresent || !editor?.visible || !ui?.result?.root?.visible) {
-      throw new Error(`Real editor surface is incomplete: ${JSON.stringify({ opened, editor, ui })}`)
+    if (!opened?.rustEditorPresent || opened?.codeMirrorPresent || !editor?.visible) {
+      throw new Error(`Real editor surface is incomplete: ${JSON.stringify({ opened, editor })}`)
     }
     await command('clearLogs')
-    return { health, opened, editor: ui.result.root }
+    return { opened, editor }
   })
 
-  await runScenario('plain-return', 'Enter creates a real line break without inventing code formatting.', async() => {
+  await harness.runScenario('plain-return', layer, async() => {
     await setMarkdownAndCaret('alpha')
     await command('press', editorSelector, 'Enter')
     await command('insertText', editorSelector, 'beta')
@@ -213,15 +131,16 @@ try {
     )
     if (normalize(state.markdown).includes('```')) throw new Error(`plain-return created a code fence: ${state.markdown}`)
     await assertNoCodeBlock('plain-return')
+    const diskBeforeExplicitSave = await waitForDisk((content) => content.includes('alpha') && content.includes('beta'))
     await command('save')
     const disk = await command('readNote', notePath)
     if (!normalize(disk.content).includes('alpha') || !normalize(disk.content).includes('beta')) {
       throw new Error(`plain-return was not persisted: ${JSON.stringify(disk)}`)
     }
-    return { markdown: state.markdown, disk: disk.content }
+    return { markdown: state.markdown, autosavedDisk: diskBeforeExplicitSave, explicitSaveDisk: disk.content }
   })
 
-  await runScenario('cursor-middle-return', 'Moving the caret into plain text and pressing Enter splits the text without changing its block type.', async() => {
+  await harness.runScenario('cursor-middle-return', layer, async() => {
     await setMarkdownAndCaret('alphomega', 4)
     await command('press', editorSelector, 'Enter')
     await command('insertText', editorSelector, 'beta')
@@ -233,7 +152,7 @@ try {
     return { markdown: state.markdown }
   })
 
-  await runScenario('arrow-cursor-return', 'Arrow-key cursor movement followed by Enter remains plain text and does not crash.', async() => {
+  await harness.runScenario('arrow-cursor-return', layer, async() => {
     await setMarkdownAndCaret('prefixsuffix')
     for (let index = 0; index < 6; index += 1) await command('press', editorSelector, 'ArrowLeft')
     await command('press', editorSelector, 'Enter')
@@ -246,20 +165,18 @@ try {
     return { markdown: state.markdown }
   })
 
-  await runScenario('selection-replace', 'Replacing a real selection changes only the selected text and preserves the plain paragraph.', async() => {
+  await harness.runScenario('selection-replace', layer, async() => {
     await command('setMarkdown', 'alpha omega')
-    const editor = await command('waitFor', editorSelector, 10_000)
-    await command('selectText', editorSelector, 6, 11)
+    const synchronized = await waitForRenderedMarkdown('alpha omega', 'selection-replace-setup')
+    const selection = await command('selectText', editorSelector, 6, 11)
+    if (selection.text !== 'omega') throw new Error(`selection-replace selected the wrong text: ${JSON.stringify(selection)}`)
     await command('insertText', editorSelector, 'beta')
-    const state = await waitForMarkdown(
-      (markdown) => markdown.trim() === 'alpha beta',
-      'selection-replace'
-    )
+    const state = await waitForMarkdown((markdown) => markdown.trim() === 'alpha beta', 'selection-replace')
     await assertNoCodeBlock('selection-replace')
-    return { markdown: state.markdown, selectedFrom: editor.text.slice(6, 11) }
+    return { markdown: state.markdown, synchronizedText: synchronized.editor.text, selection }
   })
 
-  await runScenario('multiline-insert', 'A multiline real input creates ordinary paragraphs without inheriting code formatting.', async() => {
+  await harness.runScenario('multiline-insert', layer, async() => {
     await setMarkdownAndCaret('before')
     await command('insertText', editorSelector, '\nline-one\nline-two')
     const state = await waitForMarkdown(
@@ -271,7 +188,7 @@ try {
     return { markdown: state.markdown }
   })
 
-  await runScenario('inline-code-boundary-return', 'Enter after inline code starts a plain line instead of extending code formatting.', async() => {
+  await harness.runScenario('inline-code-boundary-return', layer, async() => {
     await setMarkdownAndCaret('before `code`')
     await command('press', editorSelector, 'Enter')
     await command('insertText', editorSelector, 'plain')
@@ -287,19 +204,16 @@ try {
     return { markdown }
   })
 
-  await runScenario('list-return', 'Enter continues a Markdown list through the real editor runtime.', async() => {
+  await harness.runScenario('list-return', layer, async() => {
     await setMarkdownAndCaret('- first')
     await command('press', editorSelector, 'Enter')
     await command('insertText', editorSelector, 'second')
-    const state = await waitForMarkdown(
-      (markdown) => /(^|\n)- first\s*\n- second(\n|$)/.test(markdown),
-      'list-return'
-    )
+    const state = await waitForMarkdown((markdown) => /(^|\n)- first\s*\n- second(\n|$)/.test(markdown), 'list-return')
     await assertNoCodeBlock('list-return')
     return { markdown: state.markdown }
   })
 
-  await runScenario('empty-list-exit', 'A second Enter exits an empty list item and creates a plain paragraph.', async() => {
+  await harness.runScenario('empty-list-exit', layer, async() => {
     await setMarkdownAndCaret('- first')
     await command('press', editorSelector, 'Enter')
     await command('press', editorSelector, 'Enter')
@@ -312,15 +226,12 @@ try {
     return { markdown: state.markdown }
   })
 
-  await runScenario('code-boundary-return', 'Enter after a fenced code block stays outside the code block and does not create another fence.', async() => {
+  await harness.runScenario('code-boundary-return', layer, async() => {
     const initial = '# Boundary\n\n```js\nconst value = 1\n```\n\noutside'
     await setMarkdownAndCaret(initial)
     await command('press', editorSelector, 'Enter')
     await command('insertText', editorSelector, 'tail')
-    const state = await waitForMarkdown(
-      (markdown) => markdown.includes('outside') && markdown.includes('tail'),
-      'code-boundary-return'
-    )
+    const state = await waitForMarkdown((markdown) => markdown.includes('outside') && markdown.includes('tail'), 'code-boundary-return')
     const markdown = normalize(state.markdown)
     const fences = markdown.match(/```/g) || []
     const codeBlocks = await command('queryAll', '[data-elephant-editor-kind="code_block"]')
@@ -330,7 +241,7 @@ try {
     return { markdown, codeBlockCount: codeBlocks.length }
   })
 
-  await runScenario('return-stress-no-crash', 'Repeated real Enter/input operations keep the renderer alive and error-free.', async() => {
+  await harness.runScenario('return-stress-no-crash', layer, async() => {
     await setMarkdownAndCaret('stress-start')
     for (let index = 1; index <= 12; index += 1) {
       await command('press', editorSelector, 'Enter')
@@ -346,65 +257,41 @@ try {
     if (!editor?.visible || errors.length !== 0) {
       throw new Error(`Return stress produced a crash or logged error: ${JSON.stringify({ editor, errors })}`)
     }
-    await command('save')
-    finalMarkdown = normalize(state.markdown)
-    const disk = normalize(readFileSync(join(vaultRoot, notePath), 'utf8'))
-    if (disk !== finalMarkdown) {
-      throw new Error(`Saved Markdown differs from the real editor state: ${JSON.stringify({ finalMarkdown, disk })}`)
+    const disk = await waitForDisk((content) => content.includes('line-1') && content.includes('line-12'))
+    const latestState = await command('readState')
+    finalMarkdown = normalize(latestState.markdown)
+    if (normalize(disk) !== finalMarkdown) {
+      throw new Error(`Autosaved Markdown differs from the real editor state: ${JSON.stringify({ finalMarkdown, disk })}`)
     }
     return { markdown: finalMarkdown, editor, errorCount: errors.length }
   })
 
-  await runScenario('restart-persistence', 'The exact Markdown survives process termination and a clean application restart.', async() => {
+  await harness.runScenario('restart-persistence', layer, async() => {
     await stopChild()
-    endpoint = ''
     await startChild()
-    await command('selectVault', vaultRoot)
+    await command('selectVault', harness.vaultRoot)
     await command('openNote', notePath)
     const state = await waitForMarkdown((markdown) => markdown === finalMarkdown, 'restart-persistence', 15_000)
-    const disk = normalize(await command('readNote', notePath).then((note) => note.content))
-    const ui = await request(`/v1/ui?selector=${encodeURIComponent(editorSelector)}`)
+    const synchronized = await waitForRenderedMarkdown(finalMarkdown, 'restart-persistence-render', 15_000)
+    const disk = normalize(readFileSync(`${harness.vaultRoot}/${notePath}`, 'utf8'))
     const errors = await command('logs', { level: 'error', limit: 5000 })
-    if (disk !== finalMarkdown || !ui?.result?.root?.visible || errors.length !== 0) {
-      throw new Error(`Restart persistence failed: ${JSON.stringify({ state, disk, ui, errors })}`)
+    if (disk !== finalMarkdown || !synchronized.editor?.visible || errors.length !== 0) {
+      throw new Error(`Restart persistence failed: ${JSON.stringify({ state, disk, synchronized, errors })}`)
     }
-    return { markdown: state.markdown, disk, editor: ui.result.root, errorCount: errors.length }
+    return { markdown: state.markdown, disk, editor: synchronized.editor, errorCount: errors.length }
   })
 
-  writeFileSync(
-    join(artifactRoot, 'latest.json'),
-    `${JSON.stringify({
-      at: new Date().toISOString(),
-      status: 'PROVEN',
-      runtime: 'tauri',
-      appPath,
-      scenarios: scenarioResults
-    }, null, 2)}\n`,
-    'utf8'
-  )
-  writeFileSync(join(artifactRoot, 'latest.log'), output, 'utf8')
-  console.log(`[markdown-trust] PASS scenarios=${scenarioResults.length}`)
+  await harness.writeEvidence({
+    status: 'PROVEN',
+    extra: {
+      proofBoundary: 'Real packaged Tauri renderer, synchronized real Rust editor remounts, keyboard/input events, autosave to disk, process restart and renderer error logs.'
+    }
+  })
 } catch (error) {
-  const errors = endpoint
-    ? await command('logs', { level: 'error', limit: 5000 }).catch(() => [])
-    : []
-  writeFileSync(
-    join(artifactRoot, 'latest.json'),
-    `${JSON.stringify({
-      at: new Date().toISOString(),
-      status: 'NOT PROVEN',
-      runtime: 'tauri',
-      appPath,
-      error: error?.stack || String(error),
-      rendererErrors: errors,
-      scenarios: scenarioResults
-    }, null, 2)}\n`,
-    'utf8'
-  )
-  writeFileSync(join(artifactRoot, 'latest.log'), output, 'utf8')
-  throw error
+  failure = error
+  await harness.writeEvidence({ status: 'NOT PROVEN', error })
 } finally {
-  await stopChild()
-  writeFileSync(join(artifactRoot, 'latest.log'), output, 'utf8')
-  rmSync(fixtureRoot, { recursive: true, force: true })
+  await harness.cleanup()
 }
+
+if (failure) throw failure

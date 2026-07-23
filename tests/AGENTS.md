@@ -14,11 +14,13 @@ Every maintained product test must belong to exactly one category declared in `t
 
 1. **backend-contract** — direct production Tauri/backend commands against a real vault and real filesystem. It proves backend behavior only and must not make a frontend claim.
 2. **frontend-behavior** — the real renderer is driven through visible DOM controls and keyboard/input events. Direct store mutation, direct save, direct note opening and direct Tauri calls are forbidden inside the claimed scenario. Fixture setup must be recorded separately and excluded from the claim.
-3. **packaged-user-journey** — the exact packaged executable is used from a clean profile, driven through visible controls, persisted to disk, killed, restarted and verified visibly. A development launcher is forbidden.
+3. **packaged-user-journey** — the exact distributed package artifact is used from a clean profile, driven through visible controls, persisted to disk, killed, restarted and verified visibly. A development launcher or an unbundled build output is forbidden.
 
 A diagnostic outside these categories may help locate a defect, but it is not product proof, must not be counted and must not make a release green.
 
 The default `pnpm test` proof chain must execute all three categories. A category is `PROVEN` only when its structured artifact exists and every mandatory scenario is green. Otherwise the status is `NOT PROVEN`.
+
+A proof is scoped to the package format and operating system recorded in its artifact. A passing Linux AppImage proof must never be presented as proof for macOS, Windows, Android or a native file picker that was not exercised.
 
 ## Forbidden additions
 

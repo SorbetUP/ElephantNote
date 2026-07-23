@@ -122,7 +122,7 @@ for (const marker of [
 }
 
 const userSource = readText('build/scripts/run-packaged-user-journey-trust.mjs')
-for (const marker of ['requirePackagedApp: true', "restart({ crash: true })", 'waitForVaultFile', "harness.action(layer, 'logs'")]) {
+for (const marker of ['requirePackagedApp: true', "restart({ crash: true })", 'waitForVaultFile', "harness.action(layer, 'logs'"]) {
   if (!userSource.includes(marker)) fail(`packaged-user-journey runner omits release proof marker ${marker}`)
 }
 

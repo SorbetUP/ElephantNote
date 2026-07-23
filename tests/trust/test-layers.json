@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "productProofCommand": "pnpm test",
+  "categories": [
+    {
+      "id": "backend-contract",
+      "command": "pnpm test:backend:raw",
+      "runner": "build/scripts/run-backend-contract-trust.mjs",
+      "artifact": "test-results/trusted/backend-contract/latest.json",
+      "claim": "Production Tauri/backend behavior against a real vault filesystem.",
+      "doesNotClaim": "No frontend or user interaction guarantee.",
+      "requiredScenarios": [
+        "backend-health-and-inventory",
+        "backend-note-crud-roundtrip",
+        "backend-markdown-engine-contract",
+        "backend-path-containment",
+        "backend-persistence-after-restart"
+      ]
+    },
+    {
+      "id": "frontend-behavior",
+      "command": "pnpm test:frontend:raw",
+      "runner": "build/scripts/run-frontend-behavior-trust.mjs",
+      "artifact": "test-results/trusted/frontend-behavior/latest.json",
+      "claim": "Real renderer behavior through visible DOM controls, keyboard/input events and visible state, with persistence observed on disk.",
+      "doesNotClaim": "Vault selection and note opening used only for fixture setup are excluded from the frontend claim.",
+      "forbiddenProofCommands": [
+        "invokeTauri",
+        "openNote",
+        "selectVault",
+        "setMarkdown",
+        "save",
+        "executeCommand",
+        "installOfficialAddon",
+        "enableAddon"
+      ],
+      "requiredScenarios": [
+        "frontend-editor-keyboard-autosave",
+        "frontend-sidebar-toggle-roundtrip",
+        "frontend-search-visible-results",
+        "frontend-settings-visible-state",
+        "frontend-navigation-does-not-teleport"
+      ]
+    },
+    {
+      "id": "packaged-user-journey",
+      "command": "pnpm test:user:packaged:raw",
+      "runner": "build/scripts/run-packaged-user-journey-trust.mjs",
+      "artifact": "test-results/trusted/packaged-user-journey/latest.json",
+      "claim": "The exact packaged executable supports a clean startup, visible editing, persistence, crash restart, preference restoration and search.",
+      "doesNotClaim": "Platform-owned native folder-picker automation is fixture setup and is not yet part of the claim.",
+      "requiresPackagedExecutable": true,
+      "forbiddenProofCommands": [
+        "invokeTauri",
+        "openNote",
+        "selectVault",
+        "setMarkdown",
+        "save",
+        "executeCommand",
+        "installOfficialAddon",
+        "enableAddon"
+      ],
+      "requiredScenarios": [
+        "user-clean-install-first-screen",
+        "user-edit-visible-and-persisted",
+        "user-theme-choice-visible",
+        "user-crash-restart-restores-visible-work",
+        "user-search-after-restart",
+        "user-session-has-no-unexpected-automation-errors"
+      ]
+    }
+  ]
+}

@@ -76,6 +76,7 @@
     "test:frontend": "node build/scripts/run-observable.mjs --label frontend-behavior-real-app -- pnpm test:frontend:raw",
     "test:user:packaged:raw": "node build/scripts/run-packaged-user-journey-trust.mjs",
     "test:user:packaged": "node build/scripts/run-observable.mjs --label packaged-user-journey -- pnpm test:user:packaged:raw",
+    "test:layers:sensitivity": "node build/scripts/verify-three-layer-sensitivity.mjs",
     "test:raw": "pnpm test:trust:guard && pnpm test:backend:raw && pnpm test:frontend:raw && pnpm test:user:packaged:raw",
     "test": "node build/scripts/run-observable.mjs --label trusted-real-app-three-layers -- pnpm test:raw",
     "test:automation:raw": "node build/scripts/run-desktop-acceptance.mjs",

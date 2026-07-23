@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { createRealAppHarness } from './lib/real-app-harness.mjs'
 
 const harness = createRealAppHarness({
   suite: 'backend-contract',
   buildRenderer: true,
   initialFiles: {
-    'Backend fixture.md': '# Backend fixture\n\nInitial backend content.\n'
+    'Backend fixture.md': '# Backend fixture\n\nInitial backend content.\n',
+    'outside.md': '# Contained vault file\n\ninside-vault-marker\n'
   }
 })
 
@@ -90,14 +93,30 @@ try {
   })
 
   await harness.runScenario('backend-path-containment', 'backend', async() => {
-    let rejected = false
+    const outsideSecret = 'outside-vault-secret-9173'
+    writeFileSync(join(harness.fixtureRoot, 'outside.md'), outsideSecret, 'utf8')
+
+    let response = null
+    let rejection = null
     try {
-      await harness.backend('invokeTauri', 'tauri_notes_read', { relativePath: '../outside.md' })
+      response = await harness.backend('invokeTauri', 'tauri_notes_read', { relativePath: '../outside.md' })
     } catch (error) {
-      rejected = /outside|path|parent|relative|vault|invalid|escape/i.test(error?.message || String(error))
+      rejection = error?.message || String(error)
     }
-    if (!rejected) throw new Error('The production backend accepted or ambiguously handled a path escaping the vault')
-    return { rejected: true }
+
+    const serialized = JSON.stringify(response)
+    if (serialized.includes(outsideSecret)) {
+      throw new Error(`The production backend escaped the vault and disclosed the outside sentinel: ${serialized}`)
+    }
+    if (!rejection && !serialized.includes('inside-vault-marker')) {
+      throw new Error(`Traversal input neither failed nor resolved to contained vault data: ${serialized}`)
+    }
+    return {
+      outsideSentinelDisclosed: false,
+      explicitlyRejected: Boolean(rejection),
+      resolvedInsideVault: serialized.includes('inside-vault-marker'),
+      rejection
+    }
   })
 
   await harness.runScenario('backend-persistence-after-restart', 'backend', async() => {

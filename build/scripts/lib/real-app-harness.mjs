@@ -2,6 +2,7 @@
 
 import { randomBytes } from 'node:crypto'
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -63,9 +64,29 @@ export const createRealAppHarness = ({
   const fixtureRoot = mkdtempSync(join(tmpdir(), `elephant-${suite}-`))
   const vaultRoot = join(fixtureRoot, 'vault')
   const configRoot = join(fixtureRoot, 'config')
+  const xdgConfigRoot = join(fixtureRoot, '.config')
+  const xdgDataRoot = join(fixtureRoot, '.local', 'share')
+  const xdgCacheRoot = join(fixtureRoot, '.cache')
+  const xdgStateRoot = join(fixtureRoot, '.local', 'state')
+  const xdgRuntimeRoot = join(fixtureRoot, '.runtime')
+  const profileRoots = {
+    home: fixtureRoot,
+    elephantConfig: configRoot,
+    xdgConfig: xdgConfigRoot,
+    xdgData: xdgDataRoot,
+    xdgCache: xdgCacheRoot,
+    xdgState: xdgStateRoot,
+    xdgRuntime: xdgRuntimeRoot
+  }
   const artifactRoot = join(root, 'test-results', 'trusted', suite)
   mkdirSync(join(vaultRoot, '.elephantnote'), { recursive: true })
   mkdirSync(configRoot, { recursive: true })
+  mkdirSync(xdgConfigRoot, { recursive: true })
+  mkdirSync(xdgDataRoot, { recursive: true })
+  mkdirSync(xdgCacheRoot, { recursive: true })
+  mkdirSync(xdgStateRoot, { recursive: true })
+  mkdirSync(xdgRuntimeRoot, { recursive: true, mode: 0o700 })
+  chmodSync(xdgRuntimeRoot, 0o700)
   mkdirSync(artifactRoot, { recursive: true })
   writeFileSync(join(vaultRoot, '.elephantnote', 'workspace.json'), JSON.stringify({ version: 1, vaultName: suite, sidebar: [] }), 'utf8')
   writeFileSync(join(configRoot, 'elephantnote.json'), JSON.stringify({ vaults: [], activeVaultId: null }), 'utf8')
@@ -113,6 +134,11 @@ export const createRealAppHarness = ({
       env: {
         ...process.env,
         HOME: fixtureRoot,
+        XDG_CONFIG_HOME: xdgConfigRoot,
+        XDG_DATA_HOME: xdgDataRoot,
+        XDG_CACHE_HOME: xdgCacheRoot,
+        XDG_STATE_HOME: xdgStateRoot,
+        XDG_RUNTIME_DIR: xdgRuntimeRoot,
         PNPM_HOME: process.env.PNPM_HOME || `${originalHome}/Library/pnpm`,
         RUSTUP_HOME: process.env.RUSTUP_HOME || `${originalHome}/.rustup`,
         CARGO_HOME: process.env.CARGO_HOME || `${originalHome}/.cargo`,
@@ -268,6 +294,7 @@ export const createRealAppHarness = ({
       packagedAppRequired: requirePackagedApp,
       packagedFormat,
       appPath,
+      profileRoots,
       error: error ? normalizeError(error) : null,
       scenarios,
       commandPolicy: {
@@ -301,6 +328,7 @@ export const createRealAppHarness = ({
     fixtureRoot,
     vaultRoot,
     configRoot,
+    profileRoots,
     artifactRoot,
     appPath,
     scenarios,

@@ -95,7 +95,8 @@ const requiredScripts = {
   'test:backend:raw': 'run-backend-contract-trust.mjs',
   'test:markdown:trusted:raw': 'run-markdown-editor-trust.mjs',
   'test:frontend:behavior:raw': 'run-frontend-behavior-trust.mjs',
-  'test:user:packaged:raw': 'run-packaged-user-journey-trust.mjs'
+  'test:user:packaged:raw': 'run-packaged-user-journey-trust.mjs',
+  'test:layers:sensitivity': 'verify-three-layer-sensitivity.mjs'
 }
 for (const [name, marker] of Object.entries(requiredScripts)) {
   if (!String(scripts[name] || '').includes(marker)) failures.push(`package.json: script ${name} must contain ${marker}`)
@@ -141,6 +142,25 @@ if (!existsSync(layersManifestPath)) {
     if (category.requiresPackagedExecutable === true && !runner.includes('requirePackagedApp: true')) {
       failures.push(`${category.runner}: packaged user proof must reject development launchers`)
     }
+  }
+}
+
+const layerSensitivityPath = join(root, 'build', 'scripts', 'verify-three-layer-sensitivity.mjs')
+const layerMutationPath = join(root, 'build', 'scripts', 'three-layer-fetch-mutation.mjs')
+if (!existsSync(layerSensitivityPath)) failures.push('build/scripts/verify-three-layer-sensitivity.mjs: missing')
+if (!existsSync(layerMutationPath)) failures.push('build/scripts/three-layer-fetch-mutation.mjs: missing')
+if (existsSync(layerSensitivityPath) && existsSync(layerMutationPath)) {
+  const sensitivity = read(layerSensitivityPath)
+  const mutation = read(layerMutationPath)
+  for (const marker of ['backend-ignore-note-write', 'frontend-ignore-enter', 'user-ignore-insert-text']) {
+    if (!sensitivity.includes(marker)) failures.push(`verify-three-layer-sensitivity.mjs: missing mutation ${marker}`)
+    if (!mutation.includes(marker)) failures.push(`three-layer-fetch-mutation.mjs: missing mutation ${marker}`)
+  }
+  for (const marker of expectedCategories) {
+    if (!sensitivity.includes(marker)) failures.push(`verify-three-layer-sensitivity.mjs: missing proof category ${marker}`)
+  }
+  if (!sensitivity.includes("payload.status !== 'NOT PROVEN'") && !sensitivity.includes("payload.status !== \"NOT PROVEN\"")) {
+    failures.push('verify-three-layer-sensitivity.mjs: must require NOT PROVEN under every mutation')
   }
 }
 
@@ -203,7 +223,9 @@ for (const marker of [
   'pnpm test:backend:raw',
   'pnpm test:frontend:raw',
   'pnpm test:user:packaged:raw',
+  'pnpm test:layers:sensitivity',
   'verify-markdown-trust-sensitivity.mjs',
+  'three-layer-sensitivity.txt',
   'test-results/trusted/backend-contract/**',
   'test-results/trusted/frontend-behavior/**',
   'test-results/trusted/packaged-user-journey/**'
@@ -230,7 +252,7 @@ mkdirSync(reportRoot, { recursive: true })
 const report = {
   at: new Date().toISOString(),
   status: failures.length === 0 ? 'PROVEN' : 'FAILED',
-  note: 'The guard proves only test architecture. Runtime product proof requires passing backend-contract, frontend-behavior, and exact packaged-user-journey artifacts.',
+  note: 'The guard proves only test architecture. Runtime product proof requires passing backend-contract, frontend-behavior, and exact packaged-user-journey artifacts, plus deliberate mutation sensitivity for every layer.',
   inventory,
   failures
 }
@@ -250,4 +272,4 @@ if (failures.length > 0) {
   process.exit(1)
 }
 
-console.log('[test-trust] OK: no tracked legacy JavaScript suite remains; product proof is split into backend, frontend, and exact packaged user journeys')
+console.log('[test-trust] OK: no tracked legacy JavaScript suite remains; product proof is split into backend, frontend, and exact packaged user journeys with mutation sensitivity')

@@ -41,6 +41,8 @@ const syntaxFiles = [
   'build/scripts/run-backend-contract-trust.mjs',
   'build/scripts/run-frontend-behavior-trust.mjs',
   'build/scripts/run-packaged-user-journey-trust.mjs',
+  'build/scripts/three-layer-fetch-mutation.mjs',
+  'build/scripts/verify-three-layer-sensitivity.mjs',
   'build/scripts/run-markdown-editor-trust.mjs',
   'build/scripts/verify-test-trust.mjs',
   'build/scripts/validate-feature-matrix.mjs'
@@ -115,8 +117,17 @@ for (const marker of ['requirePackagedApp: true', "restart({ crash: true })", 'w
   if (!userSource.includes(marker)) fail(`packaged-user-journey runner omits release proof marker ${marker}`)
 }
 
+const mutationSource = readText('build/scripts/three-layer-fetch-mutation.mjs')
+const sensitivitySource = readText('build/scripts/verify-three-layer-sensitivity.mjs')
+for (const marker of ['backend-ignore-note-write', 'frontend-ignore-enter', 'user-ignore-insert-text']) {
+  if (!mutationSource.includes(marker) || !sensitivitySource.includes(marker)) fail(`three-layer sensitivity omits mutation ${marker}`)
+}
+for (const category of categories) {
+  if (!sensitivitySource.includes(category.id)) fail(`three-layer sensitivity omits category ${category.id}`)
+}
+
 const scripts = packageJson.scripts || {}
-for (const scriptName of ['test:backend:raw', 'test:frontend:raw', 'test:user:packaged:raw']) {
+for (const scriptName of ['test:backend:raw', 'test:frontend:raw', 'test:user:packaged:raw', 'test:layers:sensitivity']) {
   if (!scripts[scriptName]) fail(`package.json is missing ${scriptName}`)
 }
 const defaultChain = `${scripts.test || ''} ${scripts['test:raw'] || ''}`
@@ -128,6 +139,8 @@ for (const marker of [
   'pnpm test:backend:raw',
   'pnpm test:frontend:raw',
   'pnpm test:user:packaged:raw',
+  'pnpm test:layers:sensitivity',
+  'three-layer-sensitivity.txt',
   'test-results/trusted/backend-contract/**',
   'test-results/trusted/frontend-behavior/**',
   'test-results/trusted/packaged-user-journey/**'

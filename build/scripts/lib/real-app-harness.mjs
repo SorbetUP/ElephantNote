@@ -124,13 +124,15 @@ export const createRealAppHarness = ({
     const deadline = Date.now() + 120_000
     while (Date.now() < deadline) {
       const match = output.slice(outputOffset).match(/ELEPHANT_ACCEPTANCE_TAURI_PORT=(\d+)/)
-      if (match) {
-        endpoint = `http://127.0.0.1:${Number(match[1])}`
-        const health = await fetch(`${endpoint}/health`).then((response) => response.json())
-        if (health.transport !== 'tauri' || health.ready !== true) {
-          throw new Error(`${suite} automation endpoint is not ready: ${JSON.stringify(health)}`)
+      if (match) endpoint = `http://127.0.0.1:${Number(match[1])}`
+      if (endpoint) {
+        try {
+          const health = await fetch(`${endpoint}/health`).then((response) => response.json())
+          if (health.transport === 'tauri' && health.ready === true) return health
+        } catch {
+          // The listener can become reachable a few milliseconds before its
+          // renderer bridge is ready. Keep polling within the startup deadline.
         }
-        return health
       }
       if (child.exitCode !== null) throw new Error(`${suite} application exited before automation became ready (${child.exitCode})`)
       await sleep(250)

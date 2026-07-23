@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { randomBytes } from 'node:crypto'
 import {
   existsSync,
   mkdirSync,
@@ -78,16 +79,18 @@ export const createRealAppHarness = ({
 
   const originalHome = process.env.HOME || '/tmp'
   const appPath = process.env.ELEPHANT_ACCEPTANCE_APP_PATH || './build/scripts/build_dev.sh'
+  const packagedApp = Boolean(process.env.ELEPHANT_ACCEPTANCE_APP_PATH && !/build_dev\.sh$/.test(appPath))
   if (requirePackagedApp) {
     if (!process.env.ELEPHANT_ACCEPTANCE_APP_PATH) {
       throw new Error(`${suite} requires ELEPHANT_ACCEPTANCE_APP_PATH pointing to the packaged release executable`)
     }
-    if (/build_dev\.sh$/.test(appPath)) {
+    if (!packagedApp) {
       throw new Error(`${suite} refuses the development launcher; the exact packaged executable is required`)
     }
     if (!existsSync(appPath)) throw new Error(`${suite} packaged executable does not exist: ${appPath}`)
   }
 
+  const token = randomBytes(32).toString('hex')
   let child = null
   let endpoint = null
   let output = ''
@@ -113,7 +116,8 @@ export const createRealAppHarness = ({
         RUSTUP_HOME: process.env.RUSTUP_HOME || `${originalHome}/.rustup`,
         CARGO_HOME: process.env.CARGO_HOME || `${originalHome}/.cargo`,
         ELEPHANTNOTE_CONFIG_DIR: configRoot,
-        ELEPHANT_ACCEPTANCE_TAURI_PORT: '0'
+        ELEPHANT_AUTOMATION_PORT: '0',
+        ELEPHANT_AUTOMATION_TOKEN: token
       },
       detached: true,
       stdio: ['ignore', 'pipe', 'pipe']
@@ -123,11 +127,11 @@ export const createRealAppHarness = ({
 
     const deadline = Date.now() + 120_000
     while (Date.now() < deadline) {
-      const match = output.slice(outputOffset).match(/ELEPHANT_ACCEPTANCE_TAURI_PORT=(\d+)/)
+      const match = output.slice(outputOffset).match(/ELEPHANT_AUTOMATION_PORT=(\d+)/)
       if (match) endpoint = `http://127.0.0.1:${Number(match[1])}`
       if (endpoint) {
         try {
-          const health = await fetch(`${endpoint}/health`).then((response) => response.json())
+          const health = await fetch(`${endpoint}/v1/health`).then((response) => response.json())
           if (health.transport === 'tauri' && health.ready === true) return health
         } catch {
           // The listener can become reachable a few milliseconds before its
@@ -174,9 +178,12 @@ export const createRealAppHarness = ({
   const rawCommand = async(commandName, ...args) => {
     if (!endpoint) throw new Error(`${suite} application is not running`)
     const startedAt = Date.now()
-    const response = await fetch(`${endpoint}/command`, {
+    const response = await fetch(`${endpoint}/v1/command`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json'
+      },
       body: JSON.stringify({ command: commandName, args })
     })
     const body = await response.json()
@@ -256,7 +263,8 @@ export const createRealAppHarness = ({
       suite,
       status,
       runtime: 'tauri',
-      packagedApp: requirePackagedApp,
+      packagedApp,
+      packagedAppRequired: requirePackagedApp,
       appPath,
       error: error ? normalizeError(error) : null,
       scenarios,

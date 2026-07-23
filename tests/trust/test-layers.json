@@ -47,9 +47,10 @@
       "command": "pnpm test:user:packaged:raw",
       "runner": "build/scripts/run-packaged-user-journey-trust.mjs",
       "artifact": "test-results/trusted/packaged-user-journey/latest.json",
-      "claim": "The exact packaged executable supports a clean startup, visible editing, persistence, crash restart, preference restoration and search.",
-      "doesNotClaim": "Platform-owned native folder-picker automation is fixture setup and is not yet part of the claim.",
+      "claim": "The exact distributed Linux AppImage supports a clean startup, visible editing, persistence, crash restart, preference restoration and search.",
+      "doesNotClaim": "Native folder-picker behavior and macOS, Windows or Android distribution behavior are not covered by this Linux AppImage proof.",
       "requiresPackagedExecutable": true,
+      "requiredPackagedFormat": "linux-appimage",
       "forbiddenProofCommands": [
         "invokeTauri",
         "openNote",

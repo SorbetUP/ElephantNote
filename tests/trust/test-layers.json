@@ -19,7 +19,7 @@
     },
     {
       "id": "frontend-behavior",
-      "command": "pnpm test:frontend:raw",
+      "command": "pnpm test:frontend:behavior:raw",
       "runner": "build/scripts/run-frontend-behavior-trust.mjs",
       "artifact": "test-results/trusted/frontend-behavior/latest.json",
       "claim": "Real renderer behavior through visible DOM controls, keyboard/input events and visible state, with persistence observed on disk.",

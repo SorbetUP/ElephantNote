@@ -122,6 +122,10 @@ if (!existsSync(layersManifestPath)) {
   if (JSON.stringify(ids) !== JSON.stringify(expectedCategories)) {
     failures.push(`tests/trust/test-layers.json: categories must be exactly ${JSON.stringify(expectedCategories)}`)
   }
+  const packagedCategory = categories.find((category) => category.id === 'packaged-user-journey')
+  if (packagedCategory?.requiredPackagedFormat !== 'linux-appimage') {
+    failures.push('tests/trust/test-layers.json: packaged-user-journey must explicitly scope the current proof to linux-appimage')
+  }
   for (const category of categories) {
     const runnerPath = join(root, category.runner || '')
     if (!category.runner || !existsSync(runnerPath)) {
@@ -142,6 +146,16 @@ if (!existsSync(layersManifestPath)) {
     if (category.requiresPackagedExecutable === true && !runner.includes('requirePackagedApp: true')) {
       failures.push(`${category.runner}: packaged user proof must reject development launchers`)
     }
+  }
+}
+
+const harnessPath = join(root, 'build', 'scripts', 'lib', 'real-app-harness.mjs')
+if (!existsSync(harnessPath)) {
+  failures.push('build/scripts/lib/real-app-harness.mjs: missing')
+} else {
+  const harness = read(harnessPath)
+  for (const marker of ['ELEPHANT_AUTOMATION_TOKEN', '/v1/health', '/v1/command', 'packagedFormat']) {
+    if (!harness.includes(marker)) failures.push(`build/scripts/lib/real-app-harness.mjs: missing authenticated/package proof marker ${marker}`)
   }
 }
 
@@ -225,6 +239,9 @@ for (const marker of [
   'pnpm test:user:packaged:raw',
   'pnpm test:layers:sensitivity',
   'verify-markdown-trust-sensitivity.mjs',
+  'ELEPHANT_PACKAGED_FORMAT=linux-appimage',
+  'packaged-appimage.sha256',
+  'bundle/appimage/*.AppImage',
   'three-layer-sensitivity.txt',
   'test-results/trusted/backend-contract/**',
   'test-results/trusted/frontend-behavior/**',
@@ -243,7 +260,8 @@ const agentRules = [join(root, 'AGENTS.md'), join(root, 'tests', 'AGENTS.md')]
 for (const marker of [
   'Legacy diagnostics are not product proof.',
   'Generated test cases are forbidden.',
-  'Markdown editor changes require the real Tauri editor trust scenarios.'
+  'Markdown editor changes require the real Tauri editor trust scenarios.',
+  'A proof is scoped to the package format and operating system recorded in its artifact.'
 ]) {
   if (!agentRules.includes(marker)) failures.push(`AGENTS rules: missing mandatory test-trust rule ${JSON.stringify(marker)}`)
 }
@@ -252,7 +270,7 @@ mkdirSync(reportRoot, { recursive: true })
 const report = {
   at: new Date().toISOString(),
   status: failures.length === 0 ? 'PROVEN' : 'FAILED',
-  note: 'The guard proves only test architecture. Runtime product proof requires passing backend-contract, frontend-behavior, and exact packaged-user-journey artifacts, plus deliberate mutation sensitivity for every layer.',
+  note: 'The guard proves only test architecture. Runtime product proof requires passing backend-contract, frontend-behavior, and exact distributed Linux AppImage user-journey artifacts, plus deliberate mutation sensitivity for every layer.',
   inventory,
   failures
 }
@@ -272,4 +290,4 @@ if (failures.length > 0) {
   process.exit(1)
 }
 
-console.log('[test-trust] OK: no tracked legacy JavaScript suite remains; product proof is split into backend, frontend, and exact packaged user journeys with mutation sensitivity')
+console.log('[test-trust] OK: no tracked legacy JavaScript suite remains; product proof is split into backend, frontend, and distributed Linux AppImage user journeys with mutation sensitivity')

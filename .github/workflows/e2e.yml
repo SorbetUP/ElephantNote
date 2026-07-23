@@ -123,6 +123,7 @@ jobs:
           chmod +x "$APPIMAGE_PATH"
           APPIMAGE_PATH="$(realpath "$APPIMAGE_PATH")"
           printf 'ELEPHANT_PACKAGED_APP=%s\n' "$APPIMAGE_PATH" >> "$GITHUB_ENV"
+          printf 'ELEPHANT_PACKAGED_FORMAT=linux-appimage\n' >> "$GITHUB_ENV"
           printf 'APPIMAGE_EXTRACT_AND_RUN=1\n' >> "$GITHUB_ENV"
           sha256sum "$APPIMAGE_PATH" | tee packaged-appimage.sha256
           ls -lh "$APPIMAGE_PATH"
@@ -200,6 +201,12 @@ jobs:
             }
             if (evidence.packagedApp !== true) {
               throw new Error(`${category.id} did not run the distributed AppImage`)
+            }
+            if (evidence.packagedFormat !== 'linux-appimage') {
+              throw new Error(`${category.id} ran the wrong package format: ${JSON.stringify(evidence.packagedFormat)}`)
+            }
+            if (category.requiredPackagedFormat && evidence.packagedFormat !== category.requiredPackagedFormat) {
+              throw new Error(`${category.id} package format mismatch: ${JSON.stringify({ expected: category.requiredPackagedFormat, actual: evidence.packagedFormat })}`)
             }
             if (evidence.appPath !== process.env.ELEPHANT_PACKAGED_APP) {
               throw new Error(`${category.id} ran a different executable: ${JSON.stringify({ expected: process.env.ELEPHANT_PACKAGED_APP, actual: evidence.appPath })}`)

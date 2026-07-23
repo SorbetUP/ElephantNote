@@ -80,6 +80,7 @@ export const createRealAppHarness = ({
   const originalHome = process.env.HOME || '/tmp'
   const appPath = process.env.ELEPHANT_ACCEPTANCE_APP_PATH || './build/scripts/build_dev.sh'
   const packagedApp = Boolean(process.env.ELEPHANT_ACCEPTANCE_APP_PATH && !/build_dev\.sh$/.test(appPath))
+  const packagedFormat = process.env.ELEPHANT_PACKAGED_FORMAT || null
   if (requirePackagedApp) {
     if (!process.env.ELEPHANT_ACCEPTANCE_APP_PATH) {
       throw new Error(`${suite} requires ELEPHANT_ACCEPTANCE_APP_PATH pointing to the packaged release executable`)
@@ -265,6 +266,7 @@ export const createRealAppHarness = ({
       runtime: 'tauri',
       packagedApp,
       packagedAppRequired: requirePackagedApp,
+      packagedFormat,
       appPath,
       error: error ? normalizeError(error) : null,
       scenarios,

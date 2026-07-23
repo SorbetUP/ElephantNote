@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   e2e:
-    name: Linux three-layer packaged application proof
+    name: Linux three-layer distributed AppImage proof
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
@@ -111,14 +111,21 @@ jobs:
           test "$built" -gt 0
           find build/out/addons/releases -maxdepth 3 -type f -print -exec ls -lh {} \; | tee -a official-addon-native-build.txt
 
-      - name: Build exact packaged Tauri application
+      - name: Build and select the exact distributed Linux AppImage
         shell: bash
         run: |
           set -euxo pipefail
           node build/scripts/run-observable.mjs --label tauri-linux-build -- \
             pnpm build:linux 2>&1 | tee tauri-linux-build.txt
-          test -x Elephant/backend/tauri/target/release/Elephant
-          sha256sum Elephant/backend/tauri/target/release/Elephant | tee packaged-executable.sha256
+          APPIMAGE_PATH="$(find Elephant/backend/tauri/target/release/bundle/appimage -maxdepth 1 -type f -name '*.AppImage' -print -quit)"
+          test -n "$APPIMAGE_PATH"
+          test -f "$APPIMAGE_PATH"
+          chmod +x "$APPIMAGE_PATH"
+          APPIMAGE_PATH="$(realpath "$APPIMAGE_PATH")"
+          printf 'ELEPHANT_PACKAGED_APP=%s\n' "$APPIMAGE_PATH" >> "$GITHUB_ENV"
+          printf 'APPIMAGE_EXTRACT_AND_RUN=1\n' >> "$GITHUB_ENV"
+          sha256sum "$APPIMAGE_PATH" | tee packaged-appimage.sha256
+          ls -lh "$APPIMAGE_PATH"
 
       - name: Prove backend, frontend and user tests turn red under regressions
         shell: bash
@@ -126,7 +133,7 @@ jobs:
           set -euxo pipefail
           xvfb-run --auto-servernum env \
             ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
-            ELEPHANT_ACCEPTANCE_APP_PATH="$PWD/Elephant/backend/tauri/target/release/Elephant" \
+            ELEPHANT_ACCEPTANCE_APP_PATH="$ELEPHANT_PACKAGED_APP" \
             pnpm test:layers:sensitivity 2>&1 | tee three-layer-sensitivity.txt
           grep -F '[three-layer-sensitivity] PASS: backend, frontend and packaged user proof all detect deliberate regressions' \
             three-layer-sensitivity.txt
@@ -137,7 +144,7 @@ jobs:
           set -euxo pipefail
           xvfb-run --auto-servernum env \
             ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
-            ELEPHANT_ACCEPTANCE_APP_PATH="$PWD/Elephant/backend/tauri/target/release/Elephant" \
+            ELEPHANT_ACCEPTANCE_APP_PATH="$ELEPHANT_PACKAGED_APP" \
             pnpm test:backend:raw 2>&1 | tee backend-contract.txt
 
       - name: Prove the Markdown suite turns red under deliberate mutations
@@ -146,7 +153,7 @@ jobs:
           set -euxo pipefail
           xvfb-run --auto-servernum env \
             ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
-            ELEPHANT_ACCEPTANCE_APP_PATH="$PWD/Elephant/backend/tauri/target/release/Elephant" \
+            ELEPHANT_ACCEPTANCE_APP_PATH="$ELEPHANT_PACKAGED_APP" \
             node build/scripts/verify-markdown-trust-sensitivity.mjs \
             2>&1 | tee markdown-trust-sensitivity.txt
           grep -F '[markdown-trust-sensitivity] PASS: all deliberate mutations made the real suite red' \
@@ -158,16 +165,16 @@ jobs:
           set -euxo pipefail
           xvfb-run --auto-servernum env \
             ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
-            ELEPHANT_ACCEPTANCE_APP_PATH="$PWD/Elephant/backend/tauri/target/release/Elephant" \
+            ELEPHANT_ACCEPTANCE_APP_PATH="$ELEPHANT_PACKAGED_APP" \
             pnpm test:frontend:raw 2>&1 | tee frontend-behavior.txt
 
-      - name: Run exact packaged user journey layer
+      - name: Run exact distributed AppImage user journey layer
         shell: bash
         run: |
           set -euxo pipefail
           xvfb-run --auto-servernum env \
             ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
-            ELEPHANT_ACCEPTANCE_APP_PATH="$PWD/Elephant/backend/tauri/target/release/Elephant" \
+            ELEPHANT_ACCEPTANCE_APP_PATH="$ELEPHANT_PACKAGED_APP" \
             pnpm test:user:packaged:raw 2>&1 | tee packaged-user-journey.txt
 
       - name: Verify three-layer runtime evidence
@@ -191,11 +198,14 @@ jobs:
               const violations = (evidence.commandPolicy?.actionCommands || []).filter((entry) => forbidden.has(entry.command))
               if (violations.length) throw new Error(`${category.id} bypassed the frontend with internal commands: ${JSON.stringify(violations)}`)
             }
-            if (category.requiresPackagedExecutable === true && evidence.packagedApp !== true) {
-              throw new Error(`${category.id} did not run the packaged executable`)
+            if (evidence.packagedApp !== true) {
+              throw new Error(`${category.id} did not run the distributed AppImage`)
+            }
+            if (evidence.appPath !== process.env.ELEPHANT_PACKAGED_APP) {
+              throw new Error(`${category.id} ran a different executable: ${JSON.stringify({ expected: process.env.ELEPHANT_PACKAGED_APP, actual: evidence.appPath })}`)
             }
           }
-          console.log('[three-layer-proof] PROVEN backend + frontend + packaged user journey')
+          console.log('[three-layer-proof] PROVEN backend + frontend + distributed AppImage user journey')
           NODE
 
       - name: Run exhaustive official addon suite through the external app API
@@ -204,7 +214,7 @@ jobs:
           set -euxo pipefail
           xvfb-run --auto-servernum env \
             ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
-            ELEPHANT_ACCEPTANCE_APP_PATH="$PWD/Elephant/backend/tauri/target/release/Elephant" \
+            ELEPHANT_ACCEPTANCE_APP_PATH="$ELEPHANT_PACKAGED_APP" \
             pnpm test:automation:raw 2>&1 | tee automation-tests.txt
 
       - name: Verify exhaustive automation evidence and renderer logs
@@ -237,7 +247,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: linux-three-layer-app-proof-and-addon-diagnostics
+          name: linux-three-layer-distributed-appimage-proof-and-addon-diagnostics
           path: |
             test-trust.txt
             proof-layer-wiring.txt
@@ -248,7 +258,7 @@ jobs:
             packaged-user-journey.txt
             official-addon-native-build.txt
             tauri-linux-build.txt
-            packaged-executable.sha256
+            packaged-appimage.sha256
             automation-tests.txt
             test-results/trust/**
             test-results/trusted/backend-contract/**
@@ -259,5 +269,6 @@ jobs:
             test-results/acceptance/**
             official-addon-evidence/**
             build/out/addons/releases/**
+            Elephant/backend/tauri/target/release/bundle/appimage/*.AppImage
           if-no-files-found: warn
           retention-days: 30

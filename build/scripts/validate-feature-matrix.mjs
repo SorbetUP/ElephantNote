@@ -35,6 +35,10 @@ if (JSON.stringify(categoryIds) !== JSON.stringify(expectedCategoryIds)) {
 } else {
   pass('exact proof category split', categoryIds)
 }
+const userCategory = categories.find((category) => category.id === 'packaged-user-journey')
+if (userCategory?.requiredPackagedFormat !== 'linux-appimage') {
+  fail('packaged-user-journey must explicitly scope the current proof to linux-appimage')
+}
 
 const syntaxFiles = [
   'build/scripts/lib/real-app-harness.mjs',
@@ -95,6 +99,11 @@ for (const category of categories) {
   pass('category runner wiring', { id: category.id, scenarios: scenarios.length, artifact: category.artifact })
 }
 
+const harnessSource = readText('build/scripts/lib/real-app-harness.mjs')
+for (const marker of ['ELEPHANT_AUTOMATION_TOKEN', '/v1/health', '/v1/command', 'packagedFormat']) {
+  if (!harnessSource.includes(marker)) fail(`real app harness omits authenticated/package evidence marker ${marker}`)
+}
+
 const backendSource = readText('build/scripts/run-backend-contract-trust.mjs')
 for (const marker of ['tauri_notes_write', 'tauri_notes_read', 'tauri_entries_rename', 'tauri_entries_move', 'tauri_entries_delete', "restart({ crash: true })"]) {
   if (!backendSource.includes(marker)) fail(`backend-contract runner omits production marker ${marker}`)
@@ -140,6 +149,9 @@ for (const marker of [
   'pnpm test:frontend:raw',
   'pnpm test:user:packaged:raw',
   'pnpm test:layers:sensitivity',
+  'ELEPHANT_PACKAGED_FORMAT=linux-appimage',
+  'packaged-appimage.sha256',
+  'bundle/appimage/*.AppImage',
   'three-layer-sensitivity.txt',
   'test-results/trusted/backend-contract/**',
   'test-results/trusted/frontend-behavior/**',

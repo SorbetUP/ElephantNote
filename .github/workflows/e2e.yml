@@ -120,6 +120,17 @@ jobs:
           test -x Elephant/backend/tauri/target/release/Elephant
           sha256sum Elephant/backend/tauri/target/release/Elephant | tee packaged-executable.sha256
 
+      - name: Prove backend, frontend and user tests turn red under regressions
+        shell: bash
+        run: |
+          set -euxo pipefail
+          xvfb-run --auto-servernum env \
+            ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
+            ELEPHANT_ACCEPTANCE_APP_PATH="$PWD/Elephant/backend/tauri/target/release/Elephant" \
+            pnpm test:layers:sensitivity 2>&1 | tee three-layer-sensitivity.txt
+          grep -F '[three-layer-sensitivity] PASS: backend, frontend and packaged user proof all detect deliberate regressions' \
+            three-layer-sensitivity.txt
+
       - name: Run backend production contract layer
         shell: bash
         run: |
@@ -230,6 +241,7 @@ jobs:
           path: |
             test-trust.txt
             proof-layer-wiring.txt
+            three-layer-sensitivity.txt
             backend-contract.txt
             markdown-trust-sensitivity.txt
             frontend-behavior.txt

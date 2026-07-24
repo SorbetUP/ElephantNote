@@ -151,4 +151,7 @@ try {
   await harness.cleanup()
 }
 
-if (failure) throw failure
+if (failure) {
+  console.error(failure?.stack || failure?.message || String(failure))
+  process.exit(1)
+}

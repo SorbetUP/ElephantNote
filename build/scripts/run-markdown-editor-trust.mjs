@@ -14,6 +14,10 @@ const harness = createRealAppHarness({
 
 const sleep = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds))
 const normalize = (value) => String(value || '').replace(/\r\n/g, '\n')
+const noteBody = (markdown) => normalize(markdown)
+  .replace(/^---\n[\s\S]*?\n---(?:\n|$)+/, '')
+  .replace(/^# Markdown trust(?:\n+|$)/, '')
+  .trim()
 const startChild = () => harness.start()
 const stopChild = () => harness.stop()
 
@@ -170,9 +174,13 @@ try {
     const selection = await command('selectText', editorSelector, selectionStart, selectionStart + 5)
     if (selection.text !== 'omega') throw new Error(`selection-replace selected the wrong text: ${JSON.stringify(selection)}`)
     await command('insertText', editorSelector, 'beta')
-    const state = await waitForMarkdown((markdown) => markdown.trim() === 'alpha beta', 'selection-replace')
+    const state = await waitForMarkdown((markdown) => noteBody(markdown) === 'alpha beta', 'selection-replace')
+    const editor = await command('readDom', editorSelector)
+    if (selectableText(editor) !== 'alpha beta') {
+      throw new Error(`selection-replace visible editor differs from the exact expected body: ${JSON.stringify(editor)}`)
+    }
     await assertNoCodeBlock('selection-replace')
-    return { markdown: state.markdown, synchronizedText: synchronized.editor.text, selection }
+    return { markdown: state.markdown, visibleText: editor.text, synchronizedText: synchronized.editor.text, selection }
   })
 
   await harness.runScenario('multiline-insert', layer, async() => {

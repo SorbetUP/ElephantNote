@@ -38,7 +38,7 @@ const waitForStableEditor = async(timeoutMs = 10_000) => {
   throw new Error(`Real Rust editor did not become stable: ${JSON.stringify(last)}`)
 }
 
-const expectedKeyboardResult = /Initial visible text\. frontend line one\s*\n+\s*frontend line two\s*$/
+const expectedKeyboardResult = /^frontend line one\s*\n+\s*frontend line two\s*$/
 
 let failure = null
 try {
@@ -56,22 +56,21 @@ try {
   await harness.runScenario('frontend-editor-keyboard-autosave', layer, async() => {
     await harness.action(layer, 'waitFor', editorSelector, 10_000)
     const editor = await waitForStableEditor()
-    // readDom exposes innerText while selectText operates on textContent. Their
-    // offsets are not interchangeable when the rendered editor contains block
-    // separators or hidden text nodes. A deliberately oversized offset is
-    // clamped by the real DOM selection implementation to textContent.length,
-    // which gives the true document end without guessing an internal offset.
+    // Select the complete rendered document exactly as a user would with
+    // Select All, then replace it through the real beforeinput/Rust path. This
+    // avoids guessing offsets between innerText and textContent while proving
+    // selection replacement, text input, Enter, rendering and persistence.
     const selection = await harness.action(
       layer,
       'selectText',
       editorSelector,
-      Number.MAX_SAFE_INTEGER,
+      0,
       Number.MAX_SAFE_INTEGER
     )
-    if (selection?.start !== selection?.end || selection?.text !== '') {
-      throw new Error(`Frontend editor did not produce a collapsed end caret: ${JSON.stringify({ editor, selection })}`)
+    if (selection?.start !== 0 || selection?.end <= 0 || !selection?.text?.trim()) {
+      throw new Error(`Frontend editor did not select the complete visible document: ${JSON.stringify({ editor, selection })}`)
     }
-    await harness.action(layer, 'insertText', editorSelector, ' frontend line one')
+    await harness.action(layer, 'insertText', editorSelector, 'frontend line one')
     await harness.action(layer, 'press', editorSelector, 'Enter')
     await harness.action(layer, 'insertText', editorSelector, 'frontend line two')
 
@@ -83,7 +82,7 @@ try {
       await sleep(50)
     }
     if (!expectedKeyboardResult.test(String(state?.markdown || ''))) {
-      throw new Error(`Keyboard Enter/input did not append the exact expected frontend Markdown: ${JSON.stringify(state)}`)
+      throw new Error(`Keyboard selection/Enter/input did not produce the exact expected frontend Markdown: ${JSON.stringify(state)}`)
     }
 
     const persisted = await harness.waitForVaultFile('Frontend acceptance.md', (content) => expectedKeyboardResult.test(content))

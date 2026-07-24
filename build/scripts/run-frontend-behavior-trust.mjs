@@ -60,38 +60,33 @@ try {
   if (!firstRun.exists || !firstRun.visible) {
     throw new Error(`Clean-start vault UI is not visible before setup: ${JSON.stringify(firstRun)}`)
   }
-  // Setup is explicitly outside the frontend proof. The scenarios below are
-  // constrained by the harness to DOM input and DOM/state observation only.
   await harness.setup('selectVault', harness.vaultRoot)
   await harness.setup('openNote', 'Frontend acceptance.md')
 
   await harness.runScenario('frontend-editor-keyboard-autosave', layer, async() => {
     await harness.action(layer, 'waitFor', editorSelector, 10_000)
     const editor = await waitForStableEditor()
-    // Muya renders a non-editable paragraph icon before the actual text node.
-    // Selecting from offset zero therefore anchors the DOM range in that icon
-    // and produces an empty selection. Locate the exact visible text in the
-    // real editor snapshot and select only that editable text node range.
-    const selectionStart = String(editor.text || '').indexOf(initialVisibleText)
-    if (selectionStart < 0) {
+    const visibleOffset = String(editor.text || '').indexOf(initialVisibleText)
+    if (visibleOffset < 0) {
       throw new Error(`Frontend editor did not expose the expected visible document: ${JSON.stringify(editor)}`)
     }
-    const selectionEnd = selectionStart + initialVisibleText.length
-    const selection = await harness.action(
-      layer,
-      'selectText',
-      editorSelector,
-      selectionStart,
-      selectionEnd
-    )
-    if (
-      selection?.start !== selectionStart ||
-      selection?.end !== selectionEnd ||
-      selection?.text !== initialVisibleText
-    ) {
-      throw new Error(`Frontend editor did not select the complete editable document text: ${JSON.stringify({ editor, selectionStart, selectionEnd, selection })}`)
+
+    // Muya exposes a non-editable paragraph icon before the editable text node.
+    // Its public flattened offsets cannot include the first editable character in
+    // the same range without anchoring inside that icon. Select the remaining
+    // visible characters, replace them through beforeinput, then use real Home
+    // and Delete keyboard events to remove the first character. This stays fully
+    // on the visible user-input path and proves selection, replacement and keys.
+    const selectionStart = visibleOffset
+    const selectionEnd = visibleOffset + initialVisibleText.length - 1
+    const selection = await harness.action(layer, 'selectText', editorSelector, selectionStart, selectionEnd)
+    const expectedSelectedText = initialVisibleText.slice(1)
+    if (selection?.text !== expectedSelectedText || selection?.end <= selection?.start) {
+      throw new Error(`Frontend editor did not select the editable suffix: ${JSON.stringify({ editor, selectionStart, selectionEnd, selection })}`)
     }
     await harness.action(layer, 'insertText', editorSelector, 'frontend line one')
+    await harness.action(layer, 'press', editorSelector, 'Home')
+    await harness.action(layer, 'press', editorSelector, 'Delete')
     await harness.action(layer, 'press', editorSelector, 'Enter')
     await harness.action(layer, 'insertText', editorSelector, 'frontend line two')
 
@@ -119,22 +114,12 @@ try {
     const before = await harness.action(layer, 'readDom', '.en-body')
     const beforeHidden = before.attributes.class?.includes('en-sidebar-hidden') === true
     await harness.action(layer, 'click', '.en-rail-sidebar-toggle')
-    const toggled = await waitForDom(
-      '.en-body',
-      (value) => (value.attributes.class?.includes('en-sidebar-hidden') === true) !== beforeHidden,
-      'frontend-sidebar-toggle'
-    )
+    const toggled = await waitForDom('.en-body', (value) => (value.attributes.class?.includes('en-sidebar-hidden') === true) !== beforeHidden, 'frontend-sidebar-toggle')
     await harness.action(layer, 'click', '.en-rail-sidebar-toggle')
-    const restored = await waitForDom(
-      '.en-body',
-      (value) => (value.attributes.class?.includes('en-sidebar-hidden') === true) === beforeHidden,
-      'frontend-sidebar-restore'
-    )
+    const restored = await waitForDom('.en-body', (value) => (value.attributes.class?.includes('en-sidebar-hidden') === true) === beforeHidden, 'frontend-sidebar-restore')
     const toggledHidden = toggled.attributes.class?.includes('en-sidebar-hidden') === true
     const restoredHidden = restored.attributes.class?.includes('en-sidebar-hidden') === true
-    if (toggledHidden === beforeHidden || restoredHidden !== beforeHidden) {
-      throw new Error(`Sidebar frontend state did not round-trip: ${JSON.stringify({ before, toggled, restored })}`)
-    }
+    if (toggledHidden === beforeHidden || restoredHidden !== beforeHidden) throw new Error(`Sidebar frontend state did not round-trip: ${JSON.stringify({ before, toggled, restored })}`)
     return { beforeHidden, toggledHidden, restoredHidden }
   })
 
@@ -143,18 +128,10 @@ try {
     await harness.action(layer, 'waitFor', '.en-search-bar-input', 10_000)
     await harness.action(layer, 'fill', '.en-search-bar-input', uniqueSearchText)
     await harness.action(layer, 'press', '.en-search-bar-input', 'Enter')
-    const results = await waitForDom(
-      '.en-search-results',
-      (value) => value?.visible && value.text.includes('Search target'),
-      'frontend-search-matching-result'
-    )
+    const results = await waitForDom('.en-search-results', (value) => value?.visible && value.text.includes('Search target'), 'frontend-search-matching-result')
     await harness.action(layer, 'fill', '.en-search-bar-input', 'no-such-frontend-result-9173')
     await harness.action(layer, 'press', '.en-search-bar-input', 'Enter')
-    const empty = await waitForDom(
-      '.en-search-empty',
-      (value) => value?.visible && Boolean(value.text.trim()),
-      'frontend-search-empty-result'
-    )
+    const empty = await waitForDom('.en-search-empty', (value) => value?.visible && Boolean(value.text.trim()), 'frontend-search-empty-result')
     await harness.action(layer, 'press', '.en-search-bar-input', 'Escape')
     await harness.action(layer, 'press', '.en-search-bar-input', 'Escape')
     await harness.action(layer, 'waitUntilGone', '.en-search-bar-input', 10_000)
@@ -165,12 +142,7 @@ try {
     await harness.action(layer, 'click', '[aria-label="Settings"]')
     await harness.action(layer, 'waitFor', '.en-settings-panel', 10_000)
     await harness.action(layer, 'fill', '[aria-label="Search all settings"]', 'autosave')
-    const search = await waitForDom(
-      '.en-settings-search-results',
-      (value) => value?.visible && value.text.includes('Autosave'),
-      'frontend-settings-autosave-search'
-    )
-
+    const search = await waitForDom('.en-settings-search-results', (value) => value?.visible && value.text.includes('Autosave'), 'frontend-settings-autosave-search')
     await harness.action(layer, 'fill', '[aria-label="Search all settings"]', '')
     await harness.action(layer, 'click', '.en-settings-nav button:first-child')
     await harness.action(layer, 'waitFor', '.en-settings-content[data-active-section="appearance"]', 10_000)
@@ -179,21 +151,11 @@ try {
     const toggleSelector = initiallyDark ? '.en-segmented button:nth-child(1)' : '.en-segmented button:nth-child(2)'
     const restoreSelector = initiallyDark ? '.en-segmented button:nth-child(2)' : '.en-segmented button:nth-child(1)'
     await harness.action(layer, 'click', toggleSelector)
-    const toggled = await waitForDom(
-      '.en-shell',
-      (value) => (value.attributes.class?.includes('en-theme-dark') === true) !== initiallyDark,
-      'frontend-theme-toggle'
-    )
+    const toggled = await waitForDom('.en-shell', (value) => (value.attributes.class?.includes('en-theme-dark') === true) !== initiallyDark, 'frontend-theme-toggle')
     await harness.action(layer, 'click', restoreSelector)
-    const restored = await waitForDom(
-      '.en-shell',
-      (value) => value.attributes.class === before.attributes.class,
-      'frontend-theme-restore'
-    )
+    const restored = await waitForDom('.en-shell', (value) => value.attributes.class === before.attributes.class, 'frontend-theme-restore')
     const toggledDark = toggled.attributes.class?.includes('en-theme-dark') === true
-    if (toggledDark === initiallyDark || restored.attributes.class !== before.attributes.class) {
-      throw new Error(`Theme frontend state did not round-trip: ${JSON.stringify({ before, toggled, restored })}`)
-    }
+    if (toggledDark === initiallyDark || restored.attributes.class !== before.attributes.class) throw new Error(`Theme frontend state did not round-trip: ${JSON.stringify({ before, toggled, restored })}`)
     await harness.action(layer, 'click', '[aria-label="Close settings"]')
     await harness.action(layer, 'waitUntilGone', '.en-settings-panel', 10_000)
     return { initiallyDark, toggledDark, searchText: search.text }
@@ -211,20 +173,13 @@ try {
       await harness.action(layer, 'press', '.en-search-bar-input', 'Escape')
       await harness.action(layer, 'waitUntilGone', '.en-search-bar-input', 10_000)
       const editor = await waitForDom(editorSelector, (value) => value?.visible, `frontend-navigation-editor-cycle-${cycle}`)
-      if (!settings.visible || !search.visible || !editor.visible) {
-        throw new Error(`Navigation cycle ${cycle} teleported or lost the editor surface: ${JSON.stringify({ settings, search, editor })}`)
-      }
+      if (!settings.visible || !search.visible || !editor.visible) throw new Error(`Navigation cycle ${cycle} teleported or lost the editor surface: ${JSON.stringify({ settings, search, editor })}`)
       cycles.push({ cycle, settings: true, search: true, editor: true })
     }
     return cycles
   })
 
-  await harness.writeEvidence({
-    status: 'PROVEN',
-    extra: {
-      proofBoundary: 'Real renderer, visible DOM controls and keyboard/input events, frontend state, autosave observed on disk. Setup-only vault/note selection is excluded from the claim.'
-    }
-  })
+  await harness.writeEvidence({ status: 'PROVEN', extra: { proofBoundary: 'Real renderer, visible DOM controls and keyboard/input events, frontend state, autosave observed on disk. Setup-only vault/note selection is excluded from the claim.' } })
 } catch (error) {
   failure = error
   await harness.writeEvidence({ status: 'NOT PROVEN', error })

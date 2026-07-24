@@ -54,6 +54,29 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
     return exported
   }
 
+  __selection () {
+    const current = super.__selection()
+    const canonical = this.__rustMirror?.state?.markdown
+    if (typeof canonical !== 'string' || !canonical.endsWith('\n')) return current
+
+    const exported = super.getMarkdown()
+    const collapsedAtVisibleEnd = current.selection.anchor === exported.length &&
+      current.selection.focus === exported.length
+    if (!collapsedAtVisibleEnd || exported !== canonical.replace(/\n+$/, '')) return current
+
+    // A trailing empty Muya paragraph has no serialized text node. When the DOM
+    // caret is at the visible end, map it to Rust's logical position after the
+    // retained newline instead of moving it back before that newline. Otherwise
+    // the next queued keystroke joins both lines again.
+    const selection = { anchor: canonical.length, focus: canonical.length }
+    return {
+      ...current,
+      markdown: canonical,
+      selection,
+      cursor: selectionToMuyaIndexCursor(canonical, selection)
+    }
+  }
+
   __renderCanonicalMarkdown (
     markdown,
     cursor,

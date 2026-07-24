@@ -20,6 +20,19 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
     })
     this.dispatchChange = this.__rustMutationGate.dispatch
 
+    // Muya has several context-specific Enter paths. Some inline contexts consume
+    // the key without reaching enterHandler or docEnterHandler. Capture the real
+    // keyboard event once at the editor boundary and send every normal Enter to
+    // the Rust-owned command path, so inline code and document boundaries cannot
+    // silently discard the user's line break.
+    this.__rustEnterKeydownListener = (event) => {
+      if (event?.key !== 'Enter' || event?.isComposing) return
+      this.__onUserMutation?.(`keydown:${event.shiftKey ? 'Shift+Enter' : 'Enter'}`)
+      const pending = this.__enter(event)
+      pending?.catch?.(() => {})
+    }
+    this.container.addEventListener('keydown', this.__rustEnterKeydownListener, true)
+
     // Muya may normalize loaded Markdown while parsing it. The Rust session must
     // start from the document that Muya actually rendered, not from the raw file
     // and not from repeated parse/export passes.

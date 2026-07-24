@@ -34,18 +34,25 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
     })
     this.dispatchChange = this.__rustMutationGate.dispatch
 
-    // Muya has several context-specific Enter paths. Some inline contexts consume
-    // the key without reaching enterHandler or docEnterHandler. Capture the real
-    // keyboard event once at the editor boundary and send every normal Enter to
-    // the Rust-owned command path, so inline code and document boundaries cannot
-    // silently discard the user's line break.
+    // Muya installs context-specific handlers on the editor before this subclass
+    // is constructed. Some list and inline handlers stop propagation at that
+    // target, so a later listener on the same node cannot reliably claim Enter.
+    // Capture it at the owning document first and scope it to this exact editor.
+    this.__rustEnterEventTarget = this.container?.ownerDocument || document
     this.__rustEnterKeydownListener = (event) => {
       if (event?.key !== 'Enter' || event?.isComposing) return
+      const editor = event?.target?.closest?.('[data-testid="muya-rust-runtime-editor"]')
+      const belongsToEditor = editor && (
+        editor === this.container ||
+        editor.contains?.(this.container) ||
+        this.container?.contains?.(editor)
+      )
+      if (!belongsToEditor) return
       this.__onUserMutation?.(`keydown:${event.shiftKey ? 'Shift+Enter' : 'Enter'}`)
       const pending = this.__enter(event)
       pending?.catch?.(() => {})
     }
-    this.container.addEventListener('keydown', this.__rustEnterKeydownListener, true)
+    this.__rustEnterEventTarget.addEventListener('keydown', this.__rustEnterKeydownListener, true)
 
     // Muya may normalize loaded Markdown while parsing it. The Rust session must
     // start from the document that Muya actually rendered, not from the raw file
@@ -257,7 +264,7 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
   }
 
   destroy () {
-    this.container.removeEventListener('keydown', this.__rustEnterKeydownListener, true)
+    this.__rustEnterEventTarget?.removeEventListener('keydown', this.__rustEnterKeydownListener, true)
     return super.destroy()
   }
 }

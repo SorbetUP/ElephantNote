@@ -60,13 +60,23 @@ const waitForRustMutation = async(target, before, timeoutMs = 5000) => {
     if (current?.phase === 'error') {
       throw new Error(`Rust editor failed while applying Enter: ${current.error || current.reason || 'unknown error'}`)
     }
-    if (
-      Number(current?.revision) > Number(before?.revision || 0) ||
+
+    const mutationCompleted = Number(current?.revision) > Number(before?.revision || 0) ||
       Number(current?.markdownLength) !== Number(before?.markdownLength || 0)
-    ) return current
+    const canonicalState = activeMuya?.__rustMirror?.state
+    const visibleMarkdown = activeMuya?.getMarkdown?.()
+    const visibleSynchronized = canonicalState &&
+      String(visibleMarkdown ?? '') === String(canonicalState.markdown ?? '') &&
+      Number(activeMuya?.__rustMutationGate?.pending || 0) === 0
+
+    // The Rust command completing is not enough: the next real keystroke must not
+    // race the Muya render/canonicalization triggered by Enter. Return only once
+    // the visible editor exports the exact canonical Rust document and its
+    // mutation queue is empty.
+    if (mutationCompleted && visibleSynchronized) return current
     await new Promise((resolve) => setTimeout(resolve, 20))
   }
-  throw new Error('The visible Enter key did not reach a completed Rust editor mutation')
+  throw new Error('The visible Enter key did not reach a completed and rendered Rust editor mutation')
 }
 
 export const installEditorAutomationInputDefaults = (target = globalThis) => {

@@ -9,26 +9,16 @@ const layer = 'frontend'
 const harness = createRealAppHarness({
   suite: 'markdown-editor',
   buildRenderer: true,
-  initialFiles: {
-    [notePath]: '# Markdown trust\n\nInitial\n'
-  }
+  initialFiles: { [notePath]: '# Markdown trust\n\nInitial\n' }
 })
 
 const sleep = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds))
 const normalize = (value) => String(value || '').replace(/\r\n/g, '\n')
-
 const startChild = () => harness.start()
 const stopChild = () => harness.stop()
 
 const frontendCommands = new Set([
-  'insertText',
-  'logs',
-  'press',
-  'readDom',
-  'readState',
-  'selectText',
-  'waitFor',
-  'waitUntilGone'
+  'insertText', 'logs', 'press', 'readDom', 'readState', 'selectText', 'waitFor', 'waitUntilGone'
 ])
 
 const command = async(commandName, ...args) => {
@@ -54,14 +44,12 @@ const waitForRenderedMarkdown = async(markdown, label, timeoutMs = 10_000) => {
   let previousText = null
   let stableReads = 0
   let last = null
-
   while (Date.now() <= deadline) {
     const state = await command('readState')
     const editor = await command('readDom', editorSelector)
     const actualWords = visibleWords(editor?.text || '')
     const stateContainsInput = normalize(state?.markdown).includes(normalize(markdown))
     const wordsMatch = JSON.stringify(actualWords) === JSON.stringify(expectedWords)
-
     if (editor?.visible && stateContainsInput && wordsMatch) {
       stableReads = previousText === editor.text ? stableReads + 1 : 1
       previousText = editor.text
@@ -73,26 +61,20 @@ const waitForRenderedMarkdown = async(markdown, label, timeoutMs = 10_000) => {
     last = { state, editor, expectedWords, actualWords }
     await sleep(50)
   }
-
   throw new Error(`${label}: renderer did not finish the real Markdown remount: ${JSON.stringify(last)}`)
 }
 
-const editorTextBounds = (text) => {
-  const value = String(text || '')
-  const leading = value.match(/^\s*/)?.[0].length || 0
-  const end = value.trimEnd().length
-  return { leading, end: Math.max(leading, end) }
-}
+const selectableText = (editor) => String(editor?.text || '').trim()
 
 const setMarkdownAndCaret = async(markdown, position = 'end') => {
   await command('setMarkdown', markdown)
   const synchronized = await waitForRenderedMarkdown(markdown, 'set-markdown-and-caret')
-  const bounds = editorTextBounds(synchronized.editor.text)
-  const requestedOffset = position === 'end' ? bounds.end : bounds.leading + Number(position)
-  const offset = Math.max(bounds.leading, Math.min(bounds.end, requestedOffset))
+  const text = selectableText(synchronized.editor)
+  const requested = position === 'end' ? text.length : Number(position)
+  const offset = Math.max(0, Math.min(text.length, requested))
   const selection = await command('selectText', editorSelector, offset, offset)
-  if (selection?.start !== offset || selection?.end !== offset) {
-    throw new Error(`set-markdown-and-caret selected the wrong caret: ${JSON.stringify({ markdown, position, offset, bounds, selection })}`)
+  if (selection?.start !== offset || selection?.end !== offset || selection?.text !== '') {
+    throw new Error(`set-markdown-and-caret selected the wrong caret: ${JSON.stringify({ markdown, position, offset, text, selection })}`)
   }
   return synchronized.editor
 }
@@ -110,12 +92,14 @@ const waitForMarkdown = async(predicate, label, timeoutMs = 10_000) => {
 
 const assertNoCodeBlock = async(label) => {
   const codeBlocks = await command('queryAll', '[data-elephant-editor-kind="code_block"]')
-  if (codeBlocks.length !== 0) {
-    throw new Error(`${label}: unexpected code block appeared: ${JSON.stringify(codeBlocks)}`)
-  }
+  if (codeBlocks.length !== 0) throw new Error(`${label}: unexpected code block appeared: ${JSON.stringify(codeBlocks)}`)
 }
 
-const waitForDisk = (predicate, timeoutMs = 15_000) => harness.waitForVaultFile(notePath, (content) => predicate(normalize(content)), timeoutMs)
+const waitForDisk = (predicate, timeoutMs = 15_000) => harness.waitForVaultFile(
+  notePath,
+  (content) => predicate(normalize(content)),
+  timeoutMs
+)
 
 let failure = null
 let finalMarkdown = ''
@@ -143,13 +127,13 @@ try {
     )
     if (normalize(state.markdown).includes('```')) throw new Error(`plain-return created a code fence: ${state.markdown}`)
     await assertNoCodeBlock('plain-return')
-    const diskBeforeExplicitSave = await waitForDisk((content) => content.includes('alpha') && content.includes('beta'))
+    const autosavedDisk = await waitForDisk((content) => content.includes('alpha') && content.includes('beta'))
     await command('save')
     const disk = await command('readNote', notePath)
     if (!normalize(disk.content).includes('alpha') || !normalize(disk.content).includes('beta')) {
       throw new Error(`plain-return was not persisted: ${JSON.stringify(disk)}`)
     }
-    return { markdown: state.markdown, autosavedDisk: diskBeforeExplicitSave, explicitSaveDisk: disk.content }
+    return { markdown: state.markdown, autosavedDisk, explicitSaveDisk: disk.content }
   })
 
   await harness.runScenario('cursor-middle-return', layer, async() => {
@@ -180,9 +164,10 @@ try {
   await harness.runScenario('selection-replace', layer, async() => {
     await command('setMarkdown', 'alpha omega')
     const synchronized = await waitForRenderedMarkdown('alpha omega', 'selection-replace-setup')
-    const selectionStart = String(synchronized.editor.text || '').indexOf('omega')
+    const text = selectableText(synchronized.editor)
+    const selectionStart = text.indexOf('omega')
     if (selectionStart < 0) throw new Error(`selection-replace could not locate visible omega: ${JSON.stringify(synchronized.editor)}`)
-    const selection = await command('selectText', editorSelector, selectionStart, selectionStart + 'omega'.length)
+    const selection = await command('selectText', editorSelector, selectionStart, selectionStart + 5)
     if (selection.text !== 'omega') throw new Error(`selection-replace selected the wrong text: ${JSON.stringify(selection)}`)
     await command('insertText', editorSelector, 'beta')
     const state = await waitForMarkdown((markdown) => markdown.trim() === 'alpha beta', 'selection-replace')
@@ -211,9 +196,7 @@ try {
       'inline-code-boundary-return'
     )
     const markdown = normalize(state.markdown)
-    if ((markdown.match(/`/g) || []).length !== 2) {
-      throw new Error(`inline-code-boundary-return changed inline-code delimiters: ${markdown}`)
-    }
+    if ((markdown.match(/`/g) || []).length !== 2) throw new Error(`inline-code delimiters changed: ${markdown}`)
     await assertNoCodeBlock('inline-code-boundary-return')
     return { markdown }
   })
@@ -268,16 +251,12 @@ try {
     )
     const editor = await command('readDom', editorSelector)
     const errors = await command('logs', { level: 'error', limit: 5000 })
-    if (!editor?.visible || errors.length !== 0) {
-      throw new Error(`Return stress produced a crash or logged error: ${JSON.stringify({ editor, errors })}`)
-    }
+    if (!editor?.visible || errors.length !== 0) throw new Error(`Return stress produced a crash or logged error: ${JSON.stringify({ editor, errors })}`)
     const disk = await waitForDisk((content) => content.includes('line-1') && content.includes('line-12'))
     const latestState = await command('readState')
     finalMarkdown = normalize(latestState.markdown)
-    if (normalize(disk) !== finalMarkdown) {
-      throw new Error(`Autosaved Markdown differs from the real editor state: ${JSON.stringify({ finalMarkdown, disk })}`)
-    }
-    return { markdown: finalMarkdown, editor, errorCount: errors.length }
+    if (normalize(disk) !== finalMarkdown) throw new Error(`Autosaved Markdown differs from editor state: ${JSON.stringify({ finalMarkdown, disk })}`)
+    return { markdown: state.markdown, editor, errorCount: errors.length }
   })
 
   await harness.runScenario('restart-persistence', layer, async() => {
@@ -298,7 +277,7 @@ try {
   await harness.writeEvidence({
     status: 'PROVEN',
     extra: {
-      proofBoundary: 'Real packaged Tauri renderer, synchronized real Rust editor remounts, keyboard/input events, autosave to disk, process restart and renderer error logs.'
+      proofBoundary: 'Real packaged Tauri renderer, synchronized Rust editor remounts, visible keyboard/input events, autosave, process restart and renderer error logs.'
     }
   })
 } catch (error) {

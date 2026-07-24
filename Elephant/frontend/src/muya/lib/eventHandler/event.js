@@ -42,7 +42,7 @@ class EventCenter {
    * [detachAllDomEvents remove all the DOM events handler]
    */
   detachAllDomEvents() {
-    this.events.forEach(event => this.detachDOMEvent(event.eventId))
+    for (const { eventId } of [...this.events]) this.detachDOMEvent(eventId)
   }
 
   /**

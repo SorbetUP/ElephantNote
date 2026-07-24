@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   e2e:
-    name: Linux production app and official addon usage simulations
+    name: Linux three-layer distributed AppImage proof
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
@@ -32,7 +32,16 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
-      - name: Install System Dependencies
+      - name: Install pinned Tauri CLI
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if ! cargo tauri --version 2>/dev/null | grep -Fq '2.11.2'; then
+            cargo install tauri-cli --version 2.11.2 --locked
+          fi
+          cargo tauri --version
+
+      - name: Install system dependencies
         shell: bash
         run: |
           set -euxo pipefail
@@ -46,12 +55,18 @@ jobs:
 
       - uses: ./.github/actions/setup
 
-      - name: Validate complete feature and addon scenario matrix
+      - name: Reject fake or inflated tests
         shell: bash
         run: |
           set -euxo pipefail
-          node build/scripts/run-observable.mjs --label feature-matrix -- \
-            pnpm test:feature-matrix
+          pnpm test:trust:guard 2>&1 | tee test-trust.txt
+
+      - name: Validate three proof layers and addon matrix wiring
+        shell: bash
+        run: |
+          set -euxo pipefail
+          node build/scripts/run-observable.mjs --label proof-layer-wiring -- \
+            pnpm test:feature-matrix 2>&1 | tee proof-layer-wiring.txt
 
       - name: Install exact wasm-bindgen CLI
         shell: bash
@@ -63,34 +78,6 @@ jobs:
             cargo install wasm-bindgen-cli --version "$VERSION" --locked
           fi
           wasm-bindgen --version
-
-      - name: Install Electron test binary
-        shell: bash
-        run: |
-          set -euxo pipefail
-          electron_package="$(NODE_PATH=Elephant/node_modules node - <<'NODE'
-          const path = require('path')
-          const roots = [process.cwd(), path.join(process.cwd(), 'Elephant')]
-          let resolved = ''
-          for (const root of roots) {
-            try {
-              resolved = require.resolve('electron/package.json', { paths: [root] })
-              break
-            } catch {}
-          }
-          if (!resolved) process.exit(1)
-          process.stdout.write(resolved)
-          NODE
-          )"
-          electron_root="$(dirname "$electron_package")"
-          echo "Electron package: $electron_root" | tee electron-install.txt
-          node "$electron_root/install.js" 2>&1 | tee -a electron-install.txt
-          test -s "$electron_root/path.txt"
-          cat "$electron_root/path.txt"
-
-      - name: Install Playwright Chromium
-        shell: bash
-        run: NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/playwright install chromium
 
       - name: Run postinstall with complete output
         shell: bash
@@ -124,33 +111,132 @@ jobs:
           test "$built" -gt 0
           find build/out/addons/releases -maxdepth 3 -type f -print -exec ls -lh {} \; | tee -a official-addon-native-build.txt
 
-      - name: Build Rust renderer for Linux usage simulations
-        shell: bash
-        run: |
-          set -euxo pipefail
-          node build/scripts/run-observable.mjs --label e2e-renderer-build -- \
-            pnpm build \
-            2>&1 | tee e2e-build.txt
-          test -f build/out/renderer/index.html
-          ls -lh build/out/renderer/index.html
-
-      - name: Run every core and official addon application scenario
-        shell: bash
-        run: |
-          set -euxo pipefail
-          xvfb-run --auto-servernum pnpm test:e2e 2>&1 | tee e2e-tests.txt
-
-      - name: Build and run the packaged Tauri desktop acceptance scenario
+      - name: Build and select the exact distributed Linux AppImage
         shell: bash
         run: |
           set -euxo pipefail
           node build/scripts/run-observable.mjs --label tauri-linux-build -- \
             pnpm build:linux 2>&1 | tee tauri-linux-build.txt
-          test -x Elephant/backend/tauri/target/release/Elephant
+          APPIMAGE_PATH="$(find Elephant/backend/tauri/target/release/bundle/appimage -maxdepth 1 -type f -name '*.AppImage' -print -quit)"
+          test -n "$APPIMAGE_PATH"
+          test -f "$APPIMAGE_PATH"
+          chmod +x "$APPIMAGE_PATH"
+          APPIMAGE_PATH="$(realpath "$APPIMAGE_PATH")"
+          printf 'ELEPHANT_PACKAGED_APP=%s\n' "$APPIMAGE_PATH" >> "$GITHUB_ENV"
+          printf 'ELEPHANT_PACKAGED_FORMAT=linux-appimage\n' >> "$GITHUB_ENV"
+          printf 'APPIMAGE_EXTRACT_AND_RUN=1\n' >> "$GITHUB_ENV"
+          sha256sum "$APPIMAGE_PATH" | tee packaged-appimage.sha256
+          ls -lh "$APPIMAGE_PATH"
+
+      - name: Prove backend, frontend and user tests turn red under regressions
+        shell: bash
+        run: |
+          set -euxo pipefail
           xvfb-run --auto-servernum env \
             ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
-            ELEPHANT_ACCEPTANCE_APP_PATH="$PWD/Elephant/backend/tauri/target/release/Elephant" \
-            pnpm test:desktop:acceptance 2>&1 | tee tauri-acceptance-tests.txt
+            ELEPHANT_ACCEPTANCE_APP_PATH="$ELEPHANT_PACKAGED_APP" \
+            pnpm test:layers:sensitivity 2>&1 | tee three-layer-sensitivity.txt
+          grep -F '[three-layer-sensitivity] PASS: backend, frontend and packaged user proof all detect deliberate regressions' \
+            three-layer-sensitivity.txt
+
+      - name: Run backend production contract layer
+        shell: bash
+        run: |
+          set -euxo pipefail
+          xvfb-run --auto-servernum env \
+            ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
+            ELEPHANT_ACCEPTANCE_APP_PATH="$ELEPHANT_PACKAGED_APP" \
+            pnpm test:backend:raw 2>&1 | tee backend-contract.txt
+
+      - name: Prove the Markdown suite turns red under deliberate mutations
+        shell: bash
+        run: |
+          set -euxo pipefail
+          xvfb-run --auto-servernum env \
+            ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
+            ELEPHANT_ACCEPTANCE_APP_PATH="$ELEPHANT_PACKAGED_APP" \
+            node build/scripts/verify-markdown-trust-sensitivity.mjs \
+            2>&1 | tee markdown-trust-sensitivity.txt
+          grep -F '[markdown-trust-sensitivity] PASS: all deliberate mutations made the real suite red' \
+            markdown-trust-sensitivity.txt
+
+      - name: Run frontend behavior layer through visible controls
+        shell: bash
+        run: |
+          set -euxo pipefail
+          xvfb-run --auto-servernum env \
+            ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
+            ELEPHANT_ACCEPTANCE_APP_PATH="$ELEPHANT_PACKAGED_APP" \
+            pnpm test:frontend:raw 2>&1 | tee frontend-behavior.txt
+
+      - name: Run exact distributed AppImage user journey layer
+        shell: bash
+        run: |
+          set -euxo pipefail
+          xvfb-run --auto-servernum env \
+            ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
+            ELEPHANT_ACCEPTANCE_APP_PATH="$ELEPHANT_PACKAGED_APP" \
+            pnpm test:user:packaged:raw 2>&1 | tee packaged-user-journey.txt
+
+      - name: Verify three-layer runtime evidence
+        shell: bash
+        run: |
+          set -euxo pipefail
+          node - <<'NODE'
+          const fs = require('fs')
+          const manifest = JSON.parse(fs.readFileSync('tests/trust/test-layers.json', 'utf8'))
+          for (const category of manifest.categories) {
+            if (!fs.existsSync(category.artifact)) throw new Error(`${category.id} did not produce ${category.artifact}`)
+            const evidence = JSON.parse(fs.readFileSync(category.artifact, 'utf8'))
+            if (evidence.status !== 'PROVEN') throw new Error(`${category.id} is not proven: ${JSON.stringify(evidence)}`)
+            const scenarios = Array.isArray(evidence.scenarios) ? evidence.scenarios : []
+            const missing = category.requiredScenarios.filter((id) => !scenarios.some((scenario) => scenario.id === id && scenario.ok === true))
+            if (missing.length) throw new Error(`${category.id} is missing passing scenarios: ${JSON.stringify(missing)}`)
+            const failed = scenarios.filter((scenario) => scenario.ok !== true)
+            if (failed.length) throw new Error(`${category.id} contains failing scenarios: ${JSON.stringify(failed)}`)
+            if ((category.id === 'frontend-behavior' || category.id === 'packaged-user-journey')) {
+              const forbidden = new Set(category.forbiddenProofCommands || [])
+              const violations = (evidence.commandPolicy?.actionCommands || []).filter((entry) => forbidden.has(entry.command))
+              if (violations.length) throw new Error(`${category.id} bypassed the frontend with internal commands: ${JSON.stringify(violations)}`)
+            }
+            if (evidence.packagedApp !== true) {
+              throw new Error(`${category.id} did not run the distributed AppImage`)
+            }
+            if (evidence.packagedFormat !== 'linux-appimage') {
+              throw new Error(`${category.id} ran the wrong package format: ${JSON.stringify(evidence.packagedFormat)}`)
+            }
+            if (category.requiredPackagedFormat && evidence.packagedFormat !== category.requiredPackagedFormat) {
+              throw new Error(`${category.id} package format mismatch: ${JSON.stringify({ expected: category.requiredPackagedFormat, actual: evidence.packagedFormat })}`)
+            }
+            if (evidence.appPath !== process.env.ELEPHANT_PACKAGED_APP) {
+              throw new Error(`${category.id} ran a different executable: ${JSON.stringify({ expected: process.env.ELEPHANT_PACKAGED_APP, actual: evidence.appPath })}`)
+            }
+          }
+          console.log('[three-layer-proof] PROVEN backend + frontend + distributed AppImage user journey')
+          NODE
+
+      - name: Run exhaustive official addon suite through the external app API
+        shell: bash
+        run: |
+          set -euxo pipefail
+          xvfb-run --auto-servernum env \
+            ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
+            ELEPHANT_ACCEPTANCE_APP_PATH="$ELEPHANT_PACKAGED_APP" \
+            pnpm test:automation:raw 2>&1 | tee automation-tests.txt
+
+      - name: Verify exhaustive automation evidence and renderer logs
+        shell: bash
+        run: |
+          set -euxo pipefail
+          test -s test-results/acceptance/latest.json
+          node - <<'NODE'
+          const fs = require('fs')
+          const payload = JSON.parse(fs.readFileSync('test-results/acceptance/latest.json', 'utf8'))
+          if (!payload?.result) throw new Error(`Automation suite did not report a result: ${JSON.stringify(payload)}`)
+          const logs = Array.isArray(payload.result.logs) ? payload.result.logs : []
+          const unexpected = logs.filter((entry) => String(entry.level || '').toLowerCase() === 'error')
+          if (unexpected.length) throw new Error(`Automation logs contain ${unexpected.length} unexpected application error(s): ${JSON.stringify(unexpected.slice(0, 10))}`)
+          NODE
 
       - name: Collect explicit official addon evidence
         if: always()
@@ -164,24 +250,32 @@ jobs:
           done < <(find test-results -type f -name '*native-package-evidence.json' -print 2>/dev/null || true)
           find official-addon-evidence -maxdepth 1 -type f -print -exec cat {} \; || true
 
-      - name: Upload complete Linux usage diagnostics
+      - name: Upload complete Linux automation diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: linux-app-and-official-addon-usage-diagnostics
+          name: linux-three-layer-distributed-appimage-proof-and-addon-diagnostics
           path: |
-            electron-install.txt
+            test-trust.txt
+            proof-layer-wiring.txt
+            three-layer-sensitivity.txt
+            backend-contract.txt
+            markdown-trust-sensitivity.txt
+            frontend-behavior.txt
+            packaged-user-journey.txt
             official-addon-native-build.txt
-            e2e-build.txt
-            e2e-tests.txt
             tauri-linux-build.txt
-            tauri-acceptance-tests.txt
+            packaged-appimage.sha256
+            automation-tests.txt
+            test-results/trust/**
+            test-results/trusted/backend-contract/**
+            test-results/trusted/frontend-behavior/**
+            test-results/trusted/packaged-user-journey/**
+            test-results/trusted/markdown-editor/**
             test-results/observability/**
-            test-results/e2e-results.json
-            test-results/e2e-junit.xml
-            test-results/**
-            playwright-report/**
+            test-results/acceptance/**
             official-addon-evidence/**
             build/out/addons/releases/**
+            Elephant/backend/tauri/target/release/bundle/appimage/*.AppImage
           if-no-files-found: warn
           retention-days: 30

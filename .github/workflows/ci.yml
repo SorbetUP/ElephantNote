@@ -34,15 +34,8 @@ jobs:
           set -euxo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            gnome-keyring \
-            graphicsmagick \
-            icnsutils \
-            libfontconfig-dev \
-            libsecret-1-dev \
-            libx11-dev \
-            libxkbfile-dev \
-            rpm \
-            xz-utils
+            gnome-keyring graphicsmagick icnsutils libfontconfig-dev libsecret-1-dev \
+            libx11-dev libxkbfile-dev rpm xz-utils
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -75,6 +68,9 @@ jobs:
       - name: Security guardrails
         run: pnpm security:guard
 
+      - name: Test trust policy
+        run: pnpm test:trust:guard
+
       - name: Tauri platform compatibility guard
         run: pnpm tauri:platform:check
 
@@ -83,17 +79,6 @@ jobs:
         run: |
           set -o pipefail
           pnpm lint 2>&1 | tee eslint-output.txt
-
-      - name: ElephantNote contract tests
-        shell: bash
-        run: |
-          set -o pipefail
-          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
-            tests/app/unit/specs/main/elephantnote \
-            2>&1 | tee contract-tests-output.txt
-
-      - name: Unit suite
-        run: pnpm test:unit
 
       - name: Run postinstall before reference build
         run: node build/scripts/postinstall.js
@@ -114,18 +99,17 @@ jobs:
       - name: Validate licenses
         run: pnpm run validate-licenses
 
-      - name: Upload build/coverage and generated docs
+      - name: Upload build and generated docs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: quality-artifacts
           path: |
-            build/coverage/
             docs/parity/generated/
             docs/parity/index.md
             security-guardrails-report.json
+            test-results/trust/**
             eslint-output.txt
-            contract-tests-output.txt
             build-output.txt
           if-no-files-found: ignore
           retention-days: 14
@@ -165,7 +149,7 @@ jobs:
         shell: bash
         run: |
           if ! cargo tauri --version >/dev/null 2>&1; then
-            cargo install tauri-cli --version '^2.10.0' --locked
+            cargo install tauri-cli --version '2.11.2' --locked
           fi
 
       - name: Install exact wasm-bindgen CLI
@@ -176,6 +160,9 @@ jobs:
           if ! wasm-bindgen --version 2>/dev/null | grep -q "${VERSION}$"; then
             cargo install wasm-bindgen-cli --version "$VERSION" --locked
           fi
+
+      - name: Prepare embedded Tauri addon resources for macOS
+        run: node build/scripts/prepare-tauri-addon-resources.mjs
 
       - name: Cargo check macOS Apple Silicon target
         run: cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --target aarch64-apple-darwin
@@ -219,15 +206,15 @@ jobs:
       - name: Materialize official addons
         run: node build/scripts/sync-elephant-addons.mjs
 
+      - name: Prepare embedded Tauri addon resources for Rust checks
+        run: node build/scripts/prepare-tauri-addon-resources.mjs
+
       - name: Install Tauri Linux dependencies
         shell: bash
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -243,8 +230,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-tauri-
 
-      - name: Rust formatting diagnostic
-        continue-on-error: true
+      - name: Rust formatting
         run: cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml --all -- --check
 
       - name: Cargo check

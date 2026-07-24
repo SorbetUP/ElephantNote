@@ -1,192 +1,168 @@
+#!/usr/bin/env node
+
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import vm from 'node:vm'
 import { spawnSync } from 'node:child_process'
-import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
-const require = createRequire(import.meta.url)
 const readText = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 const readJson = (relativePath) => JSON.parse(readText(relativePath))
+const failures = []
+
 const fail = (message) => {
-  console.error(`[feature-matrix] FAIL ${message}`)
-  process.exitCode = 1
+  failures.push(message)
+  console.error(`[proof-layers] FAIL ${message}`)
 }
 const pass = (message, detail = undefined) => {
-  console.log(`[feature-matrix] PASS ${message}${detail === undefined ? '' : ` ${JSON.stringify(detail)}`}`)
+  console.log(`[proof-layers] PASS ${message}${detail === undefined ? '' : ` ${JSON.stringify(detail)}`}`)
 }
 
-const matrix = readJson('tests/app/usage/feature-matrix.json')
-const linuxCatalog = readJson('tests/app/usage/linux/scenarios.json')
-const addonCatalog = readJson('addons/catalog.json')
-const linuxSuite = readText('tests/app/e2e/linux-usage-regressions.spec.js')
-const officialAddonSuite = readText('tests/app/e2e/official-addons-regressions.spec.js')
+const manifestPath = 'tests/trust/test-layers.json'
+const manifest = readJson(manifestPath)
 const packageJson = readJson('package.json')
 const workflow = readText('.github/workflows/e2e.yml')
-const observableRunner = readText('build/scripts/run-observable.mjs')
+const expectedCategoryIds = ['backend-contract', 'frontend-behavior', 'packaged-user-journey']
 
-for (const relativePath of [
-  'build/scripts/run-observable.mjs',
-  'build/scripts/validate-feature-matrix.mjs',
-  'tests/app/e2e/observable-preload-patch.js',
-  'tests/app/e2e/official-addon-preload-patch.js',
-  'tests/app/e2e/official-addons-regressions.spec.js',
-  'tests/app/e2e/tauri-preload-entry.js',
-  'tests/app/e2e/playwright.config.js'
-]) {
+if (manifest.schemaVersion !== 1) fail(`unsupported schemaVersion ${manifest.schemaVersion}`)
+if (manifest.productProofCommand !== 'pnpm test') fail('productProofCommand must remain exactly "pnpm test"')
+
+const categories = Array.isArray(manifest.categories) ? manifest.categories : []
+const categoryIds = categories.map((category) => category.id)
+if (JSON.stringify(categoryIds) !== JSON.stringify(expectedCategoryIds)) {
+  fail(`proof categories must be exactly ${JSON.stringify(expectedCategoryIds)}, received ${JSON.stringify(categoryIds)}`)
+} else {
+  pass('exact proof category split', categoryIds)
+}
+const userCategory = categories.find((category) => category.id === 'packaged-user-journey')
+if (userCategory?.requiredPackagedFormat !== 'linux-appimage') {
+  fail('packaged-user-journey must explicitly scope the current proof to linux-appimage')
+}
+
+const syntaxFiles = [
+  'build/scripts/lib/real-app-harness.mjs',
+  'build/scripts/run-backend-contract-trust.mjs',
+  'build/scripts/run-frontend-behavior-trust.mjs',
+  'build/scripts/run-packaged-user-journey-trust.mjs',
+  'build/scripts/three-layer-fetch-mutation.mjs',
+  'build/scripts/verify-three-layer-sensitivity.mjs',
+  'build/scripts/run-markdown-editor-trust.mjs',
+  'build/scripts/verify-test-trust.mjs',
+  'build/scripts/validate-feature-matrix.mjs'
+]
+for (const relativePath of syntaxFiles) {
+  if (!fs.existsSync(path.join(root, relativePath))) {
+    fail(`${relativePath} is missing`)
+    continue
+  }
   const result = spawnSync(process.execPath, ['--check', path.join(root, relativePath)], {
     cwd: root,
     encoding: 'utf8'
   })
-  if (result.status !== 0) {
-    fail(`${relativePath} does not parse: ${String(result.stderr || result.stdout || '').trim()}`)
-  } else {
-    pass('JavaScript syntax', relativePath)
-  }
+  if (result.status !== 0) fail(`${relativePath} does not parse: ${String(result.stderr || result.stdout || '').trim()}`)
+  else pass('JavaScript syntax', relativePath)
 }
 
-try {
-  const applyObservablePatch = require(path.join(root, 'tests/app/e2e/observable-preload-patch.js'))
-  const applyOfficialAddonPatch = require(path.join(root, 'tests/app/e2e/official-addon-preload-patch.js'))
-  const originalPreload = readText('tests/app/e2e/tauri-preload.js')
-  const observablePreload = applyObservablePatch(originalPreload)
-  const generatedPreload = applyOfficialAddonPatch(observablePreload)
-  new vm.Script(generatedPreload, { filename: 'generated-observable-official-addon-tauri-preload.js' })
-  const helperBoundary = generatedPreload.indexOf('const primitivePreference =')
-  const fixtureBoundary = generatedPreload.indexOf('const officialAddonFixture =')
-  const implementationBoundary = generatedPreload.indexOf('const invokeImplementation = async')
-  const observableBoundary = generatedPreload.indexOf('const invoke = async')
-  if (!(helperBoundary >= 0 && fixtureBoundary > helperBoundary && implementationBoundary > fixtureBoundary && observableBoundary > implementationBoundary)) {
-    fail('preload patches are not composed after initialized helpers and before the observable invoke wrapper')
-  } else {
-    pass('generated observable official addon preload parses in runtime dependency order', {
-      bytes: Buffer.byteLength(generatedPreload),
-      helperBoundary,
-      fixtureBoundary,
-      implementationBoundary,
-      observableBoundary
-    })
-  }
-  for (const marker of [
-    '[e2e-tauri:invoke:start]',
-    '[e2e-tauri:invoke:done]',
-    '[e2e-tauri:invoke:error]',
-    'Unhandled E2E Tauri invoke',
-    'tauri_addons_read_module',
-    'tauri_addons_install'
-  ]) {
-    if (!generatedPreload.includes(marker)) fail(`generated preload omits ${marker}`)
-  }
-} catch (error) {
-  fail(`generated observable official addon preload is invalid: ${error?.stack || error?.message || String(error)}`)
-}
-
-if (matrix.schemaVersion !== 1) fail(`unsupported schemaVersion ${matrix.schemaVersion}`)
-else pass('feature matrix schema version', matrix.schemaVersion)
-
-const requiredKinds = new Set(matrix.policy?.requiredScenarioKinds || [])
-const linuxScenarioIds = new Set((linuxCatalog.scenarios || []).map((scenario) => scenario.id))
-const officialScenarioIds = new Set((matrix.officialAddonScenarios || []).map((scenario) => scenario.id))
-const knownScenarioIds = new Set([...linuxScenarioIds, ...officialScenarioIds])
-const minimum = Number(matrix.policy?.minimumScenariosPerFeature || 0)
-
-for (const feature of matrix.coreFeatures || []) {
-  const scenarios = Array.isArray(feature.scenarios) ? feature.scenarios : []
-  if (scenarios.length < minimum) {
-    fail(`${feature.id} has ${scenarios.length} scenarios; minimum is ${minimum}`)
+for (const category of categories) {
+  if (!category?.id || !category?.command || !category?.runner || !category?.artifact) {
+    fail(`category is incomplete: ${JSON.stringify(category)}`)
     continue
   }
-  const kinds = new Set(scenarios.map((scenario) => scenario.kind))
-  for (const kind of requiredKinds) {
-    if (!kinds.has(kind)) fail(`${feature.id} does not cover scenario kind ${kind}`)
+  const runnerPath = path.join(root, category.runner)
+  if (!fs.existsSync(runnerPath)) {
+    fail(`${category.id} runner is missing: ${category.runner}`)
+    continue
   }
-  for (const scenario of scenarios) {
-    if (!knownScenarioIds.has(scenario.id)) fail(`${feature.id} references unknown scenario ${scenario.id}`)
+  const source = fs.readFileSync(runnerPath, 'utf8')
+  const scriptName = category.command.replace(/^pnpm\s+/, '')
+  const packageCommand = String(packageJson.scripts?.[scriptName] || '')
+  if (!packageCommand.includes(path.basename(category.runner))) {
+    fail(`${category.id} package command ${scriptName} does not execute ${category.runner}`)
   }
-  pass('core feature coverage', {
-    id: feature.id,
-    scenarios: scenarios.map((scenario) => scenario.id),
-    kinds: [...kinds]
-  })
+  const scenarios = Array.isArray(category.requiredScenarios) ? category.requiredScenarios : []
+  if (scenarios.length < 4) fail(`${category.id} has too few mandatory scenarios (${scenarios.length})`)
+  for (const scenarioId of scenarios) {
+    if (!source.includes(`'${scenarioId}'`)) fail(`${category.id} runner is missing executable scenario ${scenarioId}`)
+  }
+  if (!source.includes("status: 'PROVEN'") || !source.includes("status: 'NOT PROVEN'")) {
+    fail(`${category.id} runner must emit both PROVEN and NOT PROVEN evidence`)
+  }
+  if (!source.includes('await harness.writeEvidence')) fail(`${category.id} runner does not persist structured evidence`)
+
+  for (const forbidden of category.forbiddenProofCommands || []) {
+    const forbiddenAction = new RegExp(`harness\\.action\\([^\\n]*['\"]${forbidden}['\"]`)
+    if (forbiddenAction.test(source)) {
+      fail(`${category.id} uses forbidden internal command ${forbidden} inside a claimed frontend/user action`)
+    }
+  }
+  pass('category runner wiring', { id: category.id, scenarios: scenarios.length, artifact: category.artifact })
 }
 
-for (const id of linuxScenarioIds) {
-  if (!linuxSuite.includes(`defineUsageTest('${id}'`)) fail(`Linux scenario ${id} is not connected to defineUsageTest`)
-}
-pass('Linux usage catalog is connected to executable tests', { count: linuxScenarioIds.size })
-
-const matrixAddonIds = (matrix.officialAddons || []).map((addon) => addon.id).sort()
-const catalogAddonIds = (addonCatalog.addons || []).map((addon) => addon.id).sort()
-if (JSON.stringify(matrixAddonIds) !== JSON.stringify(catalogAddonIds)) {
-  fail(`official addon matrix mismatch: matrix=${JSON.stringify(matrixAddonIds)} catalog=${JSON.stringify(catalogAddonIds)}`)
-} else {
-  pass('all official catalogue addons are represented', { count: catalogAddonIds.length })
+const harnessSource = readText('build/scripts/lib/real-app-harness.mjs')
+for (const marker of ['ELEPHANT_AUTOMATION_TOKEN', '/v1/health', '/v1/command', 'packagedFormat']) {
+  if (!harnessSource.includes(marker)) fail(`real app harness omits authenticated/package evidence marker ${marker}`)
 }
 
-for (const scenario of matrix.officialAddonScenarios || []) {
-  if (!officialAddonSuite.includes(scenario.id)) fail(`official addon scenario ${scenario.id} has no executable marker`)
+const backendSource = readText('build/scripts/run-backend-contract-trust.mjs')
+for (const marker of ['tauri_notes_write', 'tauri_notes_read', 'tauri_entries_rename', 'tauri_entries_move', 'tauri_entries_delete', "restart({ crash: true })"]) {
+  if (!backendSource.includes(marker)) fail(`backend-contract runner omits production marker ${marker}`)
 }
-for (const addonId of matrixAddonIds) {
-  if (!officialAddonSuite.includes('for (const addon of catalog.addons)')) {
-    fail('official addon suite is not data-driven from catalog.addons')
-    break
-  }
-  if (!addonId.startsWith('elephant.')) fail(`invalid official addon id ${addonId}`)
-}
-for (const requiredOperation of [
-  'installFromPath(`official:${id}`)',
-  'enableWithDependencies',
-  'probeAddonFunctionality',
-  'page.reload()',
-  'uninstallWithDependents'
+
+const frontendSource = readText('build/scripts/run-frontend-behavior-trust.mjs')
+for (const marker of [
+  "harness.action(layer, 'click'",
+  "harness.action(layer, 'fill'",
+  "harness.action(layer, 'press'",
+  "harness.action(layer, 'insertText'",
+  "harness.action(layer, 'readDom'",
+  'waitForVaultFile'
 ]) {
-  if (!officialAddonSuite.includes(requiredOperation)) fail(`official addon suite omits ${requiredOperation}`)
-}
-pass('official addon lifecycle suite is catalogue-driven', {
-  addons: matrixAddonIds.length,
-  scenariosPerAddon: (matrix.officialAddonScenarios || []).length
-})
-
-const serviceAddons = new Set((matrix.officialAddons || [])
-  .filter((addon) => addon.runtime === 'service')
-  .map((addon) => addon.id))
-for (const addonId of serviceAddons) {
-  if (!officialAddonSuite.includes('assertNativePackageEvidence')) {
-    fail(`service addon ${addonId} has no native package evidence assertion`)
-    break
-  }
-}
-pass('service-backed addons require native package evidence', { count: serviceAddons.size })
-
-const observableScripts = ['tauri:dev', 'test', 'test:unit', 'test:e2e', 'test:official-addons:e2e']
-for (const scriptName of observableScripts) {
-  const script = packageJson.scripts?.[scriptName] || ''
-  if (!script.includes('run-observable.mjs')) fail(`${scriptName} bypasses the observable command runner`)
-  else pass('observable script', { scriptName, command: script })
+  if (!frontendSource.includes(marker)) fail(`frontend-behavior runner omits real frontend marker ${marker}`)
 }
 
-for (const marker of ['run-start', 'child-spawned', 'output', 'run-finish', 'signal-received']) {
-  if (!observableRunner.includes(`'${marker}'`)) fail(`observable runner does not emit ${marker}`)
+const userSource = readText('build/scripts/run-packaged-user-journey-trust.mjs')
+for (const marker of ['requirePackagedApp: true', "restart({ crash: true })", 'waitForVaultFile', "harness.action(layer, 'logs'"]) {
+  if (!userSource.includes(marker)) fail(`packaged-user-journey runner omits release proof marker ${marker}`)
 }
-if (!observableRunner.includes('[REDACTED_SECRET_VALUE]')) fail('observable runner does not redact credential values')
-pass('observable runner emits structured lifecycle and output events')
 
-for (const workflowMarker of [
-  'pnpm test:feature-matrix',
-  'pnpm test:e2e',
-  'test-results/observability/**',
-  'official-addon-evidence/**',
-  'build/out/addons/releases/**'
+const mutationSource = readText('build/scripts/three-layer-fetch-mutation.mjs')
+const sensitivitySource = readText('build/scripts/verify-three-layer-sensitivity.mjs')
+for (const marker of ['backend-ignore-note-write', 'frontend-ignore-enter', 'user-ignore-insert-text']) {
+  if (!mutationSource.includes(marker) || !sensitivitySource.includes(marker)) fail(`three-layer sensitivity omits mutation ${marker}`)
+}
+for (const category of categories) {
+  if (!sensitivitySource.includes(category.id)) fail(`three-layer sensitivity omits category ${category.id}`)
+}
+
+const scripts = packageJson.scripts || {}
+for (const scriptName of ['test:backend:raw', 'test:frontend:raw', 'test:user:packaged:raw', 'test:layers:sensitivity']) {
+  if (!scripts[scriptName]) fail(`package.json is missing ${scriptName}`)
+}
+const defaultChain = `${scripts.test || ''} ${scripts['test:raw'] || ''}`
+for (const marker of ['test:trust:guard', 'test:backend:raw', 'test:frontend:raw', 'test:user:packaged:raw']) {
+  if (!defaultChain.includes(marker)) fail(`default product proof chain omits ${marker}`)
+}
+
+for (const marker of [
+  'pnpm test:backend:raw',
+  'pnpm test:frontend:raw',
+  'pnpm test:user:packaged:raw',
+  'pnpm test:layers:sensitivity',
+  'ELEPHANT_PACKAGED_FORMAT=linux-appimage',
+  'packaged-appimage.sha256',
+  'bundle/appimage/*.AppImage',
+  'three-layer-sensitivity.txt',
+  'test-results/trusted/backend-contract/**',
+  'test-results/trusted/frontend-behavior/**',
+  'test-results/trusted/packaged-user-journey/**'
 ]) {
-  if (!workflow.includes(workflowMarker)) fail(`E2E workflow does not retain ${workflowMarker}`)
-}
-pass('E2E workflow keeps feature, addon and observability evidence')
-
-if (process.exitCode) {
-  console.error('[feature-matrix] Validation failed')
-  process.exit(process.exitCode)
+  if (!workflow.includes(marker)) fail(`E2E workflow does not execute or retain ${marker}`)
 }
 
-console.log(`[feature-matrix] COMPLETE core=${matrix.coreFeatures.length} addons=${matrixAddonIds.length} linuxScenarios=${linuxScenarioIds.size}`)
+if (failures.length > 0) {
+  console.error(`[proof-layers] Validation failed with ${failures.length} error(s)`)
+  process.exit(1)
+}
+
+console.log('[proof-layers] COMPLETE: wiring is valid. This command validates test architecture only; runtime proof comes exclusively from the three real-app artifacts.')

@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "productProofCommand": "pnpm test",
+  "markdownEditor": [
+    {
+      "id": "app-starts",
+      "requires": ["real-tauri-process", "visible-rust-editor", "automation-api"]
+    },
+    {
+      "id": "plain-return",
+      "requires": ["real-keyboard-enter", "markdown-state", "visible-ui", "disk"]
+    },
+    {
+      "id": "cursor-middle-return",
+      "requires": ["real-selection", "real-keyboard-enter", "no-code-block"]
+    },
+    {
+      "id": "arrow-cursor-return",
+      "requires": ["real-arrow-keys", "real-keyboard-enter", "no-code-block", "no-crash"]
+    },
+    {
+      "id": "selection-replace",
+      "requires": ["real-selection", "real-input", "exact-markdown", "no-code-block"]
+    },
+    {
+      "id": "multiline-insert",
+      "requires": ["real-input", "multiple-line-breaks", "exact-markdown", "no-code-block"]
+    },
+    {
+      "id": "inline-code-boundary-return",
+      "requires": ["inline-code", "real-keyboard-enter", "plain-following-line", "no-code-block"]
+    },
+    {
+      "id": "list-return",
+      "requires": ["real-keyboard-enter", "list-continuation", "markdown-state"]
+    },
+    {
+      "id": "empty-list-exit",
+      "requires": ["two-real-enter-presses", "plain-paragraph", "no-code-block"]
+    },
+    {
+      "id": "code-boundary-return",
+      "requires": ["fenced-code-block", "cursor-outside-code", "exact-fence-count", "visible-block-count"]
+    },
+    {
+      "id": "return-stress-no-crash",
+      "requires": ["repeated-real-input", "renderer-alive", "zero-error-logs", "exact-disk-state"]
+    },
+    {
+      "id": "restart-persistence",
+      "requires": ["process-termination", "process-restart", "exact-markdown", "disk", "visible-ui", "zero-error-logs"]
+    }
+  ]
+}

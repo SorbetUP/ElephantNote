@@ -16,7 +16,6 @@ on:
       - 'addons/official/knowledge/**'
       - 'addons/catalog.json'
       - 'packs/*.enaddonpack'
-      - 'tests/app/unit/addons/knowledgePhysicalAddon.spec.js'
   workflow_dispatch:
 
 permissions:
@@ -62,5 +61,5 @@ jobs:
       - name: Check desktop sidecar adapter
         run: cargo check --manifest-path addons/official/knowledge/native/Cargo.toml --all-targets
 
-      # Full Tauri integration is validated by the cross-platform PR Build.
+      # Full Tauri integration is validated by the packaged app automation.
       # The Android target, bundled SQLite and APK are validated by android-apk.yml.

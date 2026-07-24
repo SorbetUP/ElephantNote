@@ -271,6 +271,10 @@ const mountRuntime = async (markdown) => {
         onUriDrop: props.onUriDrop,
         onImageClick: props.onImageClick
       })
+      // Muya replaces its origin container with the real contenteditable node.
+      // Keep the Vue ref bound to that live node so later document remounts
+      // destroy and replace the visible editor rather than a detached placeholder.
+      rootRef.value = muya.container
       // The compatibility adapter starts the Rust session asynchronously in its
       // constructor. Do not expose the editor or let Vue reconcile a canonical
       // change until that session exists on the Tauri side.

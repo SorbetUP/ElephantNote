@@ -47,7 +47,6 @@ jobs:
           workspaces: addons/official/sync/native -> target
 
       - name: Run package-owned two-endpoint Iroh synchronization
-        id: iroh-smoke
         shell: bash
         run: |
           set -uo pipefail
@@ -89,28 +88,5 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  sync-toolbar-contracts:
-    name: Active-vault toolbar states
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
-
-      - name: Run focused synchronization UI tests
-        shell: bash
-        run: |
-          set -o pipefail
-          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
-            tests/app/unit/specs/main/elephantnote/navigationIrohSync.spec.js \
-            tests/app/unit/specs/main/elephantnote/syncSettingsPanel.spec.js \
-            2>&1 | tee iroh-toolbar-vitest.txt
-
-      - name: Upload focused UI test diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: iroh-toolbar-vitest-output
-          path: iroh-toolbar-vitest.txt
-          if-no-files-found: error
-          retention-days: 14
+      # The visible toolbar and settings behavior is validated in the real packaged
+      # Elephant automation suite, not through a simulated DOM test.

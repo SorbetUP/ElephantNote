@@ -38,12 +38,20 @@ export const createRustAsyncMutationGate = ({ dispatch, onSuppressed = () => {} 
     return settled
   }
 
+  const flush = async() => {
+    await tail
+    // A completion callback can synchronously enqueue another operation while
+    // the previous tail is settling. Repeat until the visible editor queue is
+    // genuinely empty rather than merely observing one completed promise.
+    if (pending > 0) return flush()
+  }
+
   return {
     dispatch: guardedDispatch,
     enqueue,
+    flush,
     get pending () {
       return pending
     }
   }
 }
-

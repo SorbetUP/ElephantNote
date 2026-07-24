@@ -39,6 +39,8 @@ const waitForStableEditor = async(timeoutMs = 10_000) => {
   throw new Error(`Real Rust editor did not become stable: ${JSON.stringify(last)}`)
 }
 
+const expectedKeyboardResult = /Initial visible text\. frontend line one\s*\n+\s*frontend line two\s*$/
+
 let failure = null
 try {
   await harness.start()
@@ -57,8 +59,8 @@ try {
     const editor = await waitForStableEditor()
     const offset = editorTextEnd(editor.text)
     const selection = await harness.action(layer, 'selectText', editorSelector, offset, offset)
-    if (selection?.start !== offset || selection?.end !== offset) {
-      throw new Error(`Frontend editor selected the wrong caret: ${JSON.stringify({ editor, offset, selection })}`)
+    if (selection?.start !== selection?.end || selection?.text !== '') {
+      throw new Error(`Frontend editor did not produce a collapsed caret: ${JSON.stringify({ editor, offset, selection })}`)
     }
     await harness.action(layer, 'insertText', editorSelector, ' frontend line one')
     await harness.action(layer, 'press', editorSelector, 'Enter')
@@ -68,18 +70,14 @@ try {
     let state = null
     while (Date.now() <= deadline) {
       state = await harness.action(layer, 'readState')
-      if (state.markdown.includes('frontend line one') && state.markdown.includes('frontend line two') && /frontend line one\s*\n+\s*frontend line two/.test(state.markdown)) break
+      if (expectedKeyboardResult.test(String(state?.markdown || ''))) break
       await sleep(50)
     }
-    if (!state?.markdown?.includes('frontend line two') || !/frontend line one\s*\n+\s*frontend line two/.test(state.markdown)) {
-      throw new Error(`Keyboard Enter/input did not reach the frontend Markdown model: ${JSON.stringify(state)}`)
+    if (!expectedKeyboardResult.test(String(state?.markdown || ''))) {
+      throw new Error(`Keyboard Enter/input did not append the exact expected frontend Markdown: ${JSON.stringify(state)}`)
     }
 
-    const persisted = await harness.waitForVaultFile('Frontend acceptance.md', (content) => (
-      content.includes('frontend line one') &&
-      content.includes('frontend line two') &&
-      /frontend line one\s*\n+\s*frontend line two/.test(content)
-    ))
+    const persisted = await harness.waitForVaultFile('Frontend acceptance.md', (content) => expectedKeyboardResult.test(content))
     const displayed = await harness.action(layer, 'readDom', editorSelector)
     if (!displayed.text.includes('frontend line one') || !displayed.text.includes('frontend line two')) {
       throw new Error(`Visible editor diverged from persisted Markdown: ${JSON.stringify(displayed)}`)

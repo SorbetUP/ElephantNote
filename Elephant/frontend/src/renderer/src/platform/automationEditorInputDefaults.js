@@ -6,22 +6,45 @@ const editorElement = (target, selector) => {
   return element
 }
 
+const restoreSelectionAfterFocus = (target, element) => {
+  const selection = target.getSelection?.() || target.window?.getSelection?.()
+  const savedRange = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : null
+  element.focus?.()
+  if (!savedRange || !element.contains(savedRange.commonAncestorContainer)) return
+  const current = target.getSelection?.() || target.window?.getSelection?.()
+  current?.removeAllRanges()
+  current?.addRange(savedRange)
+}
+
 const dispatchEnterDefault = (target, element, key) => {
   const InputEventConstructor = target.InputEvent || target.window?.InputEvent
   if (typeof InputEventConstructor !== 'function') {
     throw new Error('Enter default emulation requires InputEvent support')
   }
 
+  const inputType = key === 'Shift+Enter' ? 'insertLineBreak' : 'insertParagraph'
   const beforeInput = new InputEventConstructor('beforeinput', {
-    inputType: key === 'Shift+Enter' ? 'insertLineBreak' : 'insertParagraph',
+    inputType,
     data: null,
     bubbles: true,
     cancelable: true,
     composed: true
   })
+
+  // WebKit versions used by Tauri may discard non-text inputType values on
+  // synthetic InputEvent construction. Restore the browser-observable field so
+  // the event is identical at the editor boundary to a real Enter default.
+  if (beforeInput.inputType !== inputType) {
+    Object.defineProperty(beforeInput, 'inputType', {
+      configurable: true,
+      enumerable: true,
+      value: inputType
+    })
+  }
+
   element.dispatchEvent(beforeInput)
   if (!beforeInput.defaultPrevented) {
-    throw new Error('The visible editor did not claim the Enter beforeinput event')
+    throw new Error(`The visible editor did not claim the ${inputType} beforeinput event`)
   }
 }
 
@@ -39,9 +62,12 @@ export const installEditorAutomationInputDefaults = (target = globalThis) => {
       throw new Error('press requires KeyboardEvent support')
     }
 
-    element.focus?.()
+    restoreSelectionAfterFocus(target, element)
     const eventInit = {
       key: 'Enter',
+      code: 'Enter',
+      keyCode: 13,
+      which: 13,
       shiftKey: key === 'Shift+Enter',
       bubbles: true,
       cancelable: true,

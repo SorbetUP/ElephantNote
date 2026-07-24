@@ -15,6 +15,30 @@ const harness = createRealAppHarness({
   }
 })
 
+const sleep = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds))
+const editorTextEnd = (text) => String(text || '').trimEnd().length
+
+const waitForStableEditor = async(timeoutMs = 10_000) => {
+  const deadline = Date.now() + timeoutMs
+  let previousText = null
+  let stableReads = 0
+  let last = null
+  while (Date.now() <= deadline) {
+    const editor = await harness.action(layer, 'readDom', editorSelector)
+    if (editor?.exists && editor?.visible) {
+      stableReads = previousText === editor.text ? stableReads + 1 : 1
+      previousText = editor.text
+      if (stableReads >= 2) return editor
+    } else {
+      stableReads = 0
+      previousText = null
+    }
+    last = editor
+    await sleep(50)
+  }
+  throw new Error(`Real Rust editor did not become stable: ${JSON.stringify(last)}`)
+}
+
 let failure = null
 try {
   await harness.start()
@@ -29,10 +53,13 @@ try {
   await harness.setup('openNote', 'Frontend acceptance.md')
 
   await harness.runScenario('frontend-editor-keyboard-autosave', layer, async() => {
-    const editor = await harness.action(layer, 'waitFor', editorSelector, 10_000)
-    if (!editor.exists || !editor.visible) throw new Error(`Real Rust editor is not visible: ${JSON.stringify(editor)}`)
-
-    await harness.action(layer, 'selectText', editorSelector, editor.text.length, editor.text.length)
+    await harness.action(layer, 'waitFor', editorSelector, 10_000)
+    const editor = await waitForStableEditor()
+    const offset = editorTextEnd(editor.text)
+    const selection = await harness.action(layer, 'selectText', editorSelector, offset, offset)
+    if (selection?.start !== offset || selection?.end !== offset) {
+      throw new Error(`Frontend editor selected the wrong caret: ${JSON.stringify({ editor, offset, selection })}`)
+    }
     await harness.action(layer, 'insertText', editorSelector, ' frontend line one')
     await harness.action(layer, 'press', editorSelector, 'Enter')
     await harness.action(layer, 'insertText', editorSelector, 'frontend line two')
@@ -42,7 +69,7 @@ try {
     while (Date.now() <= deadline) {
       state = await harness.action(layer, 'readState')
       if (state.markdown.includes('frontend line one') && state.markdown.includes('frontend line two') && /frontend line one\s*\n+\s*frontend line two/.test(state.markdown)) break
-      await new Promise((resolvePromise) => setTimeout(resolvePromise, 50))
+      await sleep(50)
     }
     if (!state?.markdown?.includes('frontend line two') || !/frontend line one\s*\n+\s*frontend line two/.test(state.markdown)) {
       throw new Error(`Keyboard Enter/input did not reach the frontend Markdown model: ${JSON.stringify(state)}`)
@@ -57,7 +84,7 @@ try {
     if (!displayed.text.includes('frontend line one') || !displayed.text.includes('frontend line two')) {
       throw new Error(`Visible editor diverged from persisted Markdown: ${JSON.stringify(displayed)}`)
     }
-    return { persistedBytes: persisted.length, displayedTextBytes: displayed.text.length }
+    return { persistedBytes: persisted.length, displayedTextBytes: displayed.text.length, selection }
   })
 
   await harness.runScenario('frontend-sidebar-toggle-roundtrip', layer, async() => {

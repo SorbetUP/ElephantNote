@@ -42,7 +42,7 @@ class EventCenter {
    * [detachAllDomEvents remove all the DOM events handler]
    */
   detachAllDomEvents() {
-    this.events.forEach(event => this.detachDOMEvent(event.eventId))
+    for (const { eventId } of [...this.events]) this.detachDOMEvent(eventId)
   }
 
   /**
@@ -56,13 +56,6 @@ class EventCenter {
     } else {
       this.listeners[event] = [handler]
     }
-  }
-
-  /**
-   * [subscribe] subscribe custom event
-   */
-  subscribe(event, listener) {
-    this._subscribe(event, listener)
   }
 
   /**
@@ -91,7 +84,45 @@ class EventCenter {
   }
 
   /**
-   * dispatch custom event
+   * inner method for subscribe and subscribeOnce
+   */
+  _subscribe(event, listener, once = false) {
+    const listeners = this.listeners[event]
+    const handler = { listener, once }
+    if (listeners && Array.isArray(listeners)) {
+      listeners.push(handler)
+    } else {
+      this.listeners[event] = [handler]
+    }
+  }
+
+  /**
+   * [unsubscribe] unsubscribe custom event
+   */
+  unsubscribe(event, listener) {
+    const listeners = this.listeners[event]
+    if (Array.isArray(listeners) && listeners.find(l => l.listener === listener)) {
+      const index = listeners.findIndex(l => l.listener === listener)
+      listeners.splice(index, 1)
+    }
+  }
+
+  /**
+   * [unsubscribeAll] unsubscribe all custom events
+   */
+  unsubscribeAll() {
+    this.listeners = {}
+  }
+
+  /**
+   * [subscribeOnce] usbscribe event and listen once
+   */
+  subscribeOnce(event, listener) {
+    this._subscribe(event, listener, true)
+  }
+
+  /**
+   * [dispatch custom event]
    */
   dispatch(event, ...data) {
     const eventListener = this.listeners[event]

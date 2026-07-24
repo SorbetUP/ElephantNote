@@ -77,11 +77,23 @@ const waitForRenderedMarkdown = async(markdown, label, timeoutMs = 10_000) => {
   throw new Error(`${label}: renderer did not finish the real Markdown remount: ${JSON.stringify(last)}`)
 }
 
+const editorTextBounds = (text) => {
+  const value = String(text || '')
+  const leading = value.match(/^\s*/)?.[0].length || 0
+  const end = value.trimEnd().length
+  return { leading, end: Math.max(leading, end) }
+}
+
 const setMarkdownAndCaret = async(markdown, position = 'end') => {
   await command('setMarkdown', markdown)
   const synchronized = await waitForRenderedMarkdown(markdown, 'set-markdown-and-caret')
-  const offset = position === 'end' ? synchronized.editor.text.length : Number(position)
-  await command('selectText', editorSelector, offset, offset)
+  const bounds = editorTextBounds(synchronized.editor.text)
+  const requestedOffset = position === 'end' ? bounds.end : bounds.leading + Number(position)
+  const offset = Math.max(bounds.leading, Math.min(bounds.end, requestedOffset))
+  const selection = await command('selectText', editorSelector, offset, offset)
+  if (selection?.start !== offset || selection?.end !== offset) {
+    throw new Error(`set-markdown-and-caret selected the wrong caret: ${JSON.stringify({ markdown, position, offset, bounds, selection })}`)
+  }
   return synchronized.editor
 }
 
@@ -168,7 +180,9 @@ try {
   await harness.runScenario('selection-replace', layer, async() => {
     await command('setMarkdown', 'alpha omega')
     const synchronized = await waitForRenderedMarkdown('alpha omega', 'selection-replace-setup')
-    const selection = await command('selectText', editorSelector, 6, 11)
+    const selectionStart = String(synchronized.editor.text || '').indexOf('omega')
+    if (selectionStart < 0) throw new Error(`selection-replace could not locate visible omega: ${JSON.stringify(synchronized.editor)}`)
+    const selection = await command('selectText', editorSelector, selectionStart, selectionStart + 'omega'.length)
     if (selection.text !== 'omega') throw new Error(`selection-replace selected the wrong text: ${JSON.stringify(selection)}`)
     await command('insertText', editorSelector, 'beta')
     const state = await waitForMarkdown((markdown) => markdown.trim() === 'alpha beta', 'selection-replace')

@@ -77,6 +77,15 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
     }
   }
 
+  __docEnter (event) {
+    // Muya routes Enter at the document boundary through docEnterHandler. The
+    // legacy image-only handler prevented the browser event and then returned
+    // without mutating the document when no image was selected. Delegate normal
+    // document-boundary Enter to the Rust-owned smart Enter path instead.
+    if (!this.contentState?.selectedImage) return super.__enter(event)
+    return super.__docEnter(event)
+  }
+
   __renderCanonicalMarkdown (
     markdown,
     cursor,

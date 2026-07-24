@@ -48,12 +48,28 @@ const dispatchEnterDefault = (target, element, key) => {
   }
 }
 
+const waitForRustMutation = async(target, before, timeoutMs = 5000) => {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() <= deadline) {
+    const current = target.__ELEPHANT_MUYA_RUST_MIRROR__
+    if (current?.phase === 'error') {
+      throw new Error(`Rust editor failed while applying Enter: ${current.error || current.reason || 'unknown error'}`)
+    }
+    if (
+      Number(current?.revision) > Number(before?.revision || 0) ||
+      Number(current?.markdownLength) !== Number(before?.markdownLength || 0)
+    ) return current
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  }
+  throw new Error('The visible Enter key did not reach a completed Rust editor mutation')
+}
+
 export const installEditorAutomationInputDefaults = (target = globalThis) => {
   const api = target.__ELEPHANT_ACCEPTANCE_TEST__ || target.__ELEPHANT_AUTOMATION__
   if (!api || typeof api.press !== 'function' || api[PATCH_FLAG]) return false
 
   const originalPress = api.press.bind(api)
-  api.press = (selector, key) => {
+  api.press = async(selector, key) => {
     if (key !== 'Enter' && key !== 'Shift+Enter') return originalPress(selector, key)
 
     const element = editorElement(target, selector)
@@ -61,6 +77,10 @@ export const installEditorAutomationInputDefaults = (target = globalThis) => {
     if (typeof KeyboardEventConstructor !== 'function') {
       throw new Error('press requires KeyboardEvent support')
     }
+
+    const rustEditor = element.closest?.('[data-testid="muya-rust-runtime-editor"]') ||
+      element.querySelector?.('[data-testid="muya-rust-runtime-editor"]')
+    const beforeRust = rustEditor ? { ...(target.__ELEPHANT_MUYA_RUST_MIRROR__ || {}) } : null
 
     restoreSelectionAfterFocus(target, element)
     const eventInit = {
@@ -78,10 +98,13 @@ export const installEditorAutomationInputDefaults = (target = globalThis) => {
     if (!keydown.defaultPrevented) dispatchEnterDefault(target, element, key)
     element.dispatchEvent(new KeyboardEventConstructor('keyup', eventInit))
 
+    if (rustEditor) await waitForRustMutation(target, beforeRust)
+
     console.info('[automation-api] emulated trusted Enter default', {
       selector,
       key,
-      keydownPrevented: keydown.defaultPrevented
+      keydownPrevented: keydown.defaultPrevented,
+      rustMutationCompleted: Boolean(rustEditor)
     })
     return api.readDom(selector)
   }

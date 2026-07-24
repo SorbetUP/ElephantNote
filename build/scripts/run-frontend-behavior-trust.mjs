@@ -4,6 +4,7 @@ import { createRealAppHarness } from './lib/real-app-harness.mjs'
 
 const layer = 'frontend'
 const editorSelector = '[data-testid="muya-rust-runtime-editor"]'
+const editableParagraphSelector = `${editorSelector} .ag-paragraph-content`
 const uniqueSearchText = 'frontend-search-marker-9173'
 const initialVisibleText = 'Initial visible text.'
 
@@ -50,7 +51,7 @@ const waitForStableEditor = async(timeoutMs = 10_000) => {
   throw new Error(`Real Rust editor did not become stable: ${JSON.stringify(last)}`)
 }
 
-const expectedKeyboardResult = /^frontend line one\s*\n+\s*frontend line two\s*$/
+const expectedKeyboardResult = /# Frontend acceptance\s*\n+\s*frontend line one\s*\n+\s*frontend line two\s*$/
 
 let failure = null
 try {
@@ -65,28 +66,26 @@ try {
 
   await harness.runScenario('frontend-editor-keyboard-autosave', layer, async() => {
     await harness.action(layer, 'waitFor', editorSelector, 10_000)
-    const editor = await waitForStableEditor()
-    const visibleOffset = String(editor.text || '').indexOf(initialVisibleText)
-    if (visibleOffset < 0) {
-      throw new Error(`Frontend editor did not expose the expected visible document: ${JSON.stringify(editor)}`)
+    await waitForStableEditor()
+    const paragraph = await harness.action(layer, 'readDom', editableParagraphSelector)
+    if (!paragraph?.visible || paragraph.text !== initialVisibleText) {
+      throw new Error(`Frontend editor did not expose the expected editable paragraph: ${JSON.stringify(paragraph)}`)
     }
 
-    // Muya exposes a non-editable paragraph icon before the editable text node.
-    // Its public flattened offsets cannot include the first editable character in
-    // the same range without anchoring inside that icon. Select the remaining
-    // visible characters, replace them through beforeinput, then use real Home
-    // and Delete keyboard events to remove the first character. This stays fully
-    // on the visible user-input path and proves selection, replacement and keys.
-    const selectionStart = visibleOffset
-    const selectionEnd = visibleOffset + initialVisibleText.length - 1
-    const selection = await harness.action(layer, 'selectText', editorSelector, selectionStart, selectionEnd)
-    const expectedSelectedText = initialVisibleText.slice(1)
-    if (selection?.text !== expectedSelectedText || selection?.end <= selection?.start) {
-      throw new Error(`Frontend editor did not select the editable suffix: ${JSON.stringify({ editor, selectionStart, selectionEnd, selection })}`)
+    // Select the real editable paragraph node rather than flattened editor text,
+    // which also contains a non-editable Muya paragraph icon. This is the same
+    // visible DOM selection a user makes by dragging across the paragraph.
+    const selection = await harness.action(
+      layer,
+      'selectText',
+      editableParagraphSelector,
+      0,
+      initialVisibleText.length
+    )
+    if (selection?.start !== 0 || selection?.end !== initialVisibleText.length || selection?.text !== initialVisibleText) {
+      throw new Error(`Frontend editor did not select the complete editable paragraph: ${JSON.stringify({ paragraph, selection })}`)
     }
     await harness.action(layer, 'insertText', editorSelector, 'frontend line one')
-    await harness.action(layer, 'press', editorSelector, 'Home')
-    await harness.action(layer, 'press', editorSelector, 'Delete')
     await harness.action(layer, 'press', editorSelector, 'Enter')
     await harness.action(layer, 'insertText', editorSelector, 'frontend line two')
 

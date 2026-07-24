@@ -59,6 +59,13 @@ class EventCenter {
   }
 
   /**
+   * [subscribe] subscribe custom event
+   */
+  subscribe(event, listener) {
+    this._subscribe(event, listener)
+  }
+
+  /**
    * [unsubscribe] unsubscribe custom event
    */
   unsubscribe(event, listener) {

@@ -74,11 +74,14 @@ const setMarkdownAndCaret = async(markdown, position = 'end') => {
   await command('setMarkdown', markdown)
   const synchronized = await waitForRenderedMarkdown(markdown, 'set-markdown-and-caret')
   const text = selectableText(synchronized.editor)
-  const requested = position === 'end' ? text.length : Number(position)
-  const offset = Math.max(0, Math.min(text.length, requested))
-  const selection = await command('selectText', editorSelector, offset, offset)
-  if (selection?.start !== offset || selection?.end !== offset || selection?.text !== '') {
-    throw new Error(`set-markdown-and-caret selected the wrong caret: ${JSON.stringify({ markdown, position, offset, text, selection })}`)
+  const requested = position === 'end'
+    ? Number.MAX_SAFE_INTEGER
+    : Math.max(0, Math.min(text.length, Number(position)))
+  const selection = await command('selectText', editorSelector, requested, requested)
+  const exactNumericCaret = position !== 'end' && selection?.start === requested && selection?.end === requested
+  const exactEndCaret = position === 'end' && selection?.start === selection?.end && selection?.end >= text.length
+  if ((!exactNumericCaret && !exactEndCaret) || selection?.text !== '') {
+    throw new Error(`set-markdown-and-caret selected the wrong caret: ${JSON.stringify({ markdown, position, requested, text, selection })}`)
   }
   return synchronized.editor
 }

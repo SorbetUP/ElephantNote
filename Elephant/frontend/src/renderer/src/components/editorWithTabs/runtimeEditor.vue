@@ -35,6 +35,7 @@ import { useProjectStore } from '@/store/project'
 import { debouncedSendBufferedState } from '@/store/bufferedState'
 import { RustMuyaRuntimeEditor } from '@/muya'
 import { createRustEditorRuntimeBinding } from '@/muya/editorRuntimeResource'
+import { installEditorAutomationInputDefaults } from '@/platform/automationEditorInputDefaults'
 import RuntimeImageToolbar from './runtimeImageToolbar.vue'
 import RuntimeTableDialog from './runtimeTableDialog.vue'
 import { rustBusCommand } from './runtimeEditorCommands'
@@ -148,6 +149,7 @@ const handleRustMarkdownChange = (editorMarkdown) => {
 }
 
 onMounted(() => {
+  installEditorAutomationInputDefaults()
   for (const [event, handler] of Object.entries(busHandlers)) bus.on(event, handler)
   globalThis.addEventListener?.('elephantnote:addons-ready', publishEditorRuntime)
   publishEditorRuntime()

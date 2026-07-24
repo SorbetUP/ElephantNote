@@ -35,6 +35,25 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
       .catch(this.__reportRustError)
   }
 
+  getMarkdown () {
+    const exported = super.getMarkdown()
+    const canonical = this.__rustMirror?.state?.markdown
+
+    // Muya intentionally omits the final empty paragraph from its serialized
+    // Markdown. The Rust editor, however, must retain that trailing newline
+    // between Enter and the user's next keystroke. Treat both representations
+    // as the same visible document while keeping Rust's caret-bearing state.
+    if (
+      typeof canonical === 'string' &&
+      canonical.endsWith('\n') &&
+      exported === canonical.replace(/\n+$/, '')
+    ) {
+      return canonical
+    }
+
+    return exported
+  }
+
   __renderCanonicalMarkdown (
     markdown,
     cursor,

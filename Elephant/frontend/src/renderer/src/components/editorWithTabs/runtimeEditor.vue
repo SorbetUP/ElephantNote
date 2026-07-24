@@ -87,7 +87,7 @@ const handleRustRuntimeReady = (runtime) => {
     getMarkdown: () => currentFile.value?.markdown ?? props.markdown
   })
   publishEditorRuntime()
-  editorRuntimeBinding.notify({ reason: 'ready' })
+  editorRuntimeBinding.notify({ reason: 'ready', engine: 'rust' })
 }
 
 const dispatchRustBusCommand = (event, payload) => {

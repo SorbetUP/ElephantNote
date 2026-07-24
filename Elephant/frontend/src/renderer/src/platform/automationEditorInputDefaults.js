@@ -49,6 +49,11 @@ const dispatchEnterDefault = (target, element, key) => {
 }
 
 const waitForRustMutation = async(target, before, timeoutMs = 5000) => {
+  const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__
+  if (activeMuya?.__rustMutationGate?.flush) {
+    await activeMuya.__rustMutationGate.flush()
+  }
+
   const deadline = Date.now() + timeoutMs
   while (Date.now() <= deadline) {
     const current = target.__ELEPHANT_MUYA_RUST_MIRROR__

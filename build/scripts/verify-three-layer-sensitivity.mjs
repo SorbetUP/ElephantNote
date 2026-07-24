@@ -37,12 +37,11 @@ const cases = [
   }
 ]
 
-// A hosted runner can spend several minutes starting and stopping the exact
-// AppImage three times, especially while the machine is under I/O pressure.
-// The old five-minute subprocess timeout could kill a valid mutation run
-// before its strict negative assertion completed. This timeout only permits
-// the real packaged proof to finish; it does not relax any assertion.
-const mutationTimeoutMs = 15 * 60_000
+// Hosted runners can spend a long time starting and stopping the exact AppImage,
+// particularly during the packaged user mutation while WebKit and the native
+// add-on payload are under I/O pressure. A timeout is only an execution budget:
+// every negative assertion, failed scenario and mutation marker remains strict.
+const mutationTimeoutMs = 30 * 60_000
 
 for (const specification of cases) {
   console.log(`[three-layer-sensitivity] expecting ${specification.layer} to fail for ${specification.mutation}`)

@@ -7,6 +7,20 @@ const cloneState = (state) => state && ({
   selection: { ...state.selection }
 })
 
+const canonicalSelectionOptions = (state, rendered, preserveLogicalEnd) => {
+  const selection = state?.selection
+  const source = String(state?.markdown || '')
+  if (
+    preserveLogicalEnd &&
+    selection?.anchor === source.length &&
+    selection?.focus === source.length
+  ) {
+    const end = String(rendered?.markdown || '').length
+    return { selection: { anchor: end, focus: end } }
+  }
+  return { muyaIndexCursor: rendered.muyaIndexCursor }
+}
+
 export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRustCore {
   constructor (element, options = {}) {
     super(element, options)
@@ -149,17 +163,22 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
     return rendered.result
   }
 
-  async __adoptRenderedCanonicalMarkdown (state, rendered, reason, continueGroup) {
+  async __adoptRenderedCanonicalMarkdown (
+    state,
+    rendered,
+    reason,
+    continueGroup,
+    preserveLogicalEnd = false
+  ) {
     if (!state || rendered.markdown === state.markdown) return state
 
     const mirror = this.__requireRust()
+    const selectionOptions = canonicalSelectionOptions(state, rendered, preserveLogicalEnd)
     if (Number(state.revision) === 0 && Number(state.undoDepth) === 0) {
-      await mirror.reset(rendered.markdown, reason, {
-        muyaIndexCursor: rendered.muyaIndexCursor
-      })
+      await mirror.reset(rendered.markdown, reason, selectionOptions)
     } else {
       await mirror.sync(rendered.markdown, reason, {
-        muyaIndexCursor: rendered.muyaIndexCursor,
+        ...selectionOptions,
         continueGroup: Boolean(continueGroup)
       })
     }
@@ -224,7 +243,8 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
       state,
       rendered,
       'post-command-render-canonicalization',
-      transaction.documentChanged
+      transaction.documentChanged,
+      true
     )
 
     if (canonicalState === state) return transaction

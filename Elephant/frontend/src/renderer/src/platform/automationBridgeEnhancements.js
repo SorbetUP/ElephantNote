@@ -78,6 +78,45 @@ const semanticSelector = [
 const normalizedLogLevel = (entry) => String(entry?.level || entry?.severity || '').toLowerCase()
 const logText = (entry) => JSON.stringify(entry)
 
+const selectionOffsetsWithin = (target, element) => {
+  const selection = target.getSelection?.() || target.document?.defaultView?.getSelection?.()
+  if (!selection || !selection.anchorNode || !selection.focusNode) return null
+  if (
+    (selection.anchorNode !== element && !element.contains?.(selection.anchorNode)) ||
+    (selection.focusNode !== element && !element.contains?.(selection.focusNode))
+  ) return null
+
+  const offsetOf = (node, offset) => {
+    const range = target.document.createRange()
+    range.selectNodeContents(element)
+    range.setEnd(node, offset)
+    return range.toString().length
+  }
+
+  try {
+    return {
+      anchor: offsetOf(selection.anchorNode, selection.anchorOffset),
+      focus: offsetOf(selection.focusNode, selection.focusOffset)
+    }
+  } catch {
+    return null
+  }
+}
+
+const navigationOffset = (key, selection, text) => {
+  const anchor = selection.anchor
+  const focus = selection.focus
+  const collapsed = anchor === focus
+  if (key === 'ArrowLeft') return collapsed ? Math.max(0, focus - 1) : Math.min(anchor, focus)
+  if (key === 'ArrowRight') return collapsed ? Math.min(text.length, focus + 1) : Math.max(anchor, focus)
+  if (key === 'Home') return text.lastIndexOf('\n', Math.max(0, focus - 1)) + 1
+  if (key === 'End') {
+    const newline = text.indexOf('\n', focus)
+    return newline < 0 ? text.length : newline
+  }
+  return null
+}
+
 export const enhanceAutomationApi = ({ target = globalThis, api } = {}) => {
   if (!api || typeof api !== 'object') throw new TypeError('enhanceAutomationApi requires an API object')
   if (api.__elephantAutomationEnhanced === true) return api
@@ -170,6 +209,34 @@ export const enhanceAutomationApi = ({ target = globalThis, api } = {}) => {
       throw new Error(`Log assertion failed: expected ${minimum}..${maximum} matching entries, received ${entries.length}`)
     }
     return { ok: true, count: entries.length, entries }
+  }
+
+  const originalPress = typeof api.press === 'function' ? api.press.bind(api) : null
+  if (originalPress && typeof api.selectText === 'function') {
+    api.press = (selector, key) => {
+      const element = target.document?.querySelector?.(selector)
+      const contentEditable = element?.isContentEditable || element?.getAttribute?.('contenteditable') === 'true'
+      const before = contentEditable ? selectionOffsetsWithin(target, element) : null
+      const result = originalPress(selector, key)
+      if (!before || !contentEditable) return result
+
+      const after = selectionOffsetsWithin(target, element)
+      const unchanged = after?.anchor === before.anchor && after?.focus === before.focus
+      if (!unchanged) return result
+
+      const text = String(element.textContent || '')
+      const next = navigationOffset(key, before, text)
+      if (next == null) return result
+
+      api.selectText(selector, next, next)
+      console.info('[automation-api] emulated trusted navigation-key default', {
+        selector,
+        key,
+        from: before.focus,
+        to: next
+      })
+      return api.readDom(selector)
+    }
   }
 
   Object.defineProperty(api, '__elephantAutomationEnhanced', {

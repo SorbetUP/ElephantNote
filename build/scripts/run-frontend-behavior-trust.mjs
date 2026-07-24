@@ -5,6 +5,7 @@ import { createRealAppHarness } from './lib/real-app-harness.mjs'
 const layer = 'frontend'
 const editorSelector = '[data-testid="muya-rust-runtime-editor"]'
 const uniqueSearchText = 'frontend-search-marker-9173'
+const initialVisibleText = 'Initial visible text.'
 
 const harness = createRealAppHarness({
   suite: 'frontend-behavior',
@@ -67,19 +68,28 @@ try {
   await harness.runScenario('frontend-editor-keyboard-autosave', layer, async() => {
     await harness.action(layer, 'waitFor', editorSelector, 10_000)
     const editor = await waitForStableEditor()
-    // Select the complete rendered document exactly as a user would with
-    // Select All, then replace it through the real beforeinput/Rust path. This
-    // avoids guessing offsets between innerText and textContent while proving
-    // selection replacement, text input, Enter, rendering and persistence.
+    // Muya renders a non-editable paragraph icon before the actual text node.
+    // Selecting from offset zero therefore anchors the DOM range in that icon
+    // and produces an empty selection. Locate the exact visible text in the
+    // real editor snapshot and select only that editable text node range.
+    const selectionStart = String(editor.text || '').indexOf(initialVisibleText)
+    if (selectionStart < 0) {
+      throw new Error(`Frontend editor did not expose the expected visible document: ${JSON.stringify(editor)}`)
+    }
+    const selectionEnd = selectionStart + initialVisibleText.length
     const selection = await harness.action(
       layer,
       'selectText',
       editorSelector,
-      0,
-      Number.MAX_SAFE_INTEGER
+      selectionStart,
+      selectionEnd
     )
-    if (selection?.start !== 0 || selection?.end <= 0 || !selection?.text?.trim()) {
-      throw new Error(`Frontend editor did not select the complete visible document: ${JSON.stringify({ editor, selection })}`)
+    if (
+      selection?.start !== selectionStart ||
+      selection?.end !== selectionEnd ||
+      selection?.text !== initialVisibleText
+    ) {
+      throw new Error(`Frontend editor did not select the complete editable document text: ${JSON.stringify({ editor, selectionStart, selectionEnd, selection })}`)
     }
     await harness.action(layer, 'insertText', editorSelector, 'frontend line one')
     await harness.action(layer, 'press', editorSelector, 'Enter')

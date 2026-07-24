@@ -37,8 +37,16 @@ const cases = [
   }
 ]
 
+// A hosted runner can spend several minutes starting and stopping the exact
+// AppImage three times, especially while the machine is under I/O pressure.
+// The old five-minute subprocess timeout could kill a valid mutation run
+// before its strict negative assertion completed. This timeout only permits
+// the real packaged proof to finish; it does not relax any assertion.
+const mutationTimeoutMs = 15 * 60_000
+
 for (const specification of cases) {
   console.log(`[three-layer-sensitivity] expecting ${specification.layer} to fail for ${specification.mutation}`)
+  const startedAt = Date.now()
   const result = spawnSync(process.execPath, [resolve(root, specification.runner)], {
     cwd: root,
     env: {
@@ -48,12 +56,15 @@ for (const specification of cases) {
     },
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: 300_000
+    timeout: mutationTimeoutMs,
+    maxBuffer: 64 * 1024 * 1024
   })
 
   if (result.stdout) process.stdout.write(result.stdout)
   if (result.stderr) process.stderr.write(result.stderr)
-  if (result.error) throw result.error
+  if (result.error) {
+    throw new Error(`${specification.layer} mutation process failed after ${Date.now() - startedAt}ms: ${result.error.stack || result.error.message || result.error}`)
+  }
   if (result.status === 0) {
     throw new Error(`${specification.layer} remained green under deliberate mutation ${specification.mutation}`)
   }
@@ -69,7 +80,7 @@ for (const specification of cases) {
   if (!(result.stderr || '').includes(specification.outputMarker)) {
     throw new Error(`${specification.mutation} was not observed in runner stderr`)
   }
-  console.log(`[three-layer-sensitivity] PASS: ${specification.layer} became red under ${specification.mutation}`)
+  console.log(`[three-layer-sensitivity] PASS: ${specification.layer} became red under ${specification.mutation} in ${Date.now() - startedAt}ms`)
 }
 
 console.log('[three-layer-sensitivity] PASS: backend, frontend and packaged user proof all detect deliberate regressions')

@@ -235,4 +235,9 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
       selectionChanged: true
     }
   }
+
+  destroy () {
+    this.container.removeEventListener('keydown', this.__rustEnterKeydownListener, true)
+    return super.destroy()
+  }
 }

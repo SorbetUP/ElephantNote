@@ -16,7 +16,6 @@ const harness = createRealAppHarness({
 })
 
 const sleep = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds))
-const editorTextEnd = (text) => String(text || '').trimEnd().length
 
 const waitForStableEditor = async(timeoutMs = 10_000) => {
   const deadline = Date.now() + timeoutMs
@@ -57,10 +56,20 @@ try {
   await harness.runScenario('frontend-editor-keyboard-autosave', layer, async() => {
     await harness.action(layer, 'waitFor', editorSelector, 10_000)
     const editor = await waitForStableEditor()
-    const offset = editorTextEnd(editor.text)
-    const selection = await harness.action(layer, 'selectText', editorSelector, offset, offset)
+    // readDom exposes innerText while selectText operates on textContent. Their
+    // offsets are not interchangeable when the rendered editor contains block
+    // separators or hidden text nodes. A deliberately oversized offset is
+    // clamped by the real DOM selection implementation to textContent.length,
+    // which gives the true document end without guessing an internal offset.
+    const selection = await harness.action(
+      layer,
+      'selectText',
+      editorSelector,
+      Number.MAX_SAFE_INTEGER,
+      Number.MAX_SAFE_INTEGER
+    )
     if (selection?.start !== selection?.end || selection?.text !== '') {
-      throw new Error(`Frontend editor did not produce a collapsed caret: ${JSON.stringify({ editor, offset, selection })}`)
+      throw new Error(`Frontend editor did not produce a collapsed end caret: ${JSON.stringify({ editor, selection })}`)
     }
     await harness.action(layer, 'insertText', editorSelector, ' frontend line one')
     await harness.action(layer, 'press', editorSelector, 'Enter')

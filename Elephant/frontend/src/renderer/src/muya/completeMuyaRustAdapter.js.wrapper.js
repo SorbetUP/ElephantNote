@@ -39,6 +39,8 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
     // target, so a later listener on the same node cannot reliably claim Enter.
     // Capture it at the owning document first and scope it to this exact editor.
     this.__rustEnterEventTarget = this.container?.ownerDocument || document
+    this.__rustEnterSequence = 0
+    this.__lastRustEnterMutation = null
     this.__rustEnterKeydownListener = (event) => {
       if (event?.key !== 'Enter' || event?.isComposing) return
       const editor = event?.target?.closest?.('[data-testid="muya-rust-runtime-editor"]')
@@ -48,18 +50,36 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
         this.container?.contains?.(editor)
       )
       if (!belongsToEditor) return
+
+      // Rust is the sole owner of Enter for this production editor. Stop the
+      // legacy Muya handlers from running a second context-dependent Enter after
+      // the canonical Rust command has already been queued.
+      event.preventDefault?.()
+      event.stopImmediatePropagation?.()
       this.__onUserMutation?.(`keydown:${event.shiftKey ? 'Shift+Enter' : 'Enter'}`)
       const pending = this.__enter(event)
-      // The automation bridge dispatches the same real KeyboardEvent object. Give
-      // it the exact Rust command promise instead of forcing it to infer command
-      // completion from eventually-published global status. This also propagates
-      // real command failures rather than hiding them behind a polling timeout.
+      const sequence = ++this.__rustEnterSequence
+      this.__lastRustEnterMutation = { sequence, promise: pending }
+
+      // The automation bridge normally receives the same real KeyboardEvent.
+      // Keep this event-local handle when the WebKit Event object is extensible,
+      // while the editor-owned sequence above remains the authoritative fallback.
       if (event && pending?.then) {
-        Object.defineProperty(event, '__elephantRustMutationPromise', {
-          configurable: true,
-          enumerable: false,
-          value: pending
-        })
+        try {
+          Object.defineProperty(event, '__elephantRustMutationPromise', {
+            configurable: true,
+            enumerable: false,
+            value: pending
+          })
+          Object.defineProperty(event, '__elephantRustMutationSequence', {
+            configurable: true,
+            enumerable: false,
+            value: sequence
+          })
+        } catch {
+          // Some WebKit Event wrappers are not extensible. The bridge reads the
+          // exact promise from __lastRustEnterMutation in that case.
+        }
       }
       pending?.catch?.(() => {})
     }
@@ -276,6 +296,7 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
 
   destroy () {
     this.__rustEnterEventTarget?.removeEventListener('keydown', this.__rustEnterKeydownListener, true)
+    this.__lastRustEnterMutation = null
     return super.destroy()
   }
 }

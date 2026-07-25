@@ -48,11 +48,15 @@ const dispatchEnterDefault = (target, element, key) => {
   }
 }
 
-const waitForRustMutation = async(target, before, timeoutMs = 5000) => {
+const waitForRustMutation = async(target, before, mutationPromise, timeoutMs = 5000) => {
   const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__
-  if (activeMuya?.__rustMutationGate?.flush) {
-    await activeMuya.__rustMutationGate.flush()
-  }
+
+  // Await the exact command created by the document-capture keydown handler.
+  // Global mirror status is still checked below as independent evidence that the
+  // command was published and rendered, but it is no longer used as a surrogate
+  // for the actual asynchronous operation.
+  if (mutationPromise?.then) await mutationPromise
+  if (activeMuya?.__rustMutationGate?.flush) await activeMuya.__rustMutationGate.flush()
 
   const deadline = Date.now() + timeoutMs
   while (Date.now() <= deadline) {
@@ -69,10 +73,8 @@ const waitForRustMutation = async(target, before, timeoutMs = 5000) => {
       String(visibleMarkdown ?? '') === String(canonicalState.markdown ?? '') &&
       Number(activeMuya?.__rustMutationGate?.pending || 0) === 0
 
-    // The Rust command completing is not enough: the next real keystroke must not
-    // race the Muya render/canonicalization triggered by Enter. Return only once
-    // the visible editor exports the exact canonical Rust document and its
-    // mutation queue is empty.
+    // The next real keystroke may run only after the exact Rust command, its Muya
+    // render and canonicalization, and the mutation queue have all completed.
     if (mutationCompleted && visibleSynchronized) return current
     await new Promise((resolve) => setTimeout(resolve, 20))
   }
@@ -113,7 +115,13 @@ export const installEditorAutomationInputDefaults = (target = globalThis) => {
     if (!keydown.defaultPrevented) dispatchEnterDefault(target, element, key)
     element.dispatchEvent(new KeyboardEventConstructor('keyup', eventInit))
 
-    if (rustEditor) await waitForRustMutation(target, beforeRust)
+    if (rustEditor) {
+      const mutationPromise = keydown.__elephantRustMutationPromise
+      if (!mutationPromise?.then) {
+        throw new Error('The visible Enter key was not claimed by the Rust editor command path')
+      }
+      await waitForRustMutation(target, beforeRust, mutationPromise)
+    }
 
     console.info('[automation-api] emulated trusted Enter default', {
       selector,

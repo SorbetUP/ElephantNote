@@ -97,7 +97,9 @@ export const installEditorAutomationInputDefaults = (target = globalThis) => {
 
     const rustEditor = element.closest?.('[data-testid="muya-rust-runtime-editor"]') ||
       element.querySelector?.('[data-testid="muya-rust-runtime-editor"]')
+    const activeMuya = rustEditor ? target.__ELEPHANT_ACTIVE_MUYA__ : null
     const beforeRust = rustEditor ? { ...(target.__ELEPHANT_MUYA_RUST_MIRROR__ || {}) } : null
+    const beforeEnterSequence = Number(activeMuya?.__lastRustEnterMutation?.sequence || 0)
 
     restoreSelectionAfterFocus(target, element)
     const eventInit = {
@@ -116,9 +118,11 @@ export const installEditorAutomationInputDefaults = (target = globalThis) => {
     element.dispatchEvent(new KeyboardEventConstructor('keyup', eventInit))
 
     if (rustEditor) {
-      const mutationPromise = keydown.__elephantRustMutationPromise
-      if (!mutationPromise?.then) {
-        throw new Error('The visible Enter key was not claimed by the Rust editor command path')
+      const ownedMutation = activeMuya?.__lastRustEnterMutation
+      const mutationPromise = keydown.__elephantRustMutationPromise || ownedMutation?.promise
+      const mutationSequence = Number(keydown.__elephantRustMutationSequence || ownedMutation?.sequence || 0)
+      if (!mutationPromise?.then || mutationSequence <= beforeEnterSequence) {
+        throw new Error('The visible Enter key was not claimed by a new Rust editor command path')
       }
       await waitForRustMutation(target, beforeRust, mutationPromise)
     }

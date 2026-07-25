@@ -50,6 +50,17 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
       if (!belongsToEditor) return
       this.__onUserMutation?.(`keydown:${event.shiftKey ? 'Shift+Enter' : 'Enter'}`)
       const pending = this.__enter(event)
+      // The automation bridge dispatches the same real KeyboardEvent object. Give
+      // it the exact Rust command promise instead of forcing it to infer command
+      // completion from eventually-published global status. This also propagates
+      // real command failures rather than hiding them behind a polling timeout.
+      if (event && pending?.then) {
+        Object.defineProperty(event, '__elephantRustMutationPromise', {
+          configurable: true,
+          enumerable: false,
+          value: pending
+        })
+      }
       pending?.catch?.(() => {})
     }
     this.__rustEnterEventTarget.addEventListener('keydown', this.__rustEnterKeydownListener, true)

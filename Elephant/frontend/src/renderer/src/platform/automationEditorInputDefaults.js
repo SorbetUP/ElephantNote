@@ -48,37 +48,66 @@ const dispatchEnterDefault = (target, element, key) => {
   }
 }
 
-const waitForRustMutation = async(target, before, mutationPromise, timeoutMs = 5000) => {
-  const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__
-
+const waitForRustMutation = async(target, before, mutationPromise, expectedMuya, timeoutMs = 5000) => {
   // Await the exact command created by the document-capture keydown handler.
-  // Global mirror status is still checked below as independent evidence that the
-  // command was published and rendered, but it is no longer used as a surrogate
-  // for the actual asynchronous operation.
-  if (mutationPromise?.then) await mutationPromise
-  if (activeMuya?.__rustMutationGate?.flush) await activeMuya.__rustMutationGate.flush()
+  // The returned transaction is the primary proof that the visible Enter event
+  // reached the production Rust command path and changed its canonical document.
+  const transaction = mutationPromise?.then ? await mutationPromise : null
+  if (!transaction?.state || !transaction.documentChanged) {
+    throw new Error(`Rust Enter completed without a document mutation: ${JSON.stringify({
+      documentChanged: transaction?.documentChanged,
+      selectionChanged: transaction?.selectionChanged,
+      revision: transaction?.state?.revision,
+      markdownLength: transaction?.state?.markdown?.length
+    })}`)
+  }
 
+  if (expectedMuya?.__rustMutationGate?.flush) await expectedMuya.__rustMutationGate.flush()
+
+  const transactionRevision = Number(transaction.state.revision || 0)
+  const transactionMarkdown = String(transaction.state.markdown ?? '')
   const deadline = Date.now() + timeoutMs
+  let last = null
+
   while (Date.now() <= deadline) {
     const current = target.__ELEPHANT_MUYA_RUST_MIRROR__
+    const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__
     if (current?.phase === 'error') {
       throw new Error(`Rust editor failed while applying Enter: ${current.error || current.reason || 'unknown error'}`)
     }
+    if (activeMuya !== expectedMuya) {
+      throw new Error('The visible editor remounted while applying Enter instead of completing the same user interaction')
+    }
 
-    const mutationCompleted = Number(current?.revision) > Number(before?.revision || 0) ||
-      Number(current?.markdownLength) !== Number(before?.markdownLength || 0)
-    const canonicalState = activeMuya?.__rustMirror?.state
-    const visibleMarkdown = activeMuya?.getMarkdown?.()
+    const canonicalState = expectedMuya?.__rustMirror?.state
+    const visibleMarkdown = expectedMuya?.getMarkdown?.()
+    const exactCommandPublished = Number(canonicalState?.revision || 0) >= transactionRevision &&
+      Number(current?.revision || 0) >= transactionRevision
+    const canonicalContainsTransaction = String(canonicalState?.markdown ?? '') === transactionMarkdown ||
+      Number(canonicalState?.revision || 0) > transactionRevision
     const visibleSynchronized = canonicalState &&
       String(visibleMarkdown ?? '') === String(canonicalState.markdown ?? '') &&
-      Number(activeMuya?.__rustMutationGate?.pending || 0) === 0
+      Number(expectedMuya?.__rustMutationGate?.pending || 0) === 0
 
-    // The next real keystroke may run only after the exact Rust command, its Muya
-    // render and canonicalization, and the mutation queue have all completed.
-    if (mutationCompleted && visibleSynchronized) return current
+    last = {
+      beforeRevision: Number(before?.revision || 0),
+      beforeMarkdownLength: Number(before?.markdownLength || 0),
+      transactionRevision,
+      transactionMarkdownLength: transactionMarkdown.length,
+      publishedRevision: Number(current?.revision || 0),
+      publishedMarkdownLength: Number(current?.markdownLength || 0),
+      canonicalRevision: Number(canonicalState?.revision || 0),
+      canonicalMarkdownLength: String(canonicalState?.markdown ?? '').length,
+      visibleMarkdownLength: String(visibleMarkdown ?? '').length,
+      pending: Number(expectedMuya?.__rustMutationGate?.pending || 0)
+    }
+
+    // The next real keystroke may run only after the exact Rust transaction has
+    // been published, rendered by Muya, canonically synchronized, and drained.
+    if (exactCommandPublished && canonicalContainsTransaction && visibleSynchronized) return current
     await new Promise((resolve) => setTimeout(resolve, 20))
   }
-  throw new Error('The visible Enter key did not reach a completed and rendered Rust editor mutation')
+  throw new Error(`The visible Enter key did not reach a completed and rendered Rust editor mutation: ${JSON.stringify(last)}`)
 }
 
 export const installEditorAutomationInputDefaults = (target = globalThis) => {
@@ -124,7 +153,7 @@ export const installEditorAutomationInputDefaults = (target = globalThis) => {
       if (!mutationPromise?.then || mutationSequence <= beforeEnterSequence) {
         throw new Error('The visible Enter key was not claimed by a new Rust editor command path')
       }
-      await waitForRustMutation(target, beforeRust, mutationPromise)
+      await waitForRustMutation(target, beforeRust, mutationPromise, activeMuya)
     }
 
     console.info('[automation-api] emulated trusted Enter default', {

@@ -279,3 +279,45 @@ jobs:
             Elephant/backend/tauri/target/release/bundle/appimage/*.AppImage
           if-no-files-found: warn
           retention-days: 30
+
+  concise-diagnostics:
+    name: Concise three-layer failure diagnostics
+    needs: e2e
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download proof diagnostics
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-three-layer-distributed-appimage-proof-and-addon-diagnostics
+          path: diagnostics
+
+      - name: Print concise proof status and failure
+        shell: bash
+        run: |
+          set -u
+          node - <<'NODE'
+          const fs = require('fs')
+          const path = require('path')
+          const root = 'diagnostics'
+          const candidates = [
+            ['backend-contract', 'test-results/trusted/backend-contract/latest.json'],
+            ['frontend-behavior', 'test-results/trusted/frontend-behavior/latest.json'],
+            ['packaged-user-journey', 'test-results/trusted/packaged-user-journey/latest.json'],
+            ['markdown-editor', 'test-results/trusted/markdown-editor/latest.json']
+          ]
+          for (const [label, relative] of candidates) {
+            const file = path.join(root, relative)
+            if (!fs.existsSync(file)) {
+              console.log(`[concise-proof] ${label}: MISSING`)
+              continue
+            }
+            const evidence = JSON.parse(fs.readFileSync(file, 'utf8'))
+            const failed = (evidence.scenarios || []).filter((scenario) => scenario.ok !== true)
+            console.log(`[concise-proof] ${label}: ${evidence.status}; error=${evidence.error?.message || evidence.error || 'none'}; failed=${JSON.stringify(failed)}`)
+          }
+          NODE
+          echo '--- frontend-behavior tail ---'
+          tail -n 160 diagnostics/frontend-behavior.txt 2>/dev/null || true
+          echo '--- mutation-sensitivity tail ---'
+          tail -n 80 diagnostics/three-layer-sensitivity.txt 2>/dev/null || true

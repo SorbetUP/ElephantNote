@@ -21,6 +21,22 @@ const canonicalSelectionOptions = (state, rendered, preserveLogicalEnd) => {
   return { muyaIndexCursor: rendered.muyaIndexCursor }
 }
 
+const isPlainParagraphEnd = ({ markdown, selection } = {}) => {
+  const source = String(markdown || '')
+  const anchor = Number(selection?.anchor)
+  const focus = Number(selection?.focus)
+  if (!Number.isInteger(anchor) || anchor !== focus) return false
+
+  const lineStart = source.lastIndexOf('\n', Math.max(0, anchor - 1)) + 1
+  const nextBreak = source.indexOf('\n', anchor)
+  const lineEnd = nextBreak < 0 ? source.length : nextBreak
+  if (anchor !== lineEnd) return false
+
+  const line = source.slice(lineStart, lineEnd)
+  if (!line.trim()) return false
+  return !/^(?:\s{0,3}(?:#{1,6}\s|>|[-+*]\s|\d+[.)]\s|```|~~~)|\s*\|)/.test(line)
+}
+
 export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRustCore {
   constructor (element, options = {}) {
     super(element, options)
@@ -142,12 +158,30 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
     }
   }
 
+  __enter (event) {
+    // A normal Enter at the end of a plain paragraph creates a new paragraph,
+    // not a soft line break. The generic smartEnter command represents that
+    // boundary as a single trailing newline; Muya then normalizes it away before
+    // the next keystroke, joining both user-visible lines. Use the Rust block
+    // insertion command for this exact plain-paragraph boundary. Structured
+    // contexts (lists, headings, quotes, tables, code) keep smartEnter semantics.
+    const current = this.__selection()
+    if (!event?.shiftKey && isPlainParagraphEnd(current)) {
+      event?.preventDefault?.()
+      event?.stopImmediatePropagation?.()
+      return this.__applyRust('plain-paragraph-enter', (engine) => (
+        engine.insertParagraph('after', '')
+      ))
+    }
+    return super.__enter(event)
+  }
+
   __docEnter (event) {
     // Muya routes Enter at the document boundary through docEnterHandler. The
     // legacy image-only handler prevented the browser event and then returned
     // without mutating the document when no image was selected. Delegate normal
     // document-boundary Enter to the Rust-owned smart Enter path instead.
-    if (!this.contentState?.selectedImage) return super.__enter(event)
+    if (!this.contentState?.selectedImage) return this.__enter(event)
     return super.__docEnter(event)
   }
 

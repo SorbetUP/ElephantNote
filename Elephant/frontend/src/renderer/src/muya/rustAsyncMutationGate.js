@@ -31,6 +31,15 @@ export const createRustAsyncMutationGate = ({ dispatch, onSuppressed = () => {} 
     const result = tail
       .catch(() => undefined)
       .then(operation)
+      .then((transaction) => {
+        // Document-capture keyboard handling intentionally prevents Muya's legacy
+        // key handler from running, so there may be no immediate dispatchChange to
+        // suppress. A completed Rust document mutation still must publish exactly
+        // one canonical change after rendering, otherwise the parent model and
+        // autosave retain the pre-keyboard Markdown.
+        if (transaction?.documentChanged) replayRequested = true
+        return transaction
+      })
     const settled = result.finally(() => {
       pending = Math.max(0, pending - 1)
 

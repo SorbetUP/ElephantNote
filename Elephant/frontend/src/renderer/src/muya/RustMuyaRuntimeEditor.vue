@@ -43,8 +43,7 @@ let mountGeneration = 0
 let syncTimer = null
 let syncRequested = false
 let syncInFlight = null
-let internalPropUpdatePending = false
-let internalPropResetTimer = null
+let internalPropEchoes = []
 let userMutationObserved = false
 let disposeUserMutationBoundary = () => {}
 
@@ -115,13 +114,9 @@ const readRuntimeMarkdown = async () => {
   return runtimeMarkdown
 }
 
-const markInternalPropUpdate = () => {
-  internalPropUpdatePending = true
-  if (internalPropResetTimer) window.clearTimeout(internalPropResetTimer)
-  internalPropResetTimer = window.setTimeout(() => {
-    internalPropResetTimer = null
-    internalPropUpdatePending = false
-  }, 0)
+const markInternalPropUpdate = (markdown) => {
+  internalPropEchoes.push(String(markdown || ''))
+  if (internalPropEchoes.length > 32) internalPropEchoes.splice(0, internalPropEchoes.length - 32)
 }
 
 const flushMarkdownSync = () => {
@@ -146,7 +141,7 @@ const flushMarkdownSync = () => {
             if (!syncRequested) break
             continue
           }
-          markInternalPropUpdate()
+          markInternalPropUpdate(next)
           emit('update:modelValue', next)
           emit('change', next)
         }
@@ -182,11 +177,7 @@ const destroyRuntime = () => {
     window.clearTimeout(syncTimer)
     syncTimer = null
   }
-  if (internalPropResetTimer) {
-    window.clearTimeout(internalPropResetTimer)
-    internalPropResetTimer = null
-  }
-  internalPropUpdatePending = false
+  internalPropEchoes = []
   userMutationObserved = false
   disposeUserMutationBoundary()
   disposeUserMutationBoundary = () => {}
@@ -305,10 +296,10 @@ const mountRuntime = async (markdown) => {
           })
           return
         }
-        // The parent receives this value from the active Rust/Muya instance.
-        // Mark it before emitting so Vue does not interpret its own echo as an
-        // external document replacement and remount the editor mid-selection.
-        markInternalPropUpdate()
+        // Record the exact Markdown emitted to the parent. Vue may deliver that
+        // echo after multiple microtasks or timers, so a one-tick boolean can no
+        // longer distinguish it from a genuine external document replacement.
+        markInternalPropUpdate(runtimeMarkdown)
         emit('update:modelValue', runtimeMarkdown)
         emit('change', runtimeMarkdown)
       })
@@ -351,12 +342,9 @@ watch(
       runtimeLength: runtimeMarkdown.length,
       revision: runtime?.bridge?.revision ?? null
     })
-    if (internalPropUpdatePending) {
-      internalPropUpdatePending = false
-      if (internalPropResetTimer) {
-        window.clearTimeout(internalPropResetTimer)
-        internalPropResetTimer = null
-      }
+    const echoIndex = internalPropEchoes.indexOf(normalized)
+    if (echoIndex >= 0) {
+      internalPropEchoes.splice(0, echoIndex + 1)
       return
     }
     if (normalized !== runtimeMarkdown) void mountRuntime(normalized)

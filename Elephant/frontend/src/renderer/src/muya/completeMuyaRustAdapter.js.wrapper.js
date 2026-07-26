@@ -118,18 +118,20 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
 
   getMarkdown () {
     const exported = super.getMarkdown()
-    const canonical = this.__rustMirror?.state?.markdown
+    const canonicalState = this.__rustMirror?.state
+    const canonical = canonicalState?.markdown
 
-    // Muya intentionally omits the final empty paragraph from its serialized
-    // Markdown. The Rust editor, however, must retain that trailing newline
-    // between Enter and the user's next keystroke. Treat both representations
-    // as the same visible document while keeping Rust's caret-bearing state.
-    if (
-      typeof canonical === 'string' &&
-      canonical.endsWith('\n') &&
-      exported === canonical.replace(/\n+$/, '')
-    ) {
-      return canonical
+    // Muya may serialize a trailing empty paragraph with fewer terminal line
+    // endings than the canonical Rust document. While the Rust caret is at the
+    // logical document end, both serializations represent the same visible
+    // document. Keep Rust's complete separator so the next real keystroke starts
+    // in the new paragraph instead of joining the preceding line again.
+    if (typeof canonical === 'string' && canonical.endsWith('\n')) {
+      const canonicalAtLogicalEnd = canonicalState?.selection?.anchor === canonical.length &&
+        canonicalState?.selection?.focus === canonical.length
+      const sameVisibleBody = exported.replace(/\n+$/, '') === canonical.replace(/\n+$/, '')
+      const exportedDidNotAddContent = exported.length <= canonical.length
+      if (canonicalAtLogicalEnd && sameVisibleBody && exportedDidNotAddContent) return canonical
     }
 
     return exported
@@ -143,7 +145,7 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
     const exported = super.getMarkdown()
     const collapsedAtVisibleEnd = current.selection.anchor === exported.length &&
       current.selection.focus === exported.length
-    if (!collapsedAtVisibleEnd || exported !== canonical.replace(/\n+$/, '')) return current
+    if (!collapsedAtVisibleEnd || exported.replace(/\n+$/, '') !== canonical.replace(/\n+$/, '')) return current
 
     // A trailing empty Muya paragraph has no serialized text node. When the DOM
     // caret is at the visible end, map it to Rust's logical position after the

@@ -97,7 +97,14 @@ try {
       await sleep(50)
     }
     if (!expectedKeyboardResult.test(String(state?.markdown || ''))) {
-      throw new Error(`Keyboard selection/Enter/input did not produce the exact expected frontend Markdown: ${JSON.stringify(state)}`)
+      const compactState = {
+        markdown: state?.markdown ?? null,
+        markdownLength: String(state?.markdown || '').length,
+        activeFile: state?.activeFile ?? null,
+        editorRuntime: state?.editorRuntime ?? null,
+        rustMirror: state?.rustMirror ?? null
+      }
+      throw new Error(`Keyboard selection/Enter/input did not produce the exact expected frontend Markdown: ${JSON.stringify(compactState)}`)
     }
 
     const persisted = await harness.waitForVaultFile('Frontend acceptance.md', (content) => expectedKeyboardResult.test(content))

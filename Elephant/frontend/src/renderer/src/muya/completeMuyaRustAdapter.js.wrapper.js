@@ -159,18 +159,21 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
   }
 
   __enter (event) {
-    // A normal Enter at the end of a plain paragraph creates a new paragraph,
-    // not a soft line break. The generic smartEnter command represents that
-    // boundary as a single trailing newline; Muya then normalizes it away before
-    // the next keystroke, joining both user-visible lines. Use the Rust block
-    // insertion command for this exact plain-paragraph boundary. Structured
-    // contexts (lists, headings, quotes, tables, code) keep smartEnter semantics.
+    // A normal Enter at the end of a plain paragraph creates a distinct Markdown
+    // paragraph. The Rust block insertion command leaves only one trailing line
+    // ending for an empty block, which Muya normalizes away before the next input.
+    // Insert the canonical blank-line separator through Rust so the visible next
+    // paragraph and its logical caret survive rendering and autosave.
     const current = this.__selection()
     if (!event?.shiftKey && isPlainParagraphEnd(current)) {
       event?.preventDefault?.()
       event?.stopImmediatePropagation?.()
       return this.__applyRust('plain-paragraph-enter', (engine) => (
-        engine.insertParagraph('after', '')
+        engine.replaceRange(
+          current.selection.anchor,
+          current.selection.focus,
+          '\n\n'
+        )
       ))
     }
     return super.__enter(event)

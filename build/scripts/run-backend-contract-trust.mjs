@@ -86,9 +86,6 @@ try {
       content: expected,
       markdown: expected
     })
-    // The production write path may complete through its real asynchronous
-    // persistence queue. Observe the backend read boundary until the exact bytes
-    // become visible rather than racing it with an immediate read.
     await waitForNoteContent(
       'Backend contracts/Lifecycle.md',
       expected,
@@ -161,17 +158,39 @@ try {
   })
 
   await harness.runScenario('backend-persistence-after-restart', 'backend', async() => {
-    const relativePath = 'Backend restart.md'
-    const content = '# Backend restart\n\npersisted-through-real-backend\n'
-    await harness.backend('invokeTauri', 'tauri_notes_write', { relativePath, content, markdown: content })
-    await waitForNoteContent(relativePath, content, 'Backend restart pre-crash persistence')
+    const expected = '# Persistence\n\nBackend survives application restart.\n'
+    await harness.backend('invokeTauri', 'tauri_notes_write', {
+      relativePath: 'Backend fixture.md',
+      content: expected,
+      markdown: expected
+    })
+    await waitForNoteContent('Backend fixture.md', expected, 'Backend pre-restart persistence')
     await harness.restart({ crash: true })
-    await harness.setup('selectVault', harness.vaultRoot)
-    const restored = await waitForNoteContent(relativePath, content, 'Backend restart post-crash restoration')
-    return { restoredBytes: restored.content.length }
+    const state = await harness.backend('readState')
+    const persisted = await waitForNoteContent('Backend fixture.md', expected, 'Backend post-restart persistence')
+    if (state.activeVault !== harness.vaultRoot) {
+      throw new Error(`Active vault did not survive restart: ${JSON.stringify(state)}`)
+    }
+    if (persisted?.content !== expected && persisted?.markdown !== expected) {
+      throw new Error(`Backend content did not survive restart: ${JSON.stringify(persisted)}`)
+    }
+    return { activeVault: state.activeVault, bytes: expected.length }
+  })
+
+  await harness.writeEvidence({
+    status: 'PROVEN',
+    extra: {
+      proofBoundary: 'Direct production Tauri/backend commands, real vault filesystem, crash restart. No frontend claim.'
+    }
   })
 } catch (error) {
   failure = error
+  await harness.writeEvidence({ status: 'NOT PROVEN', error })
 } finally {
-  await harness.finish(failure)
+  await harness.cleanup()
+}
+
+if (failure) {
+  console.error(failure?.stack || failure?.message || String(failure))
+  process.exit(1)
 }

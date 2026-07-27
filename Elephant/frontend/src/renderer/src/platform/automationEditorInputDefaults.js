@@ -202,12 +202,12 @@ export const installEditorAutomationInputDefaults = (target = globalThis) => {
       }
 
       restoreSelectionAfterFocus(target, element)
-      const beforeInput = createBeforeInput(target, element, 'insertText', text)
-      element.dispatchEvent(beforeInput)
-      if (!beforeInput.defaultPrevented) {
-        throw new Error('The visible Rust editor did not claim the insertText beforeinput event')
-      }
-
+      // Keep the production automation input primitive responsible for creating
+      // the browser-realm beforeinput event. Reconstructing InputEvent here made
+      // WebKit/Tauri expose an exception-only stack and prevented the event from
+      // reaching Muya. We still require the same visible event to be claimed and
+      // then independently prove that the Rust document changed and rendered.
+      await originalInsertText(selector, text)
       await waitForPublishedRustState(target, activeMuya, beforeRust, 'text input')
       console.info('[automation-api] dispatched trusted text input', {
         selector,

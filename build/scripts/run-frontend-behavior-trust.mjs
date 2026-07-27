@@ -72,9 +72,10 @@ try {
       throw new Error(`Frontend editor did not expose the expected editable paragraph: ${JSON.stringify(paragraph)}`)
     }
 
-    // Select the real editable paragraph node rather than flattened editor text,
-    // which also contains a non-editable Muya paragraph icon. This is the same
-    // visible DOM selection a user makes by dragging across the paragraph.
+    // Select and type through the actual visible editable paragraph. The editor
+    // shell is only a container and may not itself be contenteditable after Muya
+    // replaces the mount node, so targeting it can fail before any real input
+    // event reaches the production editor.
     const selection = await harness.action(
       layer,
       'selectText',
@@ -85,9 +86,9 @@ try {
     if (selection?.start !== 0 || selection?.end !== initialVisibleText.length || selection?.text !== initialVisibleText) {
       throw new Error(`Frontend editor did not select the complete editable paragraph: ${JSON.stringify({ paragraph, selection })}`)
     }
-    await harness.action(layer, 'insertText', editorSelector, 'frontend line one')
-    await harness.action(layer, 'press', editorSelector, 'Enter')
-    await harness.action(layer, 'insertText', editorSelector, 'frontend line two')
+    await harness.action(layer, 'insertText', editableParagraphSelector, 'frontend line one')
+    await harness.action(layer, 'press', editableParagraphSelector, 'Enter')
+    await harness.action(layer, 'insertText', editableParagraphSelector, 'frontend line two')
 
     const deadline = Date.now() + 10_000
     let state = null

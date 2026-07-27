@@ -4,6 +4,7 @@ import { createRealAppHarness } from './lib/real-app-harness.mjs'
 
 const layer = 'frontend'
 const editorSelector = '[data-testid="muya-rust-runtime-editor"]'
+const editorInputSelector = `${editorSelector}[contenteditable="true"], ${editorSelector} [contenteditable="true"]`
 const editableParagraphSelector = `${editorSelector} .ag-paragraph-content`
 const uniqueSearchText = 'frontend-search-marker-9173'
 const initialVisibleText = 'Initial visible text.'
@@ -66,6 +67,7 @@ try {
 
   await harness.runScenario('frontend-editor-keyboard-autosave', layer, async() => {
     await harness.action(layer, 'waitFor', editorSelector, 10_000)
+    await harness.action(layer, 'waitFor', editorInputSelector, 10_000)
     await waitForStableEditor()
     const paragraph = await harness.action(layer, 'readDom', editableParagraphSelector)
     if (!paragraph?.visible || paragraph.text !== initialVisibleText) {
@@ -73,10 +75,10 @@ try {
     }
 
     // Establish the exact range on the visible paragraph, then dispatch typing
-    // and keyboard input at the real contenteditable editor boundary. The Muya
-    // paragraph span owns the text range but is not itself contenteditable;
-    // targeting that nested span makes the production input API reject the
-    // event before it can reach Rust.
+    // and keyboard input at Muya's live contenteditable boundary. The stable
+    // data-testid may be an outer runtime host in some packaged WebKit builds;
+    // sending text to that host makes the production input primitive reject the
+    // event before it reaches the visible editor.
     const selection = await harness.action(
       layer,
       'selectText',
@@ -87,9 +89,9 @@ try {
     if (selection?.start !== 0 || selection?.end !== initialVisibleText.length || selection?.text !== initialVisibleText) {
       throw new Error(`Frontend editor did not select the complete editable paragraph: ${JSON.stringify({ paragraph, selection })}`)
     }
-    await harness.action(layer, 'insertText', editorSelector, 'frontend line one')
-    await harness.action(layer, 'press', editorSelector, 'Enter')
-    await harness.action(layer, 'insertText', editorSelector, 'frontend line two')
+    await harness.action(layer, 'insertText', editorInputSelector, 'frontend line one')
+    await harness.action(layer, 'press', editorInputSelector, 'Enter')
+    await harness.action(layer, 'insertText', editorInputSelector, 'frontend line two')
 
     const deadline = Date.now() + 10_000
     let state = null

@@ -64,19 +64,35 @@ for (const specification of cases) {
   if (result.error) {
     throw new Error(`${specification.layer} mutation process failed after ${Date.now() - startedAt}ms: ${result.error.stack || result.error.message || result.error}`)
   }
-  if (result.status === 0) {
-    throw new Error(`${specification.layer} remained green under deliberate mutation ${specification.mutation}`)
-  }
 
   const payload = JSON.parse(readFileSync(resolve(root, specification.artifact), 'utf8'))
   const scenario = (payload.scenarios || []).find((entry) => entry.id === specification.scenarioId)
+  const markerObserved = (result.stderr || '').includes(specification.outputMarker)
+  console.log(`[three-layer-sensitivity] observation ${JSON.stringify({
+    layer: specification.layer,
+    mutation: specification.mutation,
+    exitStatus: result.status,
+    signal: result.signal || null,
+    artifactStatus: payload.status,
+    expectedScenario: specification.scenarioId,
+    scenarioFound: Boolean(scenario),
+    scenarioOk: scenario?.ok ?? null,
+    failedScenarioIds: (payload.scenarios || []).filter((entry) => entry.ok !== true).map((entry) => entry.id),
+    markerObserved,
+    artifactError: payload.error || null,
+    durationMs: Date.now() - startedAt
+  })}`)
+
+  if (result.status === 0) {
+    throw new Error(`${specification.layer} remained green under deliberate mutation ${specification.mutation}`)
+  }
   if (payload.status !== 'NOT PROVEN') {
     throw new Error(`${specification.layer} did not report NOT PROVEN under ${specification.mutation}: ${JSON.stringify(payload)}`)
   }
   if (!scenario || scenario.ok !== false) {
     throw new Error(`${specification.mutation} did not fail ${specification.scenarioId}: ${JSON.stringify(payload.scenarios)}`)
   }
-  if (!(result.stderr || '').includes(specification.outputMarker)) {
+  if (!markerObserved) {
     throw new Error(`${specification.mutation} was not observed in runner stderr`)
   }
   console.log(`[three-layer-sensitivity] PASS: ${specification.layer} became red under ${specification.mutation} in ${Date.now() - startedAt}ms`)

@@ -82,42 +82,52 @@ try {
       'Production note creation stabilization'
     )
 
-    const roundtripPath = 'Backend contracts/Backend roundtrip.md'
+    // Create the backend-owned round-trip note at the vault root, where no
+    // renderer-selected folder can race the parent directory. Then move that
+    // existing file into the production-created folder. This still proves the
+    // complete write/read/rename/move/delete contract while making every path
+    // transition observable through the real Tauri backend.
+    const roundtripPath = 'Backend roundtrip.md'
     const expected = '# Backend roundtrip\n\nWritten through the production Tauri backend.\n'
-    await harness.backend('invokeTauri', 'tauri_notes_write', {
+    const written = await harness.backend('invokeTauri', 'tauri_notes_write', {
       relativePath: roundtripPath,
       content: expected,
       markdown: expected
     })
+    if (written?.path !== roundtripPath) {
+      throw new Error(`Production note write returned the wrong path: ${JSON.stringify(written)}`)
+    }
     await waitForNoteContent(roundtripPath, expected, 'Production note write/read round-trip')
     await harness.backend('invokeTauri', 'tauri_entries_rename', {
       relativePath: roundtripPath,
       title: 'Renamed backend roundtrip'
     })
     await harness.backend('invokeTauri', 'tauri_entries_move', {
-      relativePath: 'Backend contracts/Renamed backend roundtrip.md',
-      targetDirectoryPath: ''
+      relativePath: 'Renamed backend roundtrip.md',
+      targetDirectoryPath: 'Backend contracts'
     })
+    const movedPath = 'Backend contracts/Renamed backend roundtrip.md'
     await waitForNoteContent(
-      'Renamed backend roundtrip.md',
+      movedPath,
       expected,
       'Renamed/moved note content preservation'
     )
-    await harness.backend('invokeTauri', 'tauri_entries_delete', { relativePath: 'Renamed backend roundtrip.md' })
+    await harness.backend('invokeTauri', 'tauri_entries_delete', { relativePath: movedPath })
     await harness.backend('invokeTauri', 'tauri_entries_delete', { relativePath: 'Backend contracts/Lifecycle.md' })
-    const rootEntries = await harness.backend('invokeTauri', 'tauri_directory_list', {
-      relativePath: '',
+    const folderEntries = await harness.backend('invokeTauri', 'tauri_directory_list', {
+      relativePath: 'Backend contracts',
       offset: 0,
       limit: 1000,
       includePreview: false
     })
-    if (rootEntries.some((entry) => entry.path === 'Renamed backend roundtrip.md')) {
-      throw new Error(`Deleted note remains visible in the production backend: ${JSON.stringify(rootEntries)}`)
+    if (folderEntries.some((entry) => entry.path === movedPath)) {
+      throw new Error(`Deleted note remains visible in the production backend: ${JSON.stringify(folderEntries)}`)
     }
     return {
       folder: folder?.path || null,
       created: created?.path || null,
       backendWrittenPath: roundtripPath,
+      backendMovedPath: movedPath,
       bytes: expected.length
     }
   })

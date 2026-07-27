@@ -19,24 +19,26 @@ const restoreSelectionAfterFocus = (target, element) => {
 const rustEditorFor = (element) => element?.closest?.('[data-testid="muya-rust-runtime-editor"]') ||
   element?.querySelector?.('[data-testid="muya-rust-runtime-editor"]')
 
-const dispatchEnterDefault = (target, element, key) => {
-  const InputEventConstructor = target.InputEvent || target.window?.InputEvent
+const inputEventConstructorFor = (target, element) => element?.ownerDocument?.defaultView?.InputEvent ||
+  target.InputEvent ||
+  target.window?.InputEvent
+
+const createBeforeInput = (target, element, inputType, data) => {
+  const InputEventConstructor = inputEventConstructorFor(target, element)
   if (typeof InputEventConstructor !== 'function') {
-    throw new Error('Enter default emulation requires InputEvent support')
+    throw new Error(`${inputType} requires InputEvent support at the visible editor boundary`)
   }
 
-  const inputType = key === 'Shift+Enter' ? 'insertLineBreak' : 'insertParagraph'
   const beforeInput = new InputEventConstructor('beforeinput', {
     inputType,
-    data: null,
+    data,
     bubbles: true,
     cancelable: true,
     composed: true
   })
 
-  // WebKit versions used by Tauri may discard non-text inputType values on
-  // synthetic InputEvent construction. Restore the browser-observable field so
-  // the event is identical at the editor boundary to a real Enter default.
+  // WebKit versions used by Tauri may discard synthetic inputType values.
+  // Restore the browser-observable fields without touching the document itself.
   if (beforeInput.inputType !== inputType) {
     Object.defineProperty(beforeInput, 'inputType', {
       configurable: true,
@@ -44,7 +46,19 @@ const dispatchEnterDefault = (target, element, key) => {
       value: inputType
     })
   }
+  if (data !== null && beforeInput.data !== data) {
+    Object.defineProperty(beforeInput, 'data', {
+      configurable: true,
+      enumerable: true,
+      value: data
+    })
+  }
+  return beforeInput
+}
 
+const dispatchEnterDefault = (target, element, key) => {
+  const inputType = key === 'Shift+Enter' ? 'insertLineBreak' : 'insertParagraph'
+  const beforeInput = createBeforeInput(target, element, inputType, null)
   element.dispatchEvent(beforeInput)
   if (!beforeInput.defaultPrevented) {
     throw new Error(`The visible editor did not claim the ${inputType} beforeinput event`)
@@ -52,11 +66,9 @@ const dispatchEnterDefault = (target, element, key) => {
 }
 
 const waitForPublishedRustState = async(target, expectedMuya, before, label, timeoutMs = 5000) => {
-  // insertText dispatches the real beforeinput event synchronously. Its Rust
-  // transaction is then owned by the mutation gate, so draining that gate is
-  // the authoritative completion boundary. Do not require a second revision
-  // delta after the drain: fast WebKit runs may have already published the
-  // completed transaction before this waiter starts observing it.
+  // The visible beforeinput event queues a production Rust transaction. Draining
+  // the mutation gate is the authoritative completion boundary; the checks below
+  // additionally require that this exact user action changed canonical state.
   if (expectedMuya?.__rustMutationGate?.flush) await expectedMuya.__rustMutationGate.flush()
 
   const deadline = Date.now() + timeoutMs
@@ -73,6 +85,10 @@ const waitForPublishedRustState = async(target, expectedMuya, before, label, tim
 
     const canonicalState = expectedMuya?.__rustMirror?.state
     const visibleMarkdown = expectedMuya?.getMarkdown?.()
+    const mutationObserved = canonicalState && (
+      Number(canonicalState.revision || 0) > Number(before?.canonicalRevision || before?.revision || 0) ||
+      String(canonicalState.markdown ?? '') !== String(before?.canonicalMarkdown ?? '')
+    )
     const publishedCurrent = canonicalState &&
       Number(published?.revision || 0) >= Number(canonicalState.revision || 0) &&
       Number(published?.markdownLength || 0) === String(canonicalState.markdown ?? '').length
@@ -82,16 +98,19 @@ const waitForPublishedRustState = async(target, expectedMuya, before, label, tim
 
     last = {
       beforeRevision: Number(before?.revision || 0),
+      beforeCanonicalRevision: Number(before?.canonicalRevision || 0),
       beforeMarkdownLength: Number(before?.markdownLength || 0),
+      beforeCanonicalMarkdownLength: String(before?.canonicalMarkdown ?? '').length,
       publishedRevision: Number(published?.revision || 0),
       publishedMarkdownLength: Number(published?.markdownLength || 0),
       canonicalRevision: Number(canonicalState?.revision || 0),
       canonicalMarkdownLength: String(canonicalState?.markdown ?? '').length,
       visibleMarkdownLength: String(visibleMarkdown ?? '').length,
-      pending: Number(expectedMuya?.__rustMutationGate?.pending || 0)
+      pending: Number(expectedMuya?.__rustMutationGate?.pending || 0),
+      mutationObserved
     }
 
-    if (publishedCurrent && visibleSynchronized) return published
+    if (mutationObserved && publishedCurrent && visibleSynchronized) return published
     await new Promise((resolve) => setTimeout(resolve, 20))
   }
   throw new Error(`The visible ${label} did not reach a completed and rendered Rust editor mutation: ${JSON.stringify(last)}`)
@@ -168,14 +187,34 @@ export const installEditorAutomationInputDefaults = (target = globalThis) => {
 
   if (originalInsertText) {
     api.insertText = async(selector, text) => {
+      if (typeof text !== 'string') throw new TypeError('insertText requires a string value')
       const element = editorElement(target, selector)
       const rustEditor = rustEditorFor(element)
-      const activeMuya = rustEditor ? target.__ELEPHANT_ACTIVE_MUYA__ : null
-      const beforeRust = rustEditor ? { ...(target.__ELEPHANT_MUYA_RUST_MIRROR__ || {}) } : null
+      if (!rustEditor) return originalInsertText(selector, text)
 
-      const result = await originalInsertText(selector, text)
-      if (rustEditor) await waitForPublishedRustState(target, activeMuya, beforeRust, 'text input')
-      return result
+      const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__
+      if (!activeMuya) throw new Error('The visible Rust editor has no active Muya runtime')
+      const canonicalBefore = activeMuya.__rustMirror?.state
+      const beforeRust = {
+        ...(target.__ELEPHANT_MUYA_RUST_MIRROR__ || {}),
+        canonicalRevision: Number(canonicalBefore?.revision || 0),
+        canonicalMarkdown: String(canonicalBefore?.markdown ?? '')
+      }
+
+      restoreSelectionAfterFocus(target, element)
+      const beforeInput = createBeforeInput(target, element, 'insertText', text)
+      element.dispatchEvent(beforeInput)
+      if (!beforeInput.defaultPrevented) {
+        throw new Error('The visible Rust editor did not claim the insertText beforeinput event')
+      }
+
+      await waitForPublishedRustState(target, activeMuya, beforeRust, 'text input')
+      console.info('[automation-api] dispatched trusted text input', {
+        selector,
+        valueLength: text.length,
+        rustMutationCompleted: true
+      })
+      return api.readDom(selector)
     }
   }
 
@@ -183,7 +222,9 @@ export const installEditorAutomationInputDefaults = (target = globalThis) => {
     if (key !== 'Enter' && key !== 'Shift+Enter') return originalPress(selector, key)
 
     const element = editorElement(target, selector)
-    const KeyboardEventConstructor = target.KeyboardEvent || target.window?.KeyboardEvent
+    const KeyboardEventConstructor = element?.ownerDocument?.defaultView?.KeyboardEvent ||
+      target.KeyboardEvent ||
+      target.window?.KeyboardEvent
     if (typeof KeyboardEventConstructor !== 'function') {
       throw new Error('press requires KeyboardEvent support')
     }

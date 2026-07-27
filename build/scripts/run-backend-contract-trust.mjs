@@ -18,26 +18,45 @@ const sleep = (milliseconds) => new Promise((resolvePromise) => setTimeout(resol
 const waitForNoteContent = async(relativePath, expected, label, timeoutMs = 10_000) => {
   const deadline = Date.now() + timeoutMs
   let last = null
+  let lastError = null
   while (Date.now() <= deadline) {
-    last = await harness.backend('invokeTauri', 'tauri_notes_read', { relativePath })
-    if (last?.content === expected || last?.markdown === expected) return last
+    try {
+      last = await harness.backend('invokeTauri', 'tauri_notes_read', { relativePath })
+      lastError = null
+      if (last?.content === expected || last?.markdown === expected) return last
+    } catch (error) {
+      // Rename and move are real filesystem transitions. The destination can be
+      // briefly absent while the production backend settles the operation. Keep
+      // polling, but retain the final error and still require the exact content
+      // before the timeout expires.
+      lastError = error
+    }
     await sleep(50)
   }
-  throw new Error(`${label}: production note content did not reach the expected value: ${JSON.stringify(last)}`)
+  const diagnostic = lastError?.stack || lastError?.message || lastError || last
+  throw new Error(`${label}: production note content did not reach the expected value: ${JSON.stringify(diagnostic)}`)
 }
 
 const waitForStableNoteContent = async(relativePath, expected, label, timeoutMs = 10_000) => {
   const deadline = Date.now() + timeoutMs
   let stableReads = 0
   let last = null
+  let lastError = null
   while (Date.now() <= deadline) {
-    last = await harness.backend('invokeTauri', 'tauri_notes_read', { relativePath })
-    const matches = last?.content === expected || last?.markdown === expected
-    stableReads = matches ? stableReads + 1 : 0
-    if (stableReads >= 4) return last
+    try {
+      last = await harness.backend('invokeTauri', 'tauri_notes_read', { relativePath })
+      lastError = null
+      const matches = last?.content === expected || last?.markdown === expected
+      stableReads = matches ? stableReads + 1 : 0
+      if (stableReads >= 4) return last
+    } catch (error) {
+      lastError = error
+      stableReads = 0
+    }
     await sleep(75)
   }
-  throw new Error(`${label}: production note content did not become stable: ${JSON.stringify(last)}`)
+  const diagnostic = lastError?.stack || lastError?.message || lastError || last
+  throw new Error(`${label}: production note content did not become stable: ${JSON.stringify(diagnostic)}`)
 }
 
 let failure = null

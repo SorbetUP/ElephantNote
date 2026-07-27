@@ -37,8 +37,9 @@ const createBeforeInput = (target, element, inputType, data) => {
     composed: true
   })
 
-  // WebKit versions used by Tauri may discard synthetic inputType values.
-  // Restore the browser-observable fields without touching the document itself.
+  // WebKit versions used by Tauri may discard synthetic inputType/data fields.
+  // Restore only the browser-observable event metadata; the editor remains solely
+  // responsible for changing the document through its normal beforeinput path.
   if (beforeInput.inputType !== inputType) {
     Object.defineProperty(beforeInput, 'inputType', {
       configurable: true,
@@ -56,13 +57,18 @@ const createBeforeInput = (target, element, inputType, data) => {
   return beforeInput
 }
 
-const dispatchEnterDefault = (target, element, key) => {
-  const inputType = key === 'Shift+Enter' ? 'insertLineBreak' : 'insertParagraph'
-  const beforeInput = createBeforeInput(target, element, inputType, null)
+const dispatchClaimedBeforeInput = (target, element, inputType, data) => {
+  const beforeInput = createBeforeInput(target, element, inputType, data)
   element.dispatchEvent(beforeInput)
   if (!beforeInput.defaultPrevented) {
     throw new Error(`The visible editor did not claim the ${inputType} beforeinput event`)
   }
+  return beforeInput
+}
+
+const dispatchEnterDefault = (target, element, key) => {
+  const inputType = key === 'Shift+Enter' ? 'insertLineBreak' : 'insertParagraph'
+  return dispatchClaimedBeforeInput(target, element, inputType, null)
 }
 
 const waitForPublishedRustState = async(target, expectedMuya, before, label, timeoutMs = 5000) => {
@@ -202,12 +208,11 @@ export const installEditorAutomationInputDefaults = (target = globalThis) => {
       }
 
       restoreSelectionAfterFocus(target, element)
-      // Keep the production automation input primitive responsible for creating
-      // the browser-realm beforeinput event. Reconstructing InputEvent here made
-      // WebKit/Tauri expose an exception-only stack and prevented the event from
-      // reaching Muya. We still require the same visible event to be claimed and
-      // then independently prove that the Rust document changed and rendered.
-      await originalInsertText(selector, text)
+      // Dispatch the same browser-level beforeinput event produced by typing into
+      // the live contenteditable. No direct handler call, setMarkdown operation,
+      // or DOM mutation is allowed here: Muya must claim the event and Rust must
+      // publish and render the resulting canonical transaction.
+      dispatchClaimedBeforeInput(target, element, 'insertText', text)
       await waitForPublishedRustState(target, activeMuya, beforeRust, 'text input')
       console.info('[automation-api] dispatched trusted text input', {
         selector,

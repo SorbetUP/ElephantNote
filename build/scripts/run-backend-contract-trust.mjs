@@ -9,6 +9,7 @@ const harness = createRealAppHarness({
   buildRenderer: true,
   initialFiles: {
     'Backend fixture.md': '# Backend fixture\n\nInitial backend content.\n',
+    'Backend-only roundtrip.md': '# Backend-only roundtrip\n\nUnopened backend fixture.\n',
     'outside.md': '# Contained vault file\n\ninside-vault-marker\n'
   }
 })
@@ -25,10 +26,6 @@ const waitForNoteContent = async(relativePath, expected, label, timeoutMs = 10_0
       lastError = null
       if (last?.content === expected || last?.markdown === expected) return last
     } catch (error) {
-      // Rename and move are real filesystem transitions. The destination can be
-      // briefly absent while the production backend settles the operation. Keep
-      // polling, but retain the final error and still require the exact content
-      // before the timeout expires.
       lastError = error
     }
     await sleep(50)
@@ -97,10 +94,6 @@ try {
       'Production note creation stabilization'
     )
 
-    // tauri_notes_create legitimately updates the renderer selection. Move the
-    // renderer back to a stable fixture before exercising a separate existing
-    // backend-owned note. This preserves the real production create and update
-    // contracts while preventing renderer autosave from racing the note under test.
     await harness.setup('openNote', 'Backend fixture.md')
     await waitForStableNoteContent(
       'Backend fixture.md',
@@ -108,7 +101,10 @@ try {
       'Renderer selection stabilization before backend update'
     )
 
-    const roundtripPath = 'outside.md'
+    // Exercise a backend-owned file that the renderer has never opened. This
+    // keeps the proof on the production Tauri commands while eliminating any
+    // renderer autosave race against the same path.
+    const roundtripPath = 'Backend-only roundtrip.md'
     const expected = '# Backend roundtrip\n\nWritten through the production Tauri backend.\n'
     const written = await harness.backend('invokeTauri', 'tauri_notes_write', {
       relativePath: roundtripPath,
@@ -130,11 +126,7 @@ try {
       targetDirectoryPath: 'Backend archive'
     })
     const movedPath = 'Backend archive/Renamed backend roundtrip.md'
-    await waitForNoteContent(
-      movedPath,
-      expected,
-      'Renamed/moved note content preservation'
-    )
+    await waitForNoteContent(movedPath, expected, 'Renamed/moved note content preservation')
     await harness.backend('invokeTauri', 'tauri_entries_delete', { relativePath: movedPath })
     await harness.backend('invokeTauri', 'tauri_entries_delete', { relativePath: 'Backend contracts/Lifecycle.md' })
     const folderEntries = await harness.backend('invokeTauri', 'tauri_directory_list', {

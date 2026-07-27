@@ -16,6 +16,9 @@ const restoreSelectionAfterFocus = (target, element) => {
   current?.addRange(savedRange)
 }
 
+const rustEditorFor = (element) => element?.closest?.('[data-testid="muya-rust-runtime-editor"]') ||
+  element?.querySelector?.('[data-testid="muya-rust-runtime-editor"]')
+
 const dispatchEnterDefault = (target, element, key) => {
   const InputEventConstructor = target.InputEvent || target.window?.InputEvent
   if (typeof InputEventConstructor !== 'function') {
@@ -46,6 +49,47 @@ const dispatchEnterDefault = (target, element, key) => {
   if (!beforeInput.defaultPrevented) {
     throw new Error(`The visible editor did not claim the ${inputType} beforeinput event`)
   }
+}
+
+const waitForPublishedRustState = async(target, expectedMuya, before, label, timeoutMs = 5000) => {
+  if (expectedMuya?.__rustMutationGate?.flush) await expectedMuya.__rustMutationGate.flush()
+
+  const deadline = Date.now() + timeoutMs
+  let last = null
+  while (Date.now() <= deadline) {
+    const published = target.__ELEPHANT_MUYA_RUST_MIRROR__
+    const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__
+    if (published?.phase === 'error') {
+      throw new Error(`Rust editor failed while applying ${label}: ${published.error || published.reason || 'unknown error'}`)
+    }
+    if (activeMuya !== expectedMuya) {
+      throw new Error(`The visible editor remounted while applying ${label} instead of completing the same user interaction`)
+    }
+
+    const canonicalState = expectedMuya?.__rustMirror?.state
+    const visibleMarkdown = expectedMuya?.getMarkdown?.()
+    const changed = Number(canonicalState?.revision || 0) > Number(before?.revision || 0) ||
+      String(canonicalState?.markdown ?? '').length !== Number(before?.markdownLength || 0)
+    const publishedCurrent = Number(published?.revision || 0) >= Number(canonicalState?.revision || 0)
+    const visibleSynchronized = canonicalState &&
+      String(visibleMarkdown ?? '') === String(canonicalState.markdown ?? '') &&
+      Number(expectedMuya?.__rustMutationGate?.pending || 0) === 0
+
+    last = {
+      beforeRevision: Number(before?.revision || 0),
+      beforeMarkdownLength: Number(before?.markdownLength || 0),
+      publishedRevision: Number(published?.revision || 0),
+      publishedMarkdownLength: Number(published?.markdownLength || 0),
+      canonicalRevision: Number(canonicalState?.revision || 0),
+      canonicalMarkdownLength: String(canonicalState?.markdown ?? '').length,
+      visibleMarkdownLength: String(visibleMarkdown ?? '').length,
+      pending: Number(expectedMuya?.__rustMutationGate?.pending || 0)
+    }
+
+    if (changed && publishedCurrent && visibleSynchronized) return published
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  }
+  throw new Error(`The visible ${label} did not reach a completed and rendered Rust editor mutation: ${JSON.stringify(last)}`)
 }
 
 const waitForRustMutation = async(target, before, mutationPromise, expectedMuya, timeoutMs = 5000) => {
@@ -115,6 +159,21 @@ export const installEditorAutomationInputDefaults = (target = globalThis) => {
   if (!api || typeof api.press !== 'function' || api[PATCH_FLAG]) return false
 
   const originalPress = api.press.bind(api)
+  const originalInsertText = typeof api.insertText === 'function' ? api.insertText.bind(api) : null
+
+  if (originalInsertText) {
+    api.insertText = async(selector, text) => {
+      const element = editorElement(target, selector)
+      const rustEditor = rustEditorFor(element)
+      const activeMuya = rustEditor ? target.__ELEPHANT_ACTIVE_MUYA__ : null
+      const beforeRust = rustEditor ? { ...(target.__ELEPHANT_MUYA_RUST_MIRROR__ || {}) } : null
+
+      const result = await originalInsertText(selector, text)
+      if (rustEditor) await waitForPublishedRustState(target, activeMuya, beforeRust, 'text input')
+      return result
+    }
+  }
+
   api.press = async(selector, key) => {
     if (key !== 'Enter' && key !== 'Shift+Enter') return originalPress(selector, key)
 
@@ -124,8 +183,7 @@ export const installEditorAutomationInputDefaults = (target = globalThis) => {
       throw new Error('press requires KeyboardEvent support')
     }
 
-    const rustEditor = element.closest?.('[data-testid="muya-rust-runtime-editor"]') ||
-      element.querySelector?.('[data-testid="muya-rust-runtime-editor"]')
+    const rustEditor = rustEditorFor(element)
     const activeMuya = rustEditor ? target.__ELEPHANT_ACTIVE_MUYA__ : null
     const beforeRust = rustEditor ? { ...(target.__ELEPHANT_MUYA_RUST_MIRROR__ || {}) } : null
     const beforeEnterSequence = Number(activeMuya?.__lastRustEnterMutation?.sequence || 0)

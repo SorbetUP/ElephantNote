@@ -85,13 +85,14 @@ try {
       throw new Error(`Frontend editor did not select the complete editable paragraph: ${JSON.stringify({ paragraph, selection })}`)
     }
 
-    // Keep the exact visible paragraph selection, but dispatch browser input at
-    // Muya's live contenteditable boundary. The production insertText primitive
-    // intentionally rejects non-editable descendants; the event then bubbles
-    // through the selected paragraph and reaches the Rust-owned input path.
-    await harness.action(layer, 'insertText', editorInputSelector, 'frontend line one')
+    // Dispatch the browser beforeinput event from the visible paragraph that
+    // owns the selected range. It bubbles through Muya's live contenteditable
+    // surface and is claimed by the production Rust input handler. Targeting the
+    // outer editor boundary directly causes WebKit to lose the descendant range
+    // during focus restoration and makes a valid visible selection unusable.
+    await harness.action(layer, 'insertText', editableParagraphSelector, 'frontend line one')
     await harness.action(layer, 'press', editorInputSelector, 'Enter')
-    await harness.action(layer, 'insertText', editorInputSelector, 'frontend line two')
+    await harness.action(layer, 'insertText', editableParagraphSelector, 'frontend line two')
 
     const deadline = Date.now() + 10_000
     let state = null

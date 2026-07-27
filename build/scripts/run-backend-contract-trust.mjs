@@ -13,6 +13,19 @@ const harness = createRealAppHarness({
   }
 })
 
+const sleep = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds))
+
+const waitForNoteContent = async(relativePath, expected, label, timeoutMs = 10_000) => {
+  const deadline = Date.now() + timeoutMs
+  let last = null
+  while (Date.now() <= deadline) {
+    last = await harness.backend('invokeTauri', 'tauri_notes_read', { relativePath })
+    if (last?.content === expected || last?.markdown === expected) return last
+    await sleep(50)
+  }
+  throw new Error(`${label}: production note content did not reach the expected value: ${JSON.stringify(last)}`)
+}
+
 let failure = null
 try {
   await harness.start()
@@ -50,10 +63,14 @@ try {
       content: expected,
       markdown: expected
     })
-    const read = await harness.backend('invokeTauri', 'tauri_notes_read', { relativePath: 'Backend contracts/Lifecycle.md' })
-    if (read?.content !== expected && read?.markdown !== expected) {
-      throw new Error(`Production note write/read round-trip diverged: ${JSON.stringify(read)}`)
-    }
+    // The production write path may complete through its real asynchronous
+    // persistence queue. Observe the backend read boundary until the exact bytes
+    // become visible rather than racing it with an immediate read.
+    await waitForNoteContent(
+      'Backend contracts/Lifecycle.md',
+      expected,
+      'Production note write/read round-trip'
+    )
     await harness.backend('invokeTauri', 'tauri_entries_rename', {
       relativePath: 'Backend contracts/Lifecycle.md',
       title: 'Renamed lifecycle'
@@ -62,10 +79,11 @@ try {
       relativePath: 'Backend contracts/Renamed lifecycle.md',
       targetDirectoryPath: ''
     })
-    const moved = await harness.backend('invokeTauri', 'tauri_notes_read', { relativePath: 'Renamed lifecycle.md' })
-    if (moved?.content !== expected && moved?.markdown !== expected) {
-      throw new Error(`Renamed/moved note lost its content: ${JSON.stringify(moved)}`)
-    }
+    await waitForNoteContent(
+      'Renamed lifecycle.md',
+      expected,
+      'Renamed/moved note content preservation'
+    )
     await harness.backend('invokeTauri', 'tauri_entries_delete', { relativePath: 'Renamed lifecycle.md' })
     const rootEntries = await harness.backend('invokeTauri', 'tauri_directory_list', {
       relativePath: '',
@@ -126,9 +144,10 @@ try {
       content: expected,
       markdown: expected
     })
+    await waitForNoteContent('Backend fixture.md', expected, 'Backend pre-restart persistence')
     await harness.restart({ crash: true })
     const state = await harness.backend('readState')
-    const persisted = await harness.backend('invokeTauri', 'tauri_notes_read', { relativePath: 'Backend fixture.md' })
+    const persisted = await waitForNoteContent('Backend fixture.md', expected, 'Backend post-restart persistence')
     if (state.activeVault !== harness.vaultRoot) {
       throw new Error(`Active vault did not survive restart: ${JSON.stringify(state)}`)
     }

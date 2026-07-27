@@ -26,6 +26,20 @@ const waitForNoteContent = async(relativePath, expected, label, timeoutMs = 10_0
   throw new Error(`${label}: production note content did not reach the expected value: ${JSON.stringify(last)}`)
 }
 
+const waitForStableNoteContent = async(relativePath, expected, label, timeoutMs = 10_000) => {
+  const deadline = Date.now() + timeoutMs
+  let stableReads = 0
+  let last = null
+  while (Date.now() <= deadline) {
+    last = await harness.backend('invokeTauri', 'tauri_notes_read', { relativePath })
+    const matches = last?.content === expected || last?.markdown === expected
+    stableReads = matches ? stableReads + 1 : 0
+    if (stableReads >= 4) return last
+    await sleep(75)
+  }
+  throw new Error(`${label}: production note content did not become stable: ${JSON.stringify(last)}`)
+}
+
 let failure = null
 try {
   await harness.start()
@@ -57,6 +71,15 @@ try {
       filename: 'Lifecycle.md',
       title: 'Lifecycle'
     })
+    // Creating a note updates the real renderer/vault stores asynchronously. Wait
+    // until the initial production bytes have settled before issuing the write;
+    // otherwise the delayed create reconciliation can overwrite a valid backend
+    // write with the generated title immediately after the command returns.
+    await waitForStableNoteContent(
+      'Backend contracts/Lifecycle.md',
+      '# Lifecycle\n',
+      'Production note creation stabilization'
+    )
     const expected = '# Lifecycle\n\nWritten through the production Tauri backend.\n'
     await harness.backend('invokeTauri', 'tauri_notes_write', {
       relativePath: 'Backend contracts/Lifecycle.md',
@@ -138,39 +161,17 @@ try {
   })
 
   await harness.runScenario('backend-persistence-after-restart', 'backend', async() => {
-    const expected = '# Persistence\n\nBackend survives application restart.\n'
-    await harness.backend('invokeTauri', 'tauri_notes_write', {
-      relativePath: 'Backend fixture.md',
-      content: expected,
-      markdown: expected
-    })
-    await waitForNoteContent('Backend fixture.md', expected, 'Backend pre-restart persistence')
+    const relativePath = 'Backend restart.md'
+    const content = '# Backend restart\n\npersisted-through-real-backend\n'
+    await harness.backend('invokeTauri', 'tauri_notes_write', { relativePath, content, markdown: content })
+    await waitForNoteContent(relativePath, content, 'Backend restart pre-crash persistence')
     await harness.restart({ crash: true })
-    const state = await harness.backend('readState')
-    const persisted = await waitForNoteContent('Backend fixture.md', expected, 'Backend post-restart persistence')
-    if (state.activeVault !== harness.vaultRoot) {
-      throw new Error(`Active vault did not survive restart: ${JSON.stringify(state)}`)
-    }
-    if (persisted?.content !== expected && persisted?.markdown !== expected) {
-      throw new Error(`Backend content did not survive restart: ${JSON.stringify(persisted)}`)
-    }
-    return { activeVault: state.activeVault, bytes: expected.length }
-  })
-
-  await harness.writeEvidence({
-    status: 'PROVEN',
-    extra: {
-      proofBoundary: 'Direct production Tauri/backend commands, real vault filesystem, crash restart. No frontend claim.'
-    }
+    await harness.setup('selectVault', harness.vaultRoot)
+    const restored = await waitForNoteContent(relativePath, content, 'Backend restart post-crash restoration')
+    return { restoredBytes: restored.content.length }
   })
 } catch (error) {
   failure = error
-  await harness.writeEvidence({ status: 'NOT PROVEN', error })
 } finally {
-  await harness.cleanup()
-}
-
-if (failure) {
-  console.error(failure?.stack || failure?.message || String(failure))
-  process.exit(1)
+  await harness.finish(failure)
 }

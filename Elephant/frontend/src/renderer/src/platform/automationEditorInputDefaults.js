@@ -52,6 +52,11 @@ const dispatchEnterDefault = (target, element, key) => {
 }
 
 const waitForPublishedRustState = async(target, expectedMuya, before, label, timeoutMs = 5000) => {
+  // insertText dispatches the real beforeinput event synchronously. Its Rust
+  // transaction is then owned by the mutation gate, so draining that gate is
+  // the authoritative completion boundary. Do not require a second revision
+  // delta after the drain: fast WebKit runs may have already published the
+  // completed transaction before this waiter starts observing it.
   if (expectedMuya?.__rustMutationGate?.flush) await expectedMuya.__rustMutationGate.flush()
 
   const deadline = Date.now() + timeoutMs
@@ -68,9 +73,9 @@ const waitForPublishedRustState = async(target, expectedMuya, before, label, tim
 
     const canonicalState = expectedMuya?.__rustMirror?.state
     const visibleMarkdown = expectedMuya?.getMarkdown?.()
-    const changed = Number(canonicalState?.revision || 0) > Number(before?.revision || 0) ||
-      String(canonicalState?.markdown ?? '').length !== Number(before?.markdownLength || 0)
-    const publishedCurrent = Number(published?.revision || 0) >= Number(canonicalState?.revision || 0)
+    const publishedCurrent = canonicalState &&
+      Number(published?.revision || 0) >= Number(canonicalState.revision || 0) &&
+      Number(published?.markdownLength || 0) === String(canonicalState.markdown ?? '').length
     const visibleSynchronized = canonicalState &&
       String(visibleMarkdown ?? '') === String(canonicalState.markdown ?? '') &&
       Number(expectedMuya?.__rustMutationGate?.pending || 0) === 0
@@ -86,7 +91,7 @@ const waitForPublishedRustState = async(target, expectedMuya, before, label, tim
       pending: Number(expectedMuya?.__rustMutationGate?.pending || 0)
     }
 
-    if (changed && publishedCurrent && visibleSynchronized) return published
+    if (publishedCurrent && visibleSynchronized) return published
     await new Promise((resolve) => setTimeout(resolve, 20))
   }
   throw new Error(`The visible ${label} did not reach a completed and rendered Rust editor mutation: ${JSON.stringify(last)}`)

@@ -91,28 +91,24 @@ try {
       filename: 'Lifecycle.md',
       title: 'Lifecycle'
     })
-    // tauri_notes_write is an update command: it requires an existing note. First
-    // prove creation at its settled production boundary, then move renderer focus
-    // to a disposable note before updating Lifecycle. This prevents the renderer's
-    // legitimate autosave of the selected note from racing the direct backend
-    // contract while preserving the real create/write/read/rename/move/delete path.
     await waitForStableNoteContent(
       'Backend contracts/Lifecycle.md',
       '# Lifecycle\n',
       'Production note creation stabilization'
     )
-    const selectionSink = await harness.backend('invokeTauri', 'tauri_notes_create', {
-      relativePath: '',
-      filename: 'Backend selection sink.md',
-      title: 'Backend selection sink'
-    })
+
+    // tauri_notes_create legitimately updates the renderer selection. Move the
+    // renderer back to a stable fixture before exercising a separate existing
+    // backend-owned note. This preserves the real production create and update
+    // contracts while preventing renderer autosave from racing the note under test.
+    await harness.setup('openNote', 'Backend fixture.md')
     await waitForStableNoteContent(
-      'Backend selection sink.md',
-      '# Backend selection sink\n',
-      'Renderer selection sink stabilization'
+      'Backend fixture.md',
+      '# Backend fixture\n\nInitial backend content.\n',
+      'Renderer selection stabilization before backend update'
     )
 
-    const roundtripPath = 'Backend contracts/Lifecycle.md'
+    const roundtripPath = 'outside.md'
     const expected = '# Backend roundtrip\n\nWritten through the production Tauri backend.\n'
     const written = await harness.backend('invokeTauri', 'tauri_notes_write', {
       relativePath: roundtripPath,
@@ -127,7 +123,7 @@ try {
       relativePath: roundtripPath,
       title: 'Renamed backend roundtrip'
     })
-    const renamedPath = 'Backend contracts/Renamed backend roundtrip.md'
+    const renamedPath = 'Renamed backend roundtrip.md'
     await waitForNoteContent(renamedPath, expected, 'Renamed note content preservation')
     await harness.backend('invokeTauri', 'tauri_entries_move', {
       relativePath: renamedPath,
@@ -140,7 +136,7 @@ try {
       'Renamed/moved note content preservation'
     )
     await harness.backend('invokeTauri', 'tauri_entries_delete', { relativePath: movedPath })
-    await harness.backend('invokeTauri', 'tauri_entries_delete', { relativePath: 'Backend selection sink.md' })
+    await harness.backend('invokeTauri', 'tauri_entries_delete', { relativePath: 'Backend contracts/Lifecycle.md' })
     const folderEntries = await harness.backend('invokeTauri', 'tauri_directory_list', {
       relativePath: 'Backend archive',
       offset: 0,
@@ -154,7 +150,6 @@ try {
       folder: folder?.path || null,
       destinationFolder: destinationFolder?.path || null,
       created: created?.path || null,
-      selectionSink: selectionSink?.path || null,
       backendWrittenPath: roundtripPath,
       backendMovedPath: movedPath,
       bytes: expected.length

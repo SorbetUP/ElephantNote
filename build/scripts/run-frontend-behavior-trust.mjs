@@ -85,12 +85,13 @@ try {
       throw new Error(`Frontend editor did not select the complete editable paragraph: ${JSON.stringify({ paragraph, selection })}`)
     }
 
-    // Dispatch real beforeinput events at the visible paragraph containing the
-    // active DOM selection. They still bubble through the live contenteditable
-    // Muya surface and are handled by the production Rust-owned input path.
-    await harness.action(layer, 'insertText', editableParagraphSelector, 'frontend line one')
+    // Keep the exact visible paragraph selection, but dispatch browser input at
+    // Muya's live contenteditable boundary. The production insertText primitive
+    // intentionally rejects non-editable descendants; the event then bubbles
+    // through the selected paragraph and reaches the Rust-owned input path.
+    await harness.action(layer, 'insertText', editorInputSelector, 'frontend line one')
     await harness.action(layer, 'press', editorInputSelector, 'Enter')
-    await harness.action(layer, 'insertText', editableParagraphSelector, 'frontend line two')
+    await harness.action(layer, 'insertText', editorInputSelector, 'frontend line two')
 
     const deadline = Date.now() + 10_000
     let state = null

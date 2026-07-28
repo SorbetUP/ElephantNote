@@ -48,7 +48,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libx11-dev libxkbfile-dev libsecret-1-dev libfontconfig-dev \
-            xvfb libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
+            xvfb xdotool libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
             libdrm2 libgtk-3-0 libgbm1 libasound2t64 unzip \
             libayatana-appindicator3-dev librsvg2-dev libwebkit2gtk-4.1-dev \
             patchelf

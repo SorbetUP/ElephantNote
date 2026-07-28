@@ -55,19 +55,22 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          cargo generate-lockfile --manifest-path Elephant/backend/tauri/Cargo.toml
-          git diff -- Elephant/backend/tauri/Cargo.lock > tauri-lockfile.diff
+          cargo metadata --locked \
+            --manifest-path Elephant/backend/tauri/Cargo.toml \
+            --format-version 1 \
+            > tauri-cargo-metadata.json
           git diff --exit-code -- Elephant/backend/tauri/Cargo.lock
 
-      - name: Upload generated lockfile mismatch
+      - name: Upload Tauri lockfile verification failure
         if: failure() && steps.tauri-lockfile.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
-          name: tauri-lockfile-mismatch-${{ github.run_id }}-${{ github.run_attempt }}
+          name: tauri-lockfile-verification-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
+            Elephant/backend/tauri/Cargo.toml
             Elephant/backend/tauri/Cargo.lock
-            tauri-lockfile.diff
-          if-no-files-found: error
+            tauri-cargo-metadata.json
+          if-no-files-found: warn
           retention-days: 1
           compression-level: 9
 

@@ -71,11 +71,10 @@ let editorRuntimeBinding = null
 let disposeEditorRuntimeResource = null
 let disposeNativeInputDurability = () => {}
 
-const persistEditorRecoveryCheckpoint = () => {
-  checkpointBufferedState().catch((error) => {
-    console.error('[elephantnote:recovery] unable to persist editor checkpoint', error)
-  })
-}
+const persistEditorRecoveryCheckpoint = () => checkpointBufferedState().catch((error) => {
+  console.error('[elephantnote:recovery] unable to persist editor checkpoint', error)
+  return false
+})
 
 const unpublishEditorRuntime = () => {
   disposeEditorRuntimeResource?.()
@@ -175,18 +174,27 @@ const handleRustMarkdownChange = (editorMarkdown) => {
     editorStore,
     file,
     editorMarkdown,
-    fromEditorMarkdown: props.fromEditorMarkdown,
-    persist: persistEditorRecoveryCheckpoint
+    fromEditorMarkdown: props.fromEditorMarkdown
   })
 
-  if (changed && file?.id && file.pathname) {
-    editorStore.HANDLE_AUTO_SAVE({
-      id: file.id,
-      filename: file.filename,
-      pathname: file.pathname,
-      markdown: file.markdown,
-      options: getOptionsFromState(file)
-    })
+  if (changed) {
+    const checkpoint = persistEditorRecoveryCheckpoint()
+    if (file?.id && file.pathname) {
+      // Start the disk autosave timer only after the recovery journal has either
+      // accepted or explicitly rejected this revision. A process killed during
+      // the following window can therefore restore the exact unsaved Markdown.
+      checkpoint.finally(() => {
+        if (file.isSaved === false) {
+          editorStore.HANDLE_AUTO_SAVE({
+            id: file.id,
+            filename: file.filename,
+            pathname: file.pathname,
+            markdown: file.markdown,
+            options: getOptionsFromState(file)
+          })
+        }
+      })
+    }
   }
 
   editorRuntimeBinding?.notify({

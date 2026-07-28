@@ -50,7 +50,7 @@ jobs:
           sudo apt-get install -y \
             libayatana-appindicator3-dev librsvg2-dev libwebkit2gtk-4.1-dev \
             libx11-dev libxkbfile-dev libsecret-1-dev libfontconfig-dev \
-            libgtk-3-0 libgbm1 libnss3 libasound2t64 patchelf unzip xvfb
+            libgtk-3-0 libgbm1 libnss3 libasound2t64 patchelf unzip xvfb xdotool
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -91,6 +91,21 @@ jobs:
             pnpm test:desktop:acceptance:packaged 2>&1 | tee tauri-acceptance.txt
           fi
 
+      - name: Prove exact Linux AppImage editor durability
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          APPIMAGE="$(find Elephant/backend/tauri/target/release/bundle dist -type f -name '*.AppImage' -print -quit)"
+          test -n "$APPIMAGE"
+          test -f "$APPIMAGE"
+          chmod +x "$APPIMAGE"
+          sha256sum "$APPIMAGE" | tee appimage-sha256.txt
+          APPIMAGE_EXTRACT_AND_RUN=1 \
+          ELEPHANT_ACCEPTANCE_APP_PATH="$APPIMAGE" \
+          ELEPHANT_PACKAGED_FORMAT=linux-appimage \
+            xvfb-run --auto-servernum pnpm test:user:packaged:raw 2>&1 | tee appimage-editor-durability.txt
+
       - name: Upload Tauri acceptance evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -99,7 +114,10 @@ jobs:
           path: |
             tauri-build.txt
             tauri-acceptance.txt
+            appimage-sha256.txt
+            appimage-editor-durability.txt
             test-results/acceptance/**
+            test-results/trusted/**
             dist/**
           if-no-files-found: warn
           retention-days: 30

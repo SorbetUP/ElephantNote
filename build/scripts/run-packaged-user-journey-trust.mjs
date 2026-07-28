@@ -95,11 +95,16 @@ try {
     const persisted = await harness.waitForVaultFile('Journey acceptance.md', (content) => (
       content.includes(marker) && content.includes('second packaged line')
     ), 20_000)
+    const savedState = await waitForState((value) => (
+      value?.isSaved === true &&
+      String(value?.markdown || '').includes(marker) &&
+      String(value?.markdown || '').includes('second packaged line')
+    ), 'instrumented-input-saved-status', 20_000)
     const visible = await harness.action(layer, 'readDom', editorSelector)
     if (!visible.text.includes(marker) || !visible.text.includes('second packaged line')) {
       throw new Error(`Packaged editor is not showing what reached disk: ${JSON.stringify(visible)}`)
     }
-    return { bytes: persisted.length, visibleBytes: visible.text.length }
+    return { bytes: persisted.length, visibleBytes: visible.text.length, isSaved: savedState.isSaved }
   })
 
   await harness.runScenario('user-physical-x11-input-rust-disk', layer, async() => {
@@ -110,13 +115,25 @@ try {
     pressWithPhysicalX11Keyboard('Return')
     typeWithPhysicalX11Keyboard(physicalSecondLine)
 
-    const state = await waitForState((value) => (
+    const canonicalState = await waitForState((value) => (
       String(value?.markdown || '').includes(physicalMarker) &&
       String(value?.markdown || '').includes(physicalSecondLine)
     ), 'physical-x11-input-rust-state', 20_000)
+    const diskAtCanonicalState = harness.readVaultFile('Journey acceptance.md')
+    const physicalAlreadyPersisted = diskAtCanonicalState.includes(physicalMarker) &&
+      diskAtCanonicalState.includes(physicalSecondLine)
+    if (!physicalAlreadyPersisted && canonicalState.isSaved !== false) {
+      throw new Error(`Physical input was canonical but not on disk while isSaved was not false: ${JSON.stringify(canonicalState)}`)
+    }
+
     const persisted = await harness.waitForVaultFile('Journey acceptance.md', (content) => (
       content.includes(physicalMarker) && content.includes(physicalSecondLine)
     ), 20_000)
+    const savedState = await waitForState((value) => (
+      value?.isSaved === true &&
+      String(value?.markdown || '').includes(physicalMarker) &&
+      String(value?.markdown || '').includes(physicalSecondLine)
+    ), 'physical-x11-input-saved-status', 20_000)
     const visible = await harness.action(layer, 'readDom', editorSelector)
     if (!visible.text.includes(physicalMarker) || !visible.text.includes(physicalSecondLine)) {
       throw new Error(`Physical X11 typing reached state/disk but not the visible editor: ${JSON.stringify(visible)}`)
@@ -124,7 +141,9 @@ try {
     return {
       focusedWindow,
       physicalTypingDelayMs: 80,
-      rustMarkdownBytes: String(state.markdown || '').length,
+      canonicalStateWasUnsavedUntilDisk: physicalAlreadyPersisted || canonicalState.isSaved === false,
+      savedStatusAfterDisk: savedState.isSaved,
+      rustMarkdownBytes: String(savedState.markdown || '').length,
       persistedBytes: persisted.length,
       visibleBytes: visible.text.length
     }
@@ -154,10 +173,13 @@ try {
     await harness.action(layer, 'selectText', editorSelector, before.text.length, before.text.length)
 
     // insertText returns only after the production recovery checkpoint acknowledges
-    // the new revision. Kill immediately afterwards, before the one-second file
-    // autosave timer can be relied upon, to exercise journal recovery rather than
-    // ordinary persisted-file reopening.
+    // the new revision. The disk autosave timer starts after that acknowledgement,
+    // leaving an explicit crash window backed only by the recovery journal.
     await harness.action(layer, 'insertText', editorSelector, ` ${recoveryMarker}`)
+    const stateBeforeCrash = await harness.action(layer, 'readState')
+    if (!String(stateBeforeCrash?.markdown || '').includes(recoveryMarker) || stateBeforeCrash?.isSaved !== false) {
+      throw new Error(`Crash-window revision was not canonical and explicitly unsaved: ${JSON.stringify(stateBeforeCrash)}`)
+    }
     const diskBeforeCrash = harness.readVaultFile('Journey acceptance.md')
     if (diskBeforeCrash.includes(recoveryMarker)) {
       throw new Error('Crash-recovery scenario did not interrupt the autosave window; the marker was already on disk.')
@@ -165,20 +187,23 @@ try {
 
     await harness.restart({ crash: true })
     const editor = await harness.action(layer, 'waitFor', editorSelector, 20_000)
-    const state = await waitForState((value) => String(value?.markdown || '').includes(recoveryMarker), 'crash-recovery-buffered-state', 20_000)
+    const restoredState = await waitForState((value) => String(value?.markdown || '').includes(recoveryMarker), 'crash-recovery-buffered-state', 20_000)
     const shell = await harness.action(layer, 'readDom', '.en-shell')
     const recoveredDisk = await harness.waitForVaultFile(
       'Journey acceptance.md',
       (content) => content.includes(recoveryMarker),
       20_000
     )
+    const savedState = await waitForState((value) => (
+      value?.isSaved === true && String(value?.markdown || '').includes(recoveryMarker)
+    ), 'crash-recovery-saved-status', 20_000)
     const visibleDark = shell.attributes.class?.includes('en-theme-dark') === true
 
     if (!editor.text.includes(recoveryMarker)) {
       throw new Error(`Packaged application did not restore the checkpointed edit visibly after SIGKILL: ${JSON.stringify(editor)}`)
     }
-    if (!String(state?.markdown || '').includes(recoveryMarker)) {
-      throw new Error(`Packaged application did not restore the checkpointed Rust/Markdown state: ${JSON.stringify(state)}`)
+    if (!String(restoredState?.markdown || '').includes(recoveryMarker)) {
+      throw new Error(`Packaged application did not restore the checkpointed Rust/Markdown state: ${JSON.stringify(restoredState)}`)
     }
     if (!recoveredDisk.includes(recoveryMarker)) {
       throw new Error(`Recovered checkpoint was not written back to the vault: ${JSON.stringify(recoveredDisk)}`)
@@ -188,9 +213,11 @@ try {
     }
     return {
       markerAbsentFromDiskAtKill: true,
+      stateExplicitlyUnsavedAtKill: stateBeforeCrash.isSaved === false,
       restoredVisible: true,
       restoredMarkdown: true,
       restoredToDisk: true,
+      savedStatusAfterRecovery: savedState.isSaved,
       restoredTheme: true
     }
   })
@@ -225,7 +252,7 @@ try {
   await harness.writeEvidence({
     status: 'PROVEN',
     extra: {
-      proofBoundary: 'Exact Linux AppImage, clean startup, synthetic browser input plus slow physical X11 keyboard input, canonical Rust/Markdown state, real vault persistence, SIGKILL before autosave, recovery checkpoint restoration, visible restoration and search.'
+      proofBoundary: 'Exact Linux AppImage, clean startup, synthetic browser input plus slow physical X11 keyboard input, canonical Rust/Markdown state, truthful isSaved transitions, real vault persistence, SIGKILL before autosave, recovery checkpoint restoration, visible restoration and search.'
     }
   })
 } catch (error) {

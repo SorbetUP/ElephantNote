@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Delete temporary artifacts and caches
+      - name: Delete temporary artifacts and stale caches
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -33,7 +33,7 @@ jobs:
           set -euo pipefail
 
           repo="$GITHUB_REPOSITORY"
-          # Editing this workflow triggers one forced repository-wide purge.
+          # Editing this workflow or dispatching it triggers one full purge.
           force_cleanup=false
           if [[ "$GITHUB_EVENT_NAME" == "push" || "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             force_cleanup=true
@@ -60,16 +60,20 @@ jobs:
               --jq '.artifacts[] | [.id, .created_at, .size_in_bytes, .name] | @tsv'
           )
 
-          while IFS=$'\t' read -r id ref last_accessed size key; do
-            [[ -z "${id:-}" ]] && continue
-            echo "Deleting cache id=$id ref=$ref key=$key size=$size last_accessed=$last_accessed"
-            gh api --method DELETE "/repos/$repo/actions/caches/$id"
-            deleted_caches=$((deleted_caches + 1))
-            reclaimed_cache_bytes=$((reclaimed_cache_bytes + size))
-          done < <(
-            gh api --paginate "/repos/$repo/actions/caches?per_page=100" \
-              --jq '.actions_caches[] | [.id, .ref, .last_accessed_at, .size_in_bytes, .key] | @tsv'
-          )
+          # Caches are not part of the 0.5 GB artifact allowance and improve CI
+          # speed. Clear them only during an explicit/forced cleanup, not daily.
+          if [[ "$force_cleanup" == "true" ]]; then
+            while IFS=$'\t' read -r id ref last_accessed size key; do
+              [[ -z "${id:-}" ]] && continue
+              echo "Deleting cache id=$id ref=$ref key=$key size=$size last_accessed=$last_accessed"
+              gh api --method DELETE "/repos/$repo/actions/caches/$id"
+              deleted_caches=$((deleted_caches + 1))
+              reclaimed_cache_bytes=$((reclaimed_cache_bytes + size))
+            done < <(
+              gh api --paginate "/repos/$repo/actions/caches?per_page=100" \
+                --jq '.actions_caches[] | [.id, .ref, .last_accessed_at, .size_in_bytes, .key] | @tsv'
+            )
+          fi
 
           {
             echo "## Actions storage cleanup"
@@ -80,6 +84,6 @@ jobs:
             echo "- Caches deleted: $deleted_caches"
             echo "- Cache bytes requested for deletion: $reclaimed_cache_bytes"
             echo
-            echo "Artifacts newer than 24 hours are kept during scheduled runs."
-            echo "Caches are disposable build accelerators and are cleared daily."
+            echo "Scheduled runs keep only the latest 24 hours of artifacts."
+            echo "Caches are preserved during scheduled runs to avoid slowing CI."
           } >> "$GITHUB_STEP_SUMMARY"

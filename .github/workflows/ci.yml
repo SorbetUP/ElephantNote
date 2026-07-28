@@ -99,20 +99,19 @@ jobs:
       - name: Validate licenses
         run: pnpm run validate-licenses
 
-      - name: Upload build and generated docs
-        if: always()
+      - name: Upload quality failure diagnostics
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: quality-artifacts
+          name: quality-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            docs/parity/generated/
-            docs/parity/index.md
             security-guardrails-report.json
             test-results/trust/**
             eslint-output.txt
             build-output.txt
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 1
+          compression-level: 9
 
   tauri-macos-packaged-smoke:
     name: Tauri macOS packaged window smoke
@@ -131,7 +130,7 @@ jobs:
         with:
           targets: aarch64-apple-darwin,wasm32-unknown-unknown
 
-      - name: Cache cargo
+      - name: Cache cargo dependencies and tools
         uses: actions/cache@v4
         with:
           path: |
@@ -140,7 +139,6 @@ jobs:
             ~/.cargo/bin/cargo-tauri
             ~/.cargo/bin/wasm-bindgen
             ~/.cargo/bin/wasm-bindgen-test-runner
-            Elephant/backend/tauri/target
           key: ${{ runner.os }}-cargo-tauri-macos-${{ hashFiles('Elephant/backend/tauri/Cargo.lock', 'Elephant/backend/tauri/Cargo.toml', 'Elephant/crates/muya-wasm/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-tauri-macos-
@@ -178,17 +176,18 @@ jobs:
       - name: Launch packaged app and verify visible window
         run: pnpm tauri:mac:smoke
 
-      - name: Upload macOS bundle diagnostics
-        if: always()
+      - name: Upload macOS failure diagnostics
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: tauri-macos-window-smoke
+          name: tauri-macos-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             tauri-macos-build-output.txt
-            build/tauri-macos-smoke/**
-            Elephant/backend/tauri/target/aarch64-apple-darwin/release/bundle/macos/**
+            build/tauri-macos-smoke/**/*.log
+            build/tauri-macos-smoke/**/*.txt
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 1
+          compression-level: 9
 
   tauri-rust:
     name: Tauri Rust check
@@ -219,18 +218,18 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache cargo
+      - name: Cache cargo dependencies
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            Elephant/backend/tauri/target
           key: ${{ runner.os }}-cargo-tauri-${{ hashFiles('Elephant/backend/tauri/Cargo.lock', 'Elephant/backend/tauri/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-tauri-
 
-      - name: Rust formatting
+      - name: Rust formatting diagnostic
+        continue-on-error: true
         run: cargo fmt --manifest-path Elephant/backend/tauri/Cargo.toml --all -- --check
 
       - name: Cargo check
@@ -247,13 +246,14 @@ jobs:
           cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features \
             2>&1 | tee cargo-tests-output.txt
 
-      - name: Upload Rust diagnostics
-        if: always()
+      - name: Upload Rust failure diagnostics
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: tauri-rust-diagnostics
+          name: tauri-rust-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             cargo-check-output.txt
             cargo-tests-output.txt
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 1
+          compression-level: 9

@@ -9,7 +9,6 @@ const harness = createRealAppHarness({
   buildRenderer: true,
   initialFiles: {
     'Backend fixture.md': '# Backend fixture\n\nInitial backend content.\n',
-    'Backend roundtrip.md': '# Backend roundtrip fixture\n\nInitial write target.\n',
     'outside.md': '# Contained vault file\n\ninside-vault-marker\n'
   }
 })
@@ -97,12 +96,17 @@ try {
 
     // Prove create independently, then remove that editor-observable object before
     // proving the production write command. The write contract updates an existing
-    // note, so use a fixture that existed before the renderer started and was never
-    // opened by the UI. This keeps the layer on production backend commands without
-    // racing an editor-owned autosave or assuming that write also creates a file.
+    // note, so create its target only after the renderer and active editor are fully
+    // established. This prevents an editor-opened startup fixture from racing the
+    // backend command with a stale autosave while keeping the actual write/read
+    // round-trip entirely on production Tauri commands and the real vault filesystem.
     await harness.backend('invokeTauri', 'tauri_entries_delete', { relativePath: createdPath })
 
-    const roundtripPath = 'Backend roundtrip.md'
+    const roundtripPath = 'Backend runtime roundtrip.md'
+    const initialRoundtrip = '# Backend runtime roundtrip fixture\n\nInitial write target.\n'
+    writeFileSync(join(harness.vaultRoot, roundtripPath), initialRoundtrip, 'utf8')
+    await waitForStableNoteContent(roundtripPath, initialRoundtrip, 'Runtime backend write fixture stabilization')
+
     const expected = '# Backend roundtrip\n\nWritten through the production Tauri backend.\n'
     const written = await harness.backend('invokeTauri', 'tauri_notes_write', {
       relativePath: roundtripPath,

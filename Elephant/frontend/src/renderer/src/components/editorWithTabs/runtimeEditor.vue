@@ -32,15 +32,19 @@ import bus from '@/bus'
 import { useEditorStore } from '@/store/editor'
 import { usePreferencesStore } from '@/store/preferences'
 import { useProjectStore } from '@/store/project'
-import { debouncedSendBufferedState } from '@/store/bufferedState'
+import { checkpointBufferedState } from '@/store/bufferedState'
 import { RustMuyaRuntimeEditor } from '@/muya'
 import { createRustEditorRuntimeBinding } from '@/muya/editorRuntimeResource'
+import {
+  installEditorDurabilityAutomationFence,
+  installNativeInputDurability
+} from '@/muya/nativeInputDurability'
 import { installEditorAutomationInputDefaults } from '@/platform/automationEditorInputDefaults'
 import RuntimeImageToolbar from './runtimeImageToolbar.vue'
 import RuntimeTableDialog from './runtimeTableDialog.vue'
 import { rustBusCommand } from './runtimeEditorCommands'
 import { createRuntimeImageHandlers } from './runtimeEditorImages'
-import { useRuntimeImageToolbar } from './runtimeImageToolbarState'
+import { useRuntimeImageToolbar } from './runtimeEditorImageToolbarState'
 import { applyRustEditorMarkdown } from './runtimeEditorState'
 
 const props = defineProps({
@@ -64,6 +68,13 @@ const rustRuntime = ref(null)
 const tableDialogVisible = ref(false)
 let editorRuntimeBinding = null
 let disposeEditorRuntimeResource = null
+let disposeNativeInputDurability = () => {}
+
+const persistEditorRecoveryCheckpoint = () => {
+  checkpointBufferedState().catch((error) => {
+    console.error('[elephantnote:recovery] unable to persist editor checkpoint', error)
+  })
+}
 
 const unpublishEditorRuntime = () => {
   disposeEditorRuntimeResource?.()
@@ -80,15 +91,39 @@ const publishEditorRuntime = () => {
   }
 }
 
+const persistRecoveredFile = async(fileId) => {
+  const file = currentFile.value
+  if (!file?.id || file.id !== fileId || !file.pathname || file.isSaved !== false) return
+  await checkpointBufferedState()
+  const current = currentFile.value
+  if (current?.id === fileId && current.pathname && current.isSaved === false) {
+    console.warn('[elephantnote:recovery] persisting restored unsaved document', {
+      fileId,
+      pathname: current.pathname,
+      markdownLength: String(current.markdown || '').length
+    })
+    editorStore.FILE_SAVE()
+  }
+}
+
 const handleRustRuntimeReady = (runtime) => {
   unpublishEditorRuntime()
+  disposeNativeInputDurability()
   rustRuntime.value = runtime
+  disposeNativeInputDurability = installNativeInputDurability(runtime)
   editorRuntimeBinding = createRustEditorRuntimeBinding({
     runtime,
     getMarkdown: () => currentFile.value?.markdown ?? props.markdown
   })
   publishEditorRuntime()
   editorRuntimeBinding.notify({ reason: 'ready', engine: 'rust' })
+
+  const fileId = currentFile.value?.id
+  if (fileId && currentFile.value?.isSaved === false) {
+    persistRecoveredFile(fileId).catch((error) => {
+      console.error('[elephantnote:recovery] unable to persist restored document', error)
+    })
+  }
 }
 
 const dispatchRustBusCommand = (event, payload) => {
@@ -139,7 +174,7 @@ const handleRustMarkdownChange = (editorMarkdown) => {
     file: currentFile.value,
     editorMarkdown,
     fromEditorMarkdown: props.fromEditorMarkdown,
-    persist: debouncedSendBufferedState
+    persist: persistEditorRecoveryCheckpoint
   })
   editorRuntimeBinding?.notify({
     reason: 'document-change',
@@ -150,6 +185,7 @@ const handleRustMarkdownChange = (editorMarkdown) => {
 
 onMounted(() => {
   installEditorAutomationInputDefaults()
+  installEditorDurabilityAutomationFence()
   for (const [event, handler] of Object.entries(busHandlers)) bus.on(event, handler)
   globalThis.addEventListener?.('elephantnote:addons-ready', publishEditorRuntime)
   publishEditorRuntime()
@@ -158,6 +194,8 @@ onMounted(() => {
 onBeforeUnmount(() => {
   for (const [event, handler] of Object.entries(busHandlers)) bus.off(event, handler)
   globalThis.removeEventListener?.('elephantnote:addons-ready', publishEditorRuntime)
+  disposeNativeInputDurability()
+  disposeNativeInputDurability = () => {}
   unpublishEditorRuntime()
   rustRuntime.value = null
   tableDialogVisible.value = false

@@ -1,5 +1,5 @@
 {
-  "description": "Temporary security debt accepted so the guardrail can block new regressions while existing Tauri filesystem permissions are narrowed incrementally. Tauri application-data aliases are identifier-scoped. The native addon publisher is an explicit release workflow with a reviewed branch-write requirement.",
+  "description": "Temporary security debt accepted so the guardrail can block new regressions while existing Tauri filesystem permissions are narrowed incrementally. Tauri application-data aliases are identifier-scoped. Dedicated release and Actions-maintenance workflows have reviewed write requirements.",
   "acceptedFindings": [
     {
       "id": "TAURI_FS_DEFAULT_PERMISSION",
@@ -60,6 +60,12 @@
       "file": ".github/workflows/publish-native-addon-packages.yml",
       "value": "contents: write",
       "reason": "Dedicated release workflow: it publishes signed and hashed platform-specific .enaddon archives to feature/physical-addon-catalog. It has no pull_request trigger and needs branch write access only for the final catalogue publication job."
+    },
+    {
+      "id": "GITHUB_ACTIONS_WRITE_PERMISSION",
+      "file": ".github/workflows/actions-storage-cleanup.yml",
+      "value": "actions: write",
+      "reason": "Dedicated storage-maintenance workflow: it has no pull_request trigger, keeps contents read-only, and needs Actions write access only to delete repository artifacts and explicitly requested caches through GitHub's Actions API."
     }
   ]
 }

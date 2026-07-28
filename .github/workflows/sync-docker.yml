@@ -33,7 +33,9 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Materialize official addons
+      - name: Materialize official addon sources
+        env:
+          ELEPHANT_SKIP_NATIVE_ADDON_BUILD: '1'
         run: node build/scripts/sync-elephant-addons.mjs
 
       - name: Setup Rust

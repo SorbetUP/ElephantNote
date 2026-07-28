@@ -63,7 +63,16 @@ for (const file of [
   '.github/workflows/ci.yml',
   '.github/workflows/tauri-ci.yml',
   '.github/workflows/addon-platform-validation.yml',
+  '.github/workflows/e2e.yml',
+  '.github/workflows/test.yml',
   'build/scripts/verify-security-guardrails.mjs',
+  'build/scripts/verify-test-trust.mjs',
+  'build/scripts/verify-three-layer-sensitivity.mjs',
+  'build/scripts/run-backend-contract-trust.mjs',
+  'build/scripts/run-frontend-behavior-trust.mjs',
+  'build/scripts/run-packaged-user-journey-trust.mjs',
+  'build/scripts/lib/real-app-harness.mjs',
+  'tests/trust/test-layers.json',
   'Elephant/frontend/src/renderer/src/main.js',
   'Elephant/frontend/src/renderer/src/addons/builtin/index.js',
   'Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js',
@@ -79,9 +88,7 @@ for (const file of [
   'Elephant/backend/tauri/src/addon_services.rs',
   'Elephant/backend/tauri/src/addon_runtime_access.rs',
   'Elephant/backend/tauri/src/addon_http_access.rs',
-  'Elephant/backend/tauri/src/official_addon_catalog.rs',
-  'tests/app/e2e/search-inspect.spec.js',
-  'tests/app/unit/addons/baseOfficialAddonRuntime.spec.js'
+  'Elephant/backend/tauri/src/official_addon_catalog.rs'
 ]) read(file)
 
 missing('Elephant/backend/tauri/src/tauri_extra_commands.rs', 'legacy optional command module')
@@ -90,6 +97,14 @@ missing('Elephant/backend/tauri/src/sync', 'legacy core Iroh runtime directory')
 missing('Elephant/backend/tauri/src/vault/sync_iroh', 'legacy core Sync backend directory')
 missing('Elephant/frontend/app/components/views/DashboardView.vue', 'core Dashboard view')
 
+for (const legacyTestPath of [
+  'tests/app/e2e/playwright.config.js',
+  'tests/app/e2e/search-inspect.spec.js',
+  'tests/app/unit/addons/baseOfficialAddonRuntime.spec.js',
+  'vitest.config.js',
+  'vitest.critical.config.js'
+]) missing(legacyTestPath, 'removed synthetic or legacy JavaScript test surface')
+
 ordered(
   '.github/workflows/ci.yml',
   [
@@ -97,9 +112,10 @@ ordered(
     'run: node build/scripts/verify-critical-flows.mjs',
     '- name: Security guardrails',
     'run: pnpm security:guard',
-    '- name: Unit suite'
+    '- name: Test trust policy',
+    'run: pnpm test:trust:guard'
   ],
-  'main CI guard, security and unit order'
+  'main CI critical, security and real-proof trust order'
 )
 has(
   '.github/workflows/ci.yml',
@@ -113,6 +129,45 @@ has(
 )
 has('.github/workflows/addon-platform-validation.yml', 'Package every integrated physical addon', 'physical addon packaging gate')
 has('package.json', '"security:guard": "node build/scripts/verify-security-guardrails.mjs"', 'security guard command')
+has('package.json', '"test:trust:guard": "node build/scripts/verify-test-trust.mjs"', 'real test trust guard command')
+
+for (const [script, runner] of [
+  ['test:backend:raw', 'run-backend-contract-trust.mjs'],
+  ['test:frontend:behavior:raw', 'run-frontend-behavior-trust.mjs'],
+  ['test:user:packaged:raw', 'run-packaged-user-journey-trust.mjs'],
+  ['test:layers:sensitivity', 'verify-three-layer-sensitivity.mjs']
+]) {
+  has('package.json', `"${script}"`, `real proof script ${script}`)
+  has('package.json', runner, `real proof runner ${runner}`)
+}
+
+for (const marker of [
+  '"id": "backend-contract"',
+  '"id": "frontend-behavior"',
+  '"id": "packaged-user-journey"',
+  '"requiredPackagedFormat": "linux-appimage"',
+  '"user-physical-x11-input-rust-disk"',
+  '"user-crash-restart-restores-visible-work"'
+]) has('tests/trust/test-layers.json', marker, `real proof manifest marker ${marker}`)
+
+for (const marker of [
+  'pnpm test:trust:guard',
+  'pnpm test:backend:raw',
+  'pnpm test:frontend:raw',
+  'pnpm test:user:packaged:raw',
+  'pnpm test:layers:sensitivity',
+  'ELEPHANT_PACKAGED_FORMAT=linux-appimage',
+  'bundle/appimage/*.AppImage',
+  'test-results/trusted/packaged-user-journey/**'
+]) has('.github/workflows/e2e.yml', marker, `distributed AppImage proof marker ${marker}`)
+
+has('build/scripts/verify-test-trust.mjs', 'tracked legacy JavaScript test files are forbidden', 'legacy JS test rejection')
+has('build/scripts/verify-test-trust.mjs', "const expectedCategories = ['backend-contract', 'frontend-behavior', 'packaged-user-journey']", 'exact real proof categories')
+has('build/scripts/verify-three-layer-sensitivity.mjs', "payload.status !== 'NOT PROVEN'", 'mutation must force NOT PROVEN')
+has('build/scripts/run-packaged-user-journey-trust.mjs', 'requirePackagedApp: true', 'development launcher rejection')
+has('build/scripts/run-packaged-user-journey-trust.mjs', "status: 'PROVEN'", 'explicit packaged PROVEN artifact')
+has('build/scripts/run-packaged-user-journey-trust.mjs', "status: 'NOT PROVEN'", 'explicit packaged NOT PROVEN artifact')
+has('build/scripts/lib/real-app-harness.mjs', 'ELEPHANT_AUTOMATION_TOKEN', 'authenticated external app API')
 
 ordered(
   'Elephant/frontend/src/renderer/src/main.js',
@@ -250,12 +305,6 @@ has('addons/official/sync/native/tests/two_endpoint_sync.rs', 'physical_package_
 
 has('Elephant/backend/tauri/src/official_addon_catalog/source.rs', 'collect_local_files', 'complete local official package installation')
 has('Elephant/backend/tauri/src/official_addon_catalog/install.rs', 'collect_remote_files', 'complete remote official package installation')
-has('tests/app/unit/addons/baseOfficialAddonRuntime.spec.js', 'for (const packedAddon of parityPack.addons)', 'all first-party addon runtime probes')
-has('tests/app/unit/addons/baseOfficialAddonRuntime.spec.js', 'view.component.__mount', 'addon view usage probes')
-has('tests/app/unit/addons/baseOfficialAddonRuntime.spec.js', 'command.run({ probe: true })', 'addon command usage probes')
-
-has('tests/app/e2e/search-inspect.spec.js', 'does not expose semantic inspection without the Search addon', 'Search physical absence E2E contract')
-has('tests/app/e2e/search-inspect.spec.js', 'expect(result.ok).toBe(false)', 'unavailable core Search command')
 
 ordered(
   'Elephant/frontend/app/components/editor/NoteEditorHost.vue',

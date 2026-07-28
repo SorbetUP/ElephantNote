@@ -9,6 +9,7 @@ const harness = createRealAppHarness({
   buildRenderer: true,
   initialFiles: {
     'Backend fixture.md': '# Backend fixture\n\nInitial backend content.\n',
+    'Backend roundtrip.md': '# Backend roundtrip fixture\n\nInitial write target.\n',
     'outside.md': '# Contained vault file\n\ninside-vault-marker\n'
   }
 })
@@ -95,14 +96,13 @@ try {
     )
 
     // Prove create independently, then remove that editor-observable object before
-    // proving the production write command. A created note can legitimately be
-    // discovered by the live renderer and enter its autosave lifecycle; allowing
-    // that unrelated lifecycle to race a direct backend write would test two
-    // owners at once rather than the backend contract. Writing a fresh path keeps
-    // this layer strictly on production backend commands and the real filesystem.
+    // proving the production write command. The write contract updates an existing
+    // note, so use a fixture that existed before the renderer started and was never
+    // opened by the UI. This keeps the layer on production backend commands without
+    // racing an editor-owned autosave or assuming that write also creates a file.
     await harness.backend('invokeTauri', 'tauri_entries_delete', { relativePath: createdPath })
 
-    const roundtripPath = 'Backend contracts/Roundtrip.md'
+    const roundtripPath = 'Backend roundtrip.md'
     const expected = '# Backend roundtrip\n\nWritten through the production Tauri backend.\n'
     const written = await harness.backend('invokeTauri', 'tauri_notes_write', {
       relativePath: roundtripPath,
@@ -117,7 +117,7 @@ try {
       relativePath: roundtripPath,
       title: 'Renamed backend roundtrip'
     })
-    const renamedPath = 'Backend contracts/Renamed backend roundtrip.md'
+    const renamedPath = 'Renamed backend roundtrip.md'
     await waitForNoteContent(renamedPath, expected, 'Renamed note content preservation')
     await harness.backend('invokeTauri', 'tauri_entries_move', {
       relativePath: renamedPath,

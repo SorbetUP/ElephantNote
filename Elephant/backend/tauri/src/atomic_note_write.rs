@@ -70,6 +70,37 @@ fn write_if_changed_atomically(path: &Path, content: &str) -> ResultValue<bool> 
     Ok(true)
 }
 
+fn public_relative_path(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
+#[tauri::command]
+pub fn tauri_notes_write(
+    app: AppHandle,
+    relative_path: String,
+    content: Option<String>,
+    markdown: Option<String>,
+) -> ResultValue<Value> {
+    if relative_path.trim().is_empty() {
+        return Err("Cannot save a note without a relative path.".to_string());
+    }
+    let root = active_vault_root(&app)?;
+    let path = confined_write_target(&root, Path::new(&relative_path))?;
+    let content = content.or(markdown).unwrap_or_default();
+    let changed = write_if_changed_atomically(&path, &content)?;
+    Ok(json!({
+        "ok": true,
+        "changed": changed,
+        "path": public_relative_path(&root, &path),
+        "fullPath": path.to_string_lossy(),
+        "updatedAt": now(),
+        "atomic": true
+    }))
+}
+
 #[tauri::command]
 pub fn tauri_marktext_write_file_atomic(
     app: AppHandle,
@@ -123,6 +154,17 @@ mod tests {
         assert_eq!(fs::read_to_string(&path).unwrap(), "new complete value");
         assert!(!write_if_changed_atomically(&path, "new complete value").unwrap());
         assert!(!path.with_extension("md.tmp").exists());
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn public_path_is_relative_to_the_vault() {
+        let root = temporary_root("relative");
+        fs::create_dir_all(root.join("folder")).unwrap();
+        assert_eq!(
+            public_relative_path(&root, &root.join("folder/note.md")),
+            "folder/note.md"
+        );
         fs::remove_dir_all(root).ok();
     }
 }

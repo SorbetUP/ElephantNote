@@ -40,13 +40,14 @@ jobs:
           set -o pipefail
           pnpm test:trust:guard 2>&1 | tee test-trust.txt
 
-      - name: Upload test inventory
-        if: always()
+      - name: Upload trust-policy failure diagnostics
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: test-trust-inventory
+          name: test-trust-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             test-trust.txt
             test-results/trust/**
-          if-no-files-found: error
-          retention-days: 30
+          if-no-files-found: ignore
+          retention-days: 1
+          compression-level: 9

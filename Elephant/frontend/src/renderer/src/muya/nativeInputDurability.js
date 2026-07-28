@@ -1,0 +1,170 @@
+const AUTOMATION_FENCE_FLAG = '__elephantEditorDurabilityAutomationFenceInstalled'
+
+const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
+
+const cloneState = (state) => state && ({
+  ...state,
+  selection: state.selection ? { ...state.selection } : state.selection
+})
+
+const findPrototypeMethod = (instance, name) => {
+  let prototype = Object.getPrototypeOf(instance)
+  while (prototype) {
+    if (typeof prototype[name] === 'function') return prototype[name]
+    prototype = Object.getPrototypeOf(prototype)
+  }
+  return null
+}
+
+const checkpointState = (target = globalThis) => target.__ELEPHANT_BUFFERED_STATE_CHECKPOINT__ || null
+
+const waitForCheckpointAdvance = async(target, previousRevision, label, timeoutMs = 5000) => {
+  const deadline = Date.now() + timeoutMs
+  let last = null
+  while (Date.now() <= deadline) {
+    const checkpoint = checkpointState(target)
+    last = checkpoint && {
+      requestedRevision: Number(checkpoint.requestedRevision || 0),
+      persistedRevision: Number(checkpoint.persistedRevision || 0),
+      pending: Boolean(checkpoint.pending),
+      error: checkpoint.error || null
+    }
+    if (checkpoint?.error) throw new Error(`${label} recovery checkpoint failed: ${checkpoint.error}`)
+    if (Number(checkpoint?.requestedRevision || 0) > Number(previousRevision || 0)) {
+      const targetRevision = Number(checkpoint.requestedRevision || 0)
+      await checkpoint.flush(targetRevision)
+      if (Number(checkpoint.persistedRevision || 0) < targetRevision) {
+        throw new Error(`${label} returned before recovery revision ${targetRevision} was persisted`)
+      }
+      return targetRevision
+    }
+    await sleep(20)
+  }
+  throw new Error(`${label} did not create a durable recovery checkpoint: ${JSON.stringify(last)}`)
+}
+
+export const installEditorDurabilityAutomationFence = (target = globalThis) => {
+  const api = target.__ELEPHANT_ACCEPTANCE_TEST__ || target.__ELEPHANT_AUTOMATION__
+  if (!api || api[AUTOMATION_FENCE_FLAG] || typeof api.insertText !== 'function') return false
+
+  const originalInsertText = api.insertText.bind(api)
+  const originalPress = typeof api.press === 'function' ? api.press.bind(api) : null
+  const isRustEditorTarget = (selector) => Boolean(
+    target.document?.querySelector?.(selector)?.closest?.('[data-testid="muya-rust-runtime-editor"]') ||
+    target.document?.querySelector?.(selector)?.querySelector?.('[data-testid="muya-rust-runtime-editor"]')
+  )
+
+  api.insertText = async(selector, text) => {
+    if (!isRustEditorTarget(selector) || typeof text !== 'string' || text.length === 0) {
+      return originalInsertText(selector, text)
+    }
+    const beforeRevision = Number(checkpointState(target)?.requestedRevision || 0)
+    const result = await originalInsertText(selector, text)
+    await waitForCheckpointAdvance(target, beforeRevision, 'text input')
+    return result
+  }
+
+  if (originalPress) {
+    api.press = async(selector, key) => {
+      if (!isRustEditorTarget(selector) || (key !== 'Enter' && key !== 'Shift+Enter')) {
+        return originalPress(selector, key)
+      }
+      const beforeRevision = Number(checkpointState(target)?.requestedRevision || 0)
+      const result = await originalPress(selector, key)
+      await waitForCheckpointAdvance(target, beforeRevision, key)
+      return result
+    }
+  }
+
+  Object.defineProperty(api, AUTOMATION_FENCE_FLAG, {
+    configurable: false,
+    enumerable: false,
+    value: true
+  })
+  return true
+}
+
+export const installNativeInputDurability = (runtime) => {
+  const muya = runtime?.muya
+  const contentState = muya?.contentState
+  const mirror = muya?.__rustMirror
+  const mutationGate = muya?.__rustMutationGate
+  const applyDomInput = contentState && findPrototypeMethod(contentState, 'inputHandler')
+
+  if (!muya || !contentState || !mirror || !mutationGate?.enqueue || !applyDomInput) {
+    return () => {}
+  }
+
+  const previousInputHandler = contentState.inputHandler
+  let disposed = false
+  let recoverySequence = 0
+
+  const recoverNativeInput = (event) => {
+    if (disposed) return undefined
+
+    // The browser has already changed the contenteditable DOM. Rebuild Muya's
+    // logical blocks from that exact DOM before reading Markdown. This path only
+    // runs for a real `input` event; ordinary Rust-owned beforeinput operations
+    // prevent the browser default and therefore never reach it.
+    applyDomInput.call(contentState, event)
+
+    if (muya.__rustComposition) return undefined
+    runtime.markUserMutation?.(`native-input:${String(event?.inputType || 'unknown')}`)
+
+    const sequence = ++recoverySequence
+    const pending = mutationGate.enqueue(async() => {
+      await mirror.flush()
+      const visibleMarkdown = String(muya.getMarkdown?.() || '')
+      const canonicalBefore = String(mirror.state?.markdown || '')
+      if (visibleMarkdown === canonicalBefore) {
+        return {
+          state: cloneState(mirror.state),
+          documentChanged: false,
+          selectionChanged: false,
+          nativeInputRecovered: false
+        }
+      }
+
+      const muyaIndexCursor = contentState.getMuyaIndexCursor?.()
+      await mirror.sync(visibleMarkdown, 'native-input-recovery', {
+        muyaIndexCursor,
+        continueGroup: true
+      })
+      await mirror.flush()
+
+      const state = cloneState(mirror.state)
+      if (!state || String(state.markdown || '') !== visibleMarkdown) {
+        throw new Error('Native input recovery did not converge the visible Muya document and canonical Rust Markdown.')
+      }
+
+      console.warn('[elephantnote:muya-rust] recovered browser input that bypassed beforeinput', {
+        sequence,
+        inputType: String(event?.inputType || 'unknown'),
+        previousMarkdownLength: canonicalBefore.length,
+        recoveredMarkdownLength: visibleMarkdown.length,
+        revision: state.revision
+      })
+
+      return {
+        state,
+        documentChanged: true,
+        selectionChanged: true,
+        nativeInputRecovered: true
+      }
+    })
+
+    muya.__lastRustNativeInputRecovery = { sequence, promise: pending }
+    pending.catch((error) => muya.__reportRustError?.(error))
+    return pending
+  }
+
+  contentState.inputHandler = recoverNativeInput
+
+  return () => {
+    disposed = true
+    if (contentState.inputHandler === recoverNativeInput) {
+      contentState.inputHandler = previousInputHandler
+    }
+    muya.__lastRustNativeInputRecovery = null
+  }
+}

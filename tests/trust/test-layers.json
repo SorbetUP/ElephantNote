@@ -47,7 +47,7 @@
       "command": "pnpm test:user:packaged:raw",
       "runner": "build/scripts/run-packaged-user-journey-trust.mjs",
       "artifact": "test-results/trusted/packaged-user-journey/latest.json",
-      "claim": "The exact distributed Linux AppImage supports a clean startup, visible editing, persistence, crash restart, preference restoration and search.",
+      "claim": "The exact distributed Linux AppImage supports clean startup, physical X11 typing, canonical Rust/Markdown persistence, crash-window recovery, preference restoration and search.",
       "doesNotClaim": "Native folder-picker behavior and macOS, Windows or Android distribution behavior are not covered by this Linux AppImage proof.",
       "requiresPackagedExecutable": true,
       "requiredPackagedFormat": "linux-appimage",
@@ -64,6 +64,7 @@
       "requiredScenarios": [
         "user-clean-install-first-screen",
         "user-edit-visible-and-persisted",
+        "user-physical-x11-input-rust-disk",
         "user-theme-choice-visible",
         "user-crash-restart-restores-visible-work",
         "user-search-after-restart",

@@ -219,9 +219,13 @@ export const installEditorAutomationInputDefaults = (target = globalThis) => {
       const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__
       if (!activeMuya) throw new Error('The visible Rust editor has no active Muya runtime')
 
-      restoreSelectionAfterFocus(target, element)
       let characterCount = 0
       for (const character of text) {
+        // Rendering the previous Rust transaction may recreate the active text
+        // nodes and move focus. Restore the live DOM selection before every real
+        // character event, just as the browser does between physical keystrokes.
+        restoreSelectionAfterFocus(target, element)
+
         const canonicalBefore = activeMuya.__rustMirror?.state
         const beforeRust = {
           ...(target.__ELEPHANT_MUYA_RUST_MIRROR__ || {}),

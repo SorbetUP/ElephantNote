@@ -166,14 +166,23 @@ try {
   const knowledgeService = nativeRuntimeProbes['elephant.knowledge.service-call']
   const openModelsService = nativeRuntimeProbes['elephant.open-models.service-call']
   const syncService = nativeRuntimeProbes['elephant.sync.service-call']
+  const codexRuntimeAvailable =
+    codexService?.installed === true &&
+    codexService?.detected === true &&
+    codexService?.running === true &&
+    Boolean(String(codexService?.runtimePath || '').trim()) &&
+    Boolean(String(codexService?.version || '').trim())
+  const codexRuntimeUnavailable =
+    codexService?.installed === false &&
+    codexService?.detected === false &&
+    codexService?.running === false &&
+    codexService?.connected === false &&
+    Boolean(String(codexService?.error || '').trim())
   if (
     codeExecutionService?.available !== true ||
     !String(codeExecutionService?.executable || '').includes('python') ||
     !String(codeExecutionService?.version || codeExecutionService?.stderr || '').trim() ||
-    codexService?.running !== true ||
-    codexService?.detected !== true ||
-    !String(codexService?.runtimePath || '').trim() ||
-    !String(codexService?.version || '').trim() ||
+    (!codexRuntimeAvailable && !codexRuntimeUnavailable) ||
     !knowledgeService || typeof knowledgeService !== 'object' || knowledgeService.error ||
     openModelsService?.running !== true ||
     openModelsService?.owner !== 'elephant.open-models' ||
@@ -210,6 +219,19 @@ try {
   addonResourceProbes['calendar.provider.clear'] = calendarCleared
   if (!Array.isArray(addonResourceProbes['ai.config.listProviders']) || !Array.isArray(addonResourceProbes['ai.inference.listProviders']) || !Array.isArray(addonResourceProbes['calendar.provider.list']) || !Array.isArray(addonResourceProbes['models.provider.list']) || !Array.isArray(addonResourceProbes['wiki.provider.list']) || !Array.isArray(calendarCleared)) {
     throw new Error(`Addon resource functional probe returned an unexpected shape: ${JSON.stringify(addonResourceProbes)}`)
+  }
+  const codexProviders = [
+    ...addonResourceProbes['ai.config.listProviders'],
+    ...addonResourceProbes['ai.inference.listProviders']
+  ].filter((provider) => {
+    const id = String(provider?.providerId || provider?.provider || provider?.id || provider || '').trim()
+    return id === 'codex'
+  })
+  if (codexRuntimeAvailable && codexProviders.length === 0) {
+    throw new Error(`Installed Codex runtime did not expose its provider: ${JSON.stringify({ codexService, codexProviders })}`)
+  }
+  if (codexRuntimeUnavailable && codexProviders.length !== 0) {
+    throw new Error(`Missing Codex runtime still exposed an operational provider: ${JSON.stringify({ codexService, codexProviders })}`)
   }
   const addonActionProbes = {
     graphRebuild: await command('runAddonAction', 'elephant.graph.rebuild'),
@@ -555,7 +577,7 @@ try {
   const catalogSource = output.includes('[official-addon-catalog] source=bundled') ? 'bundled' : 'local-or-remote'
   if (packagedRun && catalogSource !== 'bundled') throw new Error('Packaged acceptance did not use the bundled official addon catalogue')
   if (packagedRun && output.includes('Addon service executable is unavailable')) throw new Error('Packaged acceptance reproduced the missing addon service executable regression')
-  result = { emptyVaultUi, initial, saved, created, createdSaved, disk, displayed, codeRunButton, codeOutput, citationSelection, citationSelectionAction, citationFeedback, citationBufferItem, citationPasted, citationContext, dom, chatPanel, calendarPanel, graphPanel, sidebarInitial, sidebarToggled, sidebarRestored, searchUi, searchEmptyUi, afterClose, pinned, settingsSearch, themeBefore, themeToggled, themeRestored, listBefore, listView, sortedLibrary, navigationCycles, capabilities, addonState, installedOfficialAddons, installedAddonState, enabledOfficialAddons, enabledAddonState, addonCoverage, nativeRuntimeProbes, addonResourceProbes, addonActionProbes, dashboardAction, dashboardNote, keepImport, keepNote, siteGenerated, siteStatus, siteStopped, syncStatus, platform, vaults, directory, drawings, attachments, features, searchStatus, atomicFeatures, localBackendProbes, search, folder, lifecycle, moved, attachmentWrite, attachmentList, drawing, drawingRead, drawingWritten, expectedFailure, invalidPathFailure, missingResourceFailure, logs, restartPersistence, addonLifecycle, packagedRun, catalogSource }
+  result = { emptyVaultUi, initial, saved, created, createdSaved, disk, displayed, codeRunButton, codeOutput, citationSelection, citationSelectionAction, citationFeedback, citationBufferItem, citationPasted, citationContext, dom, chatPanel, calendarPanel, graphPanel, sidebarInitial, sidebarToggled, sidebarRestored, searchUi, searchEmptyUi, afterClose, pinned, settingsSearch, themeBefore, themeToggled, themeRestored, listBefore, listView, sortedLibrary, navigationCycles, capabilities, addonState, installedOfficialAddons, installedAddonState, enabledOfficialAddons, enabledAddonState, addonCoverage, nativeRuntimeProbes, codexRuntimeAvailable, codexRuntimeUnavailable, codexProviders, addonResourceProbes, addonActionProbes, dashboardAction, dashboardNote, keepImport, keepNote, siteGenerated, siteStatus, siteStopped, syncStatus, platform, vaults, directory, drawings, attachments, features, searchStatus, atomicFeatures, localBackendProbes, search, folder, lifecycle, moved, attachmentWrite, attachmentList, drawing, drawingRead, drawingWritten, expectedFailure, invalidPathFailure, missingResourceFailure, logs, restartPersistence, addonLifecycle, packagedRun, catalogSource }
   writeFileSync(join(artifactRoot, 'latest.json'), JSON.stringify({ at: new Date().toISOString(), runtime: 'tauri', result }, null, 2))
   writeFileSync(join(artifactRoot, 'latest-tauri.log'), output, 'utf8')
   console.log(`[acceptance-runner] artifact ${join(artifactRoot, 'latest.json')}`)

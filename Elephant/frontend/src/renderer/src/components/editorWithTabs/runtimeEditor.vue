@@ -30,6 +30,7 @@ import { storeToRefs } from 'pinia'
 
 import bus from '@/bus'
 import { useEditorStore } from '@/store/editor'
+import { getOptionsFromState } from '@/store/help'
 import { usePreferencesStore } from '@/store/preferences'
 import { useProjectStore } from '@/store/project'
 import { checkpointBufferedState } from '@/store/bufferedState'
@@ -169,13 +170,25 @@ const busHandlers = Object.freeze({
 })
 
 const handleRustMarkdownChange = (editorMarkdown) => {
-  applyRustEditorMarkdown({
+  const file = currentFile.value
+  const changed = applyRustEditorMarkdown({
     editorStore,
-    file: currentFile.value,
+    file,
     editorMarkdown,
     fromEditorMarkdown: props.fromEditorMarkdown,
     persist: persistEditorRecoveryCheckpoint
   })
+
+  if (changed && file?.id && file.pathname) {
+    editorStore.HANDLE_AUTO_SAVE({
+      id: file.id,
+      filename: file.filename,
+      pathname: file.pathname,
+      markdown: file.markdown,
+      options: getOptionsFromState(file)
+    })
+  }
+
   editorRuntimeBinding?.notify({
     reason: 'document-change',
     markdown: props.fromEditorMarkdown(String(editorMarkdown || '')),

@@ -102,13 +102,23 @@ export const installNativeInputDurability = (runtime) => {
   const recoverNativeInput = (event) => {
     if (disposed) return undefined
 
+    // Composition is already captured at the editor boundary and committed as
+    // one Rust transaction on compositionend. The temporary DOM mutations must
+    // remain visual-only until that transaction renders the accepted document.
+    if (
+      muya.__rustComposition ||
+      event?.isComposing ||
+      event?.type === 'compositionend' ||
+      event?.inputType === 'insertCompositionText'
+    ) {
+      return undefined
+    }
+
     // The browser has already changed the contenteditable DOM. Rebuild Muya's
     // logical blocks from that exact DOM before reading Markdown. This path only
     // runs for a real `input` event; ordinary Rust-owned beforeinput operations
     // prevent the browser default and therefore never reach it.
     applyDomInput.call(contentState, event)
-
-    if (muya.__rustComposition) return undefined
     runtime.markUserMutation?.(`native-input:${String(event?.inputType || 'unknown')}`)
 
     const sequence = ++recoverySequence

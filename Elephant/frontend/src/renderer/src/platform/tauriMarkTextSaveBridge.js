@@ -1,5 +1,7 @@
 const normalizePath = (value = '') => String(value || '').replace(/\\/g, '/')
 const MARKDOWN_EXTENSION_RE = /\.md$/i
+const saveQueues = new Map()
+const saveGenerations = new Map()
 
 const isMarkdownPath = (value = '') => MARKDOWN_EXTENSION_RE.test(normalizePath(value))
 
@@ -34,6 +36,27 @@ const writeViaRustBackend = async(target, pathname, markdown) => {
   return result
 }
 
+const enqueueAtomicWrite = (target, pathname, markdown) => {
+  const key = normalizePath(pathname)
+  const previous = saveQueues.get(key) || Promise.resolve()
+  const next = previous
+    .catch(() => undefined)
+    .then(() => writeViaRustBackend(target, pathname, markdown))
+  saveQueues.set(key, next)
+  void next.finally(() => {
+    if (saveQueues.get(key) === next) saveQueues.delete(key)
+  }).catch(() => undefined)
+  return next
+}
+
+const nextSaveGeneration = (id) => {
+  const generation = Number(saveGenerations.get(id) || 0) + 1
+  saveGenerations.set(id, generation)
+  return generation
+}
+
+const isLatestSaveGeneration = (id, generation) => saveGenerations.get(id) === generation
+
 const writeRecord = async(target, ipc, record = {}, reason = 'save') => {
   const pathname = getSaveTarget(target, record)
   const id = record.id
@@ -58,36 +81,60 @@ const writeRecord = async(target, ipc, record = {}, reason = 'save') => {
     return false
   }
 
+  const generation = nextSaveGeneration(id)
   try {
     console.info('[tauri:marktext-save] write:start', {
       reason,
       id,
+      generation,
       pathname: normalizePath(pathname),
       length: markdown.length,
-      atomic: true
+      atomic: true,
+      serialized: true
     })
 
-    const result = await writeViaRustBackend(target, pathname, markdown)
+    const result = await enqueueAtomicWrite(target, pathname, markdown)
+    const latest = isLatestSaveGeneration(id, generation)
 
     console.info('[tauri:marktext-save] write:done', {
       reason,
       id,
+      generation,
+      latest,
       pathname: normalizePath(pathname),
       length: markdown.length,
       changed: result.changed === true,
       atomic: result.atomic === true
     })
-    ipc.send('mt::tab-saved', id)
-    return true
+
+    // An older completed write must never mark the tab saved while a newer
+    // revision is still queued. Only the newest generation may acknowledge
+    // `isSaved: true` or permit a save-and-close request to close the tab.
+    if (latest) {
+      ipc.send('mt::tab-saved', id)
+      return true
+    }
+
+    console.info('[tauri:marktext-save] write:superseded', {
+      reason,
+      id,
+      generation,
+      latestGeneration: saveGenerations.get(id),
+      pathname: normalizePath(pathname)
+    })
+    return false
   } catch (error) {
     const message = error?.message || String(error)
+    const latest = isLatestSaveGeneration(id, generation)
     console.error('[tauri:marktext-save] write:failed', {
       reason,
       id,
+      generation,
+      latest,
       pathname: normalizePath(pathname),
       error: message
     })
-    ipc.send('mt::tab-save-failure', id, message)
+    if (latest) ipc.send('mt::tab-save-failure', id, message)
     return false
   }
 }
@@ -115,9 +162,10 @@ export const installTauriMarkTextSaveBridge = (target = globalThis) => {
   })
 
   ipc.on('mt::save-and-close-tabs', (_event, records = []) => {
-    void Promise.all(normalizeRecords(records).map((record) => writeRecord(target, ipc, record, 'save-and-close-tabs')))
+    const normalized = normalizeRecords(records)
+    void Promise.all(normalized.map((record) => writeRecord(target, ipc, record, 'save-and-close-tabs')))
       .then((results) => {
-        const closeIds = normalizeRecords(records)
+        const closeIds = normalized
           .filter((_record, index) => results[index])
           .map((record) => record.id)
           .filter(Boolean)
@@ -125,6 +173,10 @@ export const installTauriMarkTextSaveBridge = (target = globalThis) => {
       })
   })
 
-  console.info('[tauri:marktext-save] bridge:installed', { atomic: true })
+  console.info('[tauri:marktext-save] bridge:installed', {
+    atomic: true,
+    serialized: true,
+    latestRevisionAcknowledgement: true
+  })
   return true
 }

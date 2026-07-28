@@ -43,7 +43,7 @@ const typeWithPhysicalX11Keyboard = (text, delayMs = 80) => {
     throw new Error('The physical packaged-editor proof requires the Linux AppImage under X11/Xvfb.')
   }
   const focusedWindow = xdotool(['getwindowfocus', 'getwindowname'])
-  xdotool(['type', '--clearmodifiers', '--delay', String(delayMs), '--', text])
+  xdotool(['type', '--clearmodifiers', '--delay', String(delayMs), text])
   return focusedWindow
 }
 
@@ -91,6 +91,7 @@ try {
   await harness.runScenario('user-physical-x11-input-rust-disk', layer, async() => {
     const before = await harness.action(layer, 'readDom', editorSelector)
     await harness.action(layer, 'selectText', editorSelector, before.text.length, before.text.length)
+    await sleep(100)
     const focusedWindow = typeWithPhysicalX11Keyboard(physicalMarker)
     pressWithPhysicalX11Keyboard('Return')
     typeWithPhysicalX11Keyboard(physicalSecondLine)

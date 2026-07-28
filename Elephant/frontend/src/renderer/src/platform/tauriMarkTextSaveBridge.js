@@ -24,7 +24,14 @@ const writeViaRustBackend = async(target, pathname, markdown) => {
   if (typeof invoke !== 'function') {
     throw new Error('Tauri save bridge cannot write: core.invoke is unavailable.')
   }
-  return invoke('tauri_marktext_write_file', { pathname, content: markdown })
+  const result = await invoke('tauri_marktext_write_file_atomic', {
+    pathname,
+    content: markdown
+  })
+  if (result?.ok !== true || result?.atomic !== true) {
+    throw new Error(`Atomic note writer returned an invalid acknowledgement: ${JSON.stringify(result)}`)
+  }
+  return result
 }
 
 const writeRecord = async(target, ipc, record = {}, reason = 'save') => {
@@ -56,16 +63,19 @@ const writeRecord = async(target, ipc, record = {}, reason = 'save') => {
       reason,
       id,
       pathname: normalizePath(pathname),
-      length: markdown.length
+      length: markdown.length,
+      atomic: true
     })
 
-    await writeViaRustBackend(target, pathname, markdown)
+    const result = await writeViaRustBackend(target, pathname, markdown)
 
     console.info('[tauri:marktext-save] write:done', {
       reason,
       id,
       pathname: normalizePath(pathname),
-      length: markdown.length
+      length: markdown.length,
+      changed: result.changed === true,
+      atomic: result.atomic === true
     })
     ipc.send('mt::tab-saved', id)
     return true
@@ -115,6 +125,6 @@ export const installTauriMarkTextSaveBridge = (target = globalThis) => {
       })
   })
 
-  console.info('[tauri:marktext-save] bridge:installed')
+  console.info('[tauri:marktext-save] bridge:installed', { atomic: true })
   return true
 }

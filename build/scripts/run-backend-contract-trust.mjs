@@ -87,17 +87,22 @@ try {
       filename: 'Lifecycle.md',
       title: 'Lifecycle'
     })
-    const roundtripPath = 'Backend contracts/Lifecycle.md'
+    const createdPath = 'Backend contracts/Lifecycle.md'
     await waitForStableNoteContent(
-      roundtripPath,
+      createdPath,
       '# Lifecycle\n',
       'Production note creation stabilization'
     )
 
-    // Keep the whole CRUD proof on the note created through the production
-    // backend during this scenario. It was not part of the renderer's initial
-    // inventory and is never opened through the UI, so no renderer autosave can
-    // legitimately overwrite the backend-owned write under test.
+    // Prove create independently, then remove that editor-observable object before
+    // proving the production write command. A created note can legitimately be
+    // discovered by the live renderer and enter its autosave lifecycle; allowing
+    // that unrelated lifecycle to race a direct backend write would test two
+    // owners at once rather than the backend contract. Writing a fresh path keeps
+    // this layer strictly on production backend commands and the real filesystem.
+    await harness.backend('invokeTauri', 'tauri_entries_delete', { relativePath: createdPath })
+
+    const roundtripPath = 'Backend contracts/Roundtrip.md'
     const expected = '# Backend roundtrip\n\nWritten through the production Tauri backend.\n'
     const written = await harness.backend('invokeTauri', 'tauri_notes_write', {
       relativePath: roundtripPath,

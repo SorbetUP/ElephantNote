@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::fs::{self, OpenOptions};
 use std::io::{Error, ErrorKind, Write};
 use std::path::{Path, PathBuf};
@@ -10,17 +11,19 @@ fn temporary_path(path: &Path, attempt: u64) -> std::io::Result<PathBuf> {
   let parent = path.parent().unwrap_or_else(|| Path::new("."));
   let file_name = path
     .file_name()
-    .and_then(|name| name.to_str())
-    .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "atomic write requires a UTF-8 file name"))?;
+    .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "atomic write requires a file name"))?;
   let timestamp = SystemTime::now()
     .duration_since(UNIX_EPOCH)
     .unwrap_or_default()
     .as_nanos();
   let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed) + attempt;
-  Ok(parent.join(format!(
-    ".{file_name}.elephant-tmp-{}-{timestamp}-{sequence}",
+  let mut temporary_name = OsString::from(".");
+  temporary_name.push(file_name);
+  temporary_name.push(format!(
+    ".elephant-tmp-{}-{timestamp}-{sequence}",
     std::process::id()
-  )))
+  ));
+  Ok(parent.join(temporary_name))
 }
 
 pub fn write_atomically(path: impl AsRef<Path>, bytes: &[u8]) -> std::io::Result<()> {
@@ -125,7 +128,7 @@ mod tests {
   }
 
   #[test]
-  fn atomic_write_does_not_follow_precreated_legacy_temp_symlink() {
+  fn atomic_write_does_not_overwrite_precreated_legacy_temp_file() {
     let dir = std::env::temp_dir().join(format!("elephantnote_test3_{}", std::process::id()));
     fs::create_dir_all(&dir).unwrap();
     let path = dir.join("note.md");

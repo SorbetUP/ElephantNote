@@ -38,11 +38,24 @@ const xdotool = (args) => execFileSync('xdotool', args, {
   stdio: ['ignore', 'pipe', 'pipe']
 }).trim()
 
+const focusElephantWindow = () => {
+  const windows = xdotool(['search', '--onlyvisible', '--name', 'Elephant'])
+    .split(/\s+/)
+    .filter(Boolean)
+  const windowId = windows.at(-1)
+  if (!windowId) throw new Error('xdotool could not find a visible Elephant window.')
+  xdotool(['windowfocus', '--sync', windowId])
+  return {
+    id: windowId,
+    name: xdotool(['getwindowname', windowId])
+  }
+}
+
 const typeWithPhysicalX11Keyboard = (text, delayMs = 80) => {
   if (process.platform !== 'linux') {
     throw new Error('The physical packaged-editor proof requires the Linux AppImage under X11/Xvfb.')
   }
-  const focusedWindow = xdotool(['getwindowfocus', 'getwindowname'])
+  const focusedWindow = focusElephantWindow()
   xdotool(['type', '--clearmodifiers', '--delay', String(delayMs), text])
   return focusedWindow
 }
@@ -51,6 +64,7 @@ const pressWithPhysicalX11Keyboard = (key) => {
   if (process.platform !== 'linux') {
     throw new Error('The physical packaged-editor proof requires the Linux AppImage under X11/Xvfb.')
   }
+  focusElephantWindow()
   xdotool(['key', '--clearmodifiers', key])
 }
 

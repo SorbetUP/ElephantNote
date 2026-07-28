@@ -23,37 +23,68 @@ const inputEventConstructorFor = (target, element) => element?.ownerDocument?.de
   target.InputEvent ||
   target.window?.InputEvent
 
+const genericEventConstructorFor = (target, element) => element?.ownerDocument?.defaultView?.Event ||
+  target.Event ||
+  target.window?.Event
+
+const defineEventField = (event, name, value) => {
+  if (event?.[name] === value) return true
+  try {
+    Object.defineProperty(event, name, {
+      configurable: true,
+      enumerable: true,
+      value
+    })
+    return event[name] === value
+  } catch {
+    return false
+  }
+}
+
 const createBeforeInput = (target, element, inputType, data) => {
   const InputEventConstructor = inputEventConstructorFor(target, element)
-  if (typeof InputEventConstructor !== 'function') {
-    throw new Error(`${inputType} requires InputEvent support at the visible editor boundary`)
-  }
-
-  const beforeInput = new InputEventConstructor('beforeinput', {
+  const eventInit = {
     inputType,
     data,
     bubbles: true,
     cancelable: true,
     composed: true
-  })
+  }
 
-  // WebKit versions used by Tauri may discard synthetic inputType/data fields.
-  // Restore only the browser-observable event metadata; the editor remains solely
-  // responsible for changing the document through its normal beforeinput path.
-  if (beforeInput.inputType !== inputType) {
-    Object.defineProperty(beforeInput, 'inputType', {
-      configurable: true,
-      enumerable: true,
-      value: inputType
-    })
+  let beforeInput = null
+  if (typeof InputEventConstructor === 'function') {
+    try {
+      beforeInput = new InputEventConstructor('beforeinput', eventInit)
+    } catch (error) {
+      console.warn('[automation-api] native InputEvent construction failed; using a realm-local beforeinput event', {
+        inputType,
+        error: error?.message || String(error)
+      })
+    }
   }
-  if (data !== null && beforeInput.data !== data) {
-    Object.defineProperty(beforeInput, 'data', {
-      configurable: true,
-      enumerable: true,
-      value: data
+
+  // Some WebKit/Tauri builds either reject synthetic InputEvent construction or
+  // create an event whose inputType/data fields are blank and non-configurable.
+  // A realm-local Event still traverses the exact visible beforeinput listener;
+  // only its browser-observable metadata is supplied here. The editor remains
+  // solely responsible for claiming the event and mutating Rust state.
+  if (!beforeInput || !defineEventField(beforeInput, 'inputType', inputType) ||
+    (data !== null && !defineEventField(beforeInput, 'data', data))) {
+    const EventConstructor = genericEventConstructorFor(target, element)
+    if (typeof EventConstructor !== 'function') {
+      throw new Error(`${inputType} requires Event support at the visible editor boundary`)
+    }
+    beforeInput = new EventConstructor('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      composed: true
     })
+    if (!defineEventField(beforeInput, 'inputType', inputType) ||
+      (data !== null && !defineEventField(beforeInput, 'data', data))) {
+      throw new Error(`Unable to expose ${inputType} metadata on the visible beforeinput event`)
+    }
   }
+
   return beforeInput
 }
 

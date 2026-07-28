@@ -99,6 +99,28 @@ export const installNativeInputDurability = (runtime) => {
   let disposed = false
   let recoverySequence = 0
 
+  const restoreCanonicalDocument = (fallbackMarkdown = '') => {
+    const acceptedMarkdown = String(mirror.state?.markdown ?? fallbackMarkdown)
+    if (typeof muya.__setProgrammaticMarkdown === 'function') {
+      muya.__setProgrammaticMarkdown(acceptedMarkdown, undefined, true)
+    } else {
+      muya.setMarkdown?.(acceptedMarkdown)
+    }
+    return acceptedMarkdown
+  }
+
+  const reportRejectedNativeInput = (error, evidence = {}) => {
+    console.error('[elephantnote:muya-rust] native input recovery rejected; restored canonical document', {
+      sequence: evidence.sequence ?? null,
+      inputType: String(evidence.inputType || 'unknown'),
+      rejectedMarkdownLength: Number(evidence.rejectedMarkdownLength || 0),
+      restoredMarkdownLength: Number(evidence.restoredMarkdownLength || 0),
+      phase: evidence.phase || 'unknown',
+      error: error?.message || String(error)
+    })
+    muya.__reportRustError?.(error)
+  }
+
   const recoverNativeInput = (event) => {
     if (disposed) return undefined
 
@@ -114,28 +136,45 @@ export const installNativeInputDurability = (runtime) => {
       return undefined
     }
 
+    const inputType = String(event?.inputType || 'unknown')
+    const sequence = ++recoverySequence
+    runtime.markUserMutation?.(`native-input:${inputType}`)
+
     // The browser has already changed the contenteditable DOM. Rebuild Muya's
     // logical blocks from that exact DOM before reading Markdown. This path only
     // runs for a real `input` event; ordinary Rust-owned beforeinput operations
     // prevent the browser default and therefore never reach it.
-    applyDomInput.call(contentState, event)
-    runtime.markUserMutation?.(`native-input:${String(event?.inputType || 'unknown')}`)
+    try {
+      applyDomInput.call(contentState, event)
+    } catch (error) {
+      const restoredMarkdown = restoreCanonicalDocument()
+      reportRejectedNativeInput(error, {
+        sequence,
+        inputType,
+        restoredMarkdownLength: restoredMarkdown.length,
+        phase: 'content-state-rebuild'
+      })
+      const rejected = Promise.reject(error)
+      rejected.catch(() => {})
+      return rejected
+    }
 
-    const sequence = ++recoverySequence
     const pending = mutationGate.enqueue(async() => {
-      await mirror.flush()
-      const visibleMarkdown = String(muya.getMarkdown?.() || '')
       const canonicalBefore = String(mirror.state?.markdown || '')
-      if (visibleMarkdown === canonicalBefore) {
-        return {
-          state: cloneState(mirror.state),
-          documentChanged: false,
-          selectionChanged: false,
-          nativeInputRecovered: false
-        }
-      }
-
+      let visibleMarkdown = ''
       try {
+        await mirror.flush()
+        visibleMarkdown = String(muya.getMarkdown?.() || '')
+        const canonicalCurrent = String(mirror.state?.markdown || canonicalBefore)
+        if (visibleMarkdown === canonicalCurrent) {
+          return {
+            state: cloneState(mirror.state),
+            documentChanged: false,
+            selectionChanged: false,
+            nativeInputRecovered: false
+          }
+        }
+
         const muyaIndexCursor = contentState.getMuyaIndexCursor?.()
         await mirror.sync(visibleMarkdown, 'native-input-recovery', {
           muyaIndexCursor,
@@ -150,8 +189,8 @@ export const installNativeInputDurability = (runtime) => {
 
         console.warn('[elephantnote:muya-rust] recovered browser input that bypassed beforeinput', {
           sequence,
-          inputType: String(event?.inputType || 'unknown'),
-          previousMarkdownLength: canonicalBefore.length,
+          inputType,
+          previousMarkdownLength: canonicalCurrent.length,
           recoveredMarkdownLength: visibleMarkdown.length,
           revision: state.revision
         })
@@ -167,17 +206,13 @@ export const installNativeInputDurability = (runtime) => {
         // accepted Rust document synchronously before the mutation gate replays
         // a parent change notification, so neither autosave nor the recovery
         // journal can capture a DOM-only value.
-        const acceptedMarkdown = String(mirror.state?.markdown ?? canonicalBefore)
-        if (typeof muya.__setProgrammaticMarkdown === 'function') {
-          muya.__setProgrammaticMarkdown(acceptedMarkdown, undefined, true)
-        } else {
-          muya.setMarkdown?.(acceptedMarkdown)
-        }
+        const restoredMarkdown = restoreCanonicalDocument(canonicalBefore)
         console.error('[elephantnote:muya-rust] native input recovery rejected; restored canonical document', {
           sequence,
-          inputType: String(event?.inputType || 'unknown'),
+          inputType,
           rejectedMarkdownLength: visibleMarkdown.length,
-          restoredMarkdownLength: acceptedMarkdown.length,
+          restoredMarkdownLength: restoredMarkdown.length,
+          phase: 'rust-synchronization',
           error: error?.message || String(error)
         })
         throw error

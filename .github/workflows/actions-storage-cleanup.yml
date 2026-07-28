@@ -33,6 +33,7 @@ jobs:
           set -euo pipefail
 
           repo="$GITHUB_REPOSITORY"
+          # Editing this workflow triggers one forced repository-wide purge.
           force_cleanup=false
           if [[ "$GITHUB_EVENT_NAME" == "push" || "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             force_cleanup=true

@@ -63,11 +63,6 @@ const createBeforeInput = (target, element, inputType, data) => {
     }
   }
 
-  // Some WebKit/Tauri builds either reject synthetic InputEvent construction or
-  // create an event whose inputType/data fields are blank and non-configurable.
-  // A realm-local Event still traverses the exact visible beforeinput listener;
-  // only its browser-observable metadata is supplied here. The editor remains
-  // solely responsible for claiming the event and mutating Rust state.
   if (!beforeInput || !defineEventField(beforeInput, 'inputType', inputType) ||
     (data !== null && !defineEventField(beforeInput, 'data', data))) {
     const EventConstructor = genericEventConstructorFor(target, element)
@@ -103,9 +98,6 @@ const dispatchEnterDefault = (target, element, key) => {
 }
 
 const waitForPublishedRustState = async(target, expectedMuya, before, label, timeoutMs = 5000) => {
-  // The visible beforeinput event queues a production Rust transaction. Draining
-  // the mutation gate is the authoritative completion boundary; the checks below
-  // additionally require that this exact user action changed canonical state.
   if (expectedMuya?.__rustMutationGate?.flush) await expectedMuya.__rustMutationGate.flush()
 
   const deadline = Date.now() + timeoutMs
@@ -154,9 +146,6 @@ const waitForPublishedRustState = async(target, expectedMuya, before, label, tim
 }
 
 const waitForRustMutation = async(target, before, mutationPromise, expectedMuya, timeoutMs = 5000) => {
-  // Await the exact command created by the document-capture keydown handler.
-  // The returned transaction is the primary proof that the visible Enter event
-  // reached the production Rust command path and changed its canonical document.
   const transaction = mutationPromise?.then ? await mutationPromise : null
   if (!transaction?.state || !transaction.documentChanged) {
     throw new Error(`Rust Enter completed without a document mutation: ${JSON.stringify({
@@ -207,8 +196,6 @@ const waitForRustMutation = async(target, before, mutationPromise, expectedMuya,
       pending: Number(expectedMuya?.__rustMutationGate?.pending || 0)
     }
 
-    // The next real keystroke may run only after the exact Rust transaction has
-    // been published, rendered by Muya, canonically synchronized, and drained.
     if (exactCommandPublished && canonicalContainsTransaction && visibleSynchronized) return current
     await new Promise((resolve) => setTimeout(resolve, 20))
   }
@@ -231,23 +218,30 @@ export const installEditorAutomationInputDefaults = (target = globalThis) => {
 
       const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__
       if (!activeMuya) throw new Error('The visible Rust editor has no active Muya runtime')
-      const canonicalBefore = activeMuya.__rustMirror?.state
-      const beforeRust = {
-        ...(target.__ELEPHANT_MUYA_RUST_MIRROR__ || {}),
-        canonicalRevision: Number(canonicalBefore?.revision || 0),
-        canonicalMarkdown: String(canonicalBefore?.markdown ?? '')
-      }
 
       restoreSelectionAfterFocus(target, element)
-      // Dispatch the same browser-level beforeinput event produced by typing into
-      // the live contenteditable. No direct handler call, setMarkdown operation,
-      // or DOM mutation is allowed here: Muya must claim the event and Rust must
-      // publish and render the resulting canonical transaction.
-      dispatchClaimedBeforeInput(target, element, 'insertText', text)
-      await waitForPublishedRustState(target, activeMuya, beforeRust, 'text input')
+      let characterCount = 0
+      for (const character of text) {
+        const canonicalBefore = activeMuya.__rustMirror?.state
+        const beforeRust = {
+          ...(target.__ELEPHANT_MUYA_RUST_MIRROR__ || {}),
+          canonicalRevision: Number(canonicalBefore?.revision || 0),
+          canonicalMarkdown: String(canonicalBefore?.markdown ?? '')
+        }
+
+        // Real keyboard input delivers one beforeinput transaction per typed
+        // Unicode character. Dispatching a whole sentence as one smartInput
+        // command exercises a different, unsupported path and can fail before
+        // the deliberate Enter mutation is reached.
+        dispatchClaimedBeforeInput(target, element, 'insertText', character)
+        await waitForPublishedRustState(target, activeMuya, beforeRust, `text input character ${characterCount + 1}`)
+        characterCount += 1
+      }
+
       console.info('[automation-api] dispatched trusted text input', {
         selector,
         valueLength: text.length,
+        characterCount,
         rustMutationCompleted: true
       })
       return api.readDom(selector)

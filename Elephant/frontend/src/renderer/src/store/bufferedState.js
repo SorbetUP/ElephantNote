@@ -97,16 +97,19 @@ const ensureCheckpointDrain = () => {
   return checkpointDrain
 }
 
-export const flushBufferedState = async(targetRevision = requestedRevision) => {
+const waitForBufferedRevision = async(target) => {
+  if (persistedRevision >= target) return true
+  if (checkpointError) throw checkpointError
+  if (queuedCheckpoint) ensureCheckpointDrain()
+  const activeDrain = checkpointDrain
+  if (!activeDrain) return false
+  await activeDrain
+  return waitForBufferedRevision(target)
+}
+
+export const flushBufferedState = (targetRevision = requestedRevision) => {
   const target = Number(targetRevision || 0)
-  while (persistedRevision < target) {
-    if (checkpointError) throw checkpointError
-    if (queuedCheckpoint) ensureCheckpointDrain()
-    const activeDrain = checkpointDrain
-    if (!activeDrain) break
-    await activeDrain
-  }
-  return persistedRevision >= target
+  return waitForBufferedRevision(target)
 }
 
 export const checkpointBufferedState = () => {

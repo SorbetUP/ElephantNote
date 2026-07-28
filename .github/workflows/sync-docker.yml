@@ -51,14 +51,13 @@ jobs:
           cargo test \
             --manifest-path addons/official/sync/native/Cargo.toml \
             --test two_endpoint_sync \
-            physical_package_pairs_and_synchronizes_two_real_iroh_endpoints \
             -- --nocapture 2>&1 | tee "$log_file"
           test_status=${PIPESTATUS[0]}
           set -e
           if [ "$test_status" -ne 0 ]; then
             exit "$test_status"
           fi
-          grep -Eq 'test result: ok\. 1 passed; 0 failed' "$log_file"
+          grep -Eq 'test result: ok\. 2 passed; 0 failed' "$log_file"
 
       - name: Verify structured package synchronization diagnostics
         shell: bash
@@ -74,6 +73,11 @@ jobs:
           grep -F '[Sync] verify:manifest equal=true' "$log_file"
           grep -F '[Sync] baseline:saved peers=2' "$log_file"
           grep -F '[Sync] run:complete' "$log_file"
+          grep -F '[Sync] restart-conflict:start owner=elephant.sync transport=iroh' "$log_file"
+          grep -F '[Sync] restart:stable-identities equal=true' "$log_file"
+          grep -F '[Sync] conflict:preserved files=1 both_vaults=true' "$log_file"
+          grep -F '[Sync] restart:resync files=0 conflicts=0' "$log_file"
+          grep -F '[Sync] restart-conflict:complete' "$log_file"
 
       - name: Upload Iroh failure diagnostics
         if: failure()

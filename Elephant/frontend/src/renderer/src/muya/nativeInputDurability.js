@@ -125,31 +125,52 @@ export const installNativeInputDurability = (runtime) => {
         }
       }
 
-      const muyaIndexCursor = contentState.getMuyaIndexCursor?.()
-      await mirror.sync(visibleMarkdown, 'native-input-recovery', {
-        muyaIndexCursor,
-        continueGroup: true
-      })
-      await mirror.flush()
+      try {
+        const muyaIndexCursor = contentState.getMuyaIndexCursor?.()
+        await mirror.sync(visibleMarkdown, 'native-input-recovery', {
+          muyaIndexCursor,
+          continueGroup: true
+        })
+        await mirror.flush()
 
-      const state = cloneState(mirror.state)
-      if (!state || String(state.markdown || '') !== visibleMarkdown) {
-        throw new Error('Native input recovery did not converge the visible Muya document and canonical Rust Markdown.')
-      }
+        const state = cloneState(mirror.state)
+        if (!state || String(state.markdown || '') !== visibleMarkdown) {
+          throw new Error('Native input recovery did not converge the visible Muya document and canonical Rust Markdown.')
+        }
 
-      console.warn('[elephantnote:muya-rust] recovered browser input that bypassed beforeinput', {
-        sequence,
-        inputType: String(event?.inputType || 'unknown'),
-        previousMarkdownLength: canonicalBefore.length,
-        recoveredMarkdownLength: visibleMarkdown.length,
-        revision: state.revision
-      })
+        console.warn('[elephantnote:muya-rust] recovered browser input that bypassed beforeinput', {
+          sequence,
+          inputType: String(event?.inputType || 'unknown'),
+          previousMarkdownLength: canonicalBefore.length,
+          recoveredMarkdownLength: visibleMarkdown.length,
+          revision: state.revision
+        })
 
-      return {
-        state,
-        documentChanged: true,
-        selectionChanged: true,
-        nativeInputRecovered: true
+        return {
+          state,
+          documentChanged: true,
+          selectionChanged: true,
+          nativeInputRecovered: true
+        }
+      } catch (error) {
+        // Never leave a rejected browser mutation visible. Re-render the last
+        // accepted Rust document synchronously before the mutation gate replays
+        // a parent change notification, so neither autosave nor the recovery
+        // journal can capture a DOM-only value.
+        const acceptedMarkdown = String(mirror.state?.markdown ?? canonicalBefore)
+        if (typeof muya.__setProgrammaticMarkdown === 'function') {
+          muya.__setProgrammaticMarkdown(acceptedMarkdown, undefined, true)
+        } else {
+          muya.setMarkdown?.(acceptedMarkdown)
+        }
+        console.error('[elephantnote:muya-rust] native input recovery rejected; restored canonical document', {
+          sequence,
+          inputType: String(event?.inputType || 'unknown'),
+          rejectedMarkdownLength: visibleMarkdown.length,
+          restoredMarkdownLength: acceptedMarkdown.length,
+          error: error?.message || String(error)
+        })
+        throw error
       }
     })
 

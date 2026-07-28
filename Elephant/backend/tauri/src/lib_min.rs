@@ -24,6 +24,7 @@ pub mod vault;
 pub mod vault_layout;
 
 mod android_vault_commands;
+mod atomic_note_write;
 mod debug_commands;
 mod acceptance_server;
 #[cfg(mobile)]
@@ -230,6 +231,7 @@ pub fn run() {
             tauri_extra_commands::tauri_notes_read,
             tauri_extra_commands::tauri_notes_write,
             tauri_extra_commands::tauri_marktext_write_file,
+            atomic_note_write::tauri_marktext_write_file_atomic,
             tauri_extra_commands::tauri_attachments_list,
             tauri_extra_commands::tauri_attachments_write_text,
             tauri_extra_commands::tauri_drawings_list,

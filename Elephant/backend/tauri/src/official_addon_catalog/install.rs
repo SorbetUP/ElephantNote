@@ -178,10 +178,27 @@ fn prebuilt_package(item: &CatalogAddon) -> R<Option<PathBuf>> {
 }
 
 fn temporary_package(item: &CatalogAddon, bundled_root: Option<&Path>) -> R<PathBuf> {
-  if let Some(package) = prebuilt_package(item)? {
-    return Ok(package);
-  }
-  let files = package_files(item, bundled_root)?;
+  let files = if let Some(root) = bundled_root {
+    let bundled = bundled_package_directory(item, root)?;
+    if !bundled.is_dir() {
+      return Err(format!(
+        "Bundled official addon package is missing for {}: {}",
+        item.id,
+        bundled.display()
+      ));
+    }
+    package_files(item, Some(root))?
+  } else {
+    let local = local_package_directory(item)?;
+    if local.is_dir() {
+      package_files(item, None)?
+    } else if let Some(package) = prebuilt_package(item)? {
+      return Ok(package);
+    } else {
+      package_files(item, None)?
+    }
+  };
+
   let path = temporary_package_path(item);
   let file = fs::File::create(&path).map_err(|error| error.to_string())?;
   let mut archive = ZipWriter::new(file);

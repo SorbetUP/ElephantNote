@@ -46,11 +46,12 @@ fn confined_write_target(root: &Path, candidate: &Path) -> ResultValue<PathBuf> 
         .file_name()
         .ok_or_else(|| "Cannot write a path without a file name.".to_string())?;
     let resolved = parent.join(file_name);
-    if resolved
+    let is_markdown = resolved
         .extension()
         .and_then(|extension| extension.to_str())
-        .is_none_or(|extension| !extension.eq_ignore_ascii_case("md"))
-    {
+        .map(|extension| extension.eq_ignore_ascii_case("md"))
+        .unwrap_or(false);
+    if !is_markdown {
         return Err(format!(
             "Refusing to save Markdown into a non-Markdown file: {}",
             resolved.to_string_lossy()

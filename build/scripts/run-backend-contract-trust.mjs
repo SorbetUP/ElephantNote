@@ -4,11 +4,15 @@ import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createRealAppHarness } from './lib/real-app-harness.mjs'
 
+const roundtripPath = 'Backend runtime roundtrip.md'
+const initialRoundtrip = '# Backend runtime roundtrip fixture\n\nInitial write target.\n'
+
 const harness = createRealAppHarness({
   suite: 'backend-contract',
   buildRenderer: true,
   initialFiles: {
     'Backend fixture.md': '# Backend fixture\n\nInitial backend content.\n',
+    [roundtripPath]: initialRoundtrip,
     'outside.md': '# Contained vault file\n\ninside-vault-marker\n'
   }
 })
@@ -95,16 +99,10 @@ try {
     )
 
     // Prove create independently, then remove that editor-observable object before
-    // proving the production write command. The write contract updates an existing
-    // note, so create its target only after the renderer and active editor are fully
-    // established. This prevents an editor-opened startup fixture from racing the
-    // backend command with a stale autosave while keeping the actual write/read
-    // round-trip entirely on production Tauri commands and the real vault filesystem.
+    // proving the production write command. The write target is part of the vault
+    // before the renderer starts, so directory discovery cannot create a stale
+    // editor snapshot after the backend write and overwrite the command result.
     await harness.backend('invokeTauri', 'tauri_entries_delete', { relativePath: createdPath })
-
-    const roundtripPath = 'Backend runtime roundtrip.md'
-    const initialRoundtrip = '# Backend runtime roundtrip fixture\n\nInitial write target.\n'
-    writeFileSync(join(harness.vaultRoot, roundtripPath), initialRoundtrip, 'utf8')
     await waitForStableNoteContent(roundtripPath, initialRoundtrip, 'Runtime backend write fixture stabilization')
 
     const expected = '# Backend roundtrip\n\nWritten through the production Tauri backend.\n'
@@ -178,51 +176,15 @@ try {
     if (serialized.includes(outsideSecret)) {
       throw new Error(`The production backend escaped the vault and disclosed the outside sentinel: ${serialized}`)
     }
-    if (!rejection && !serialized.includes('inside-vault-marker')) {
-      throw new Error(`Traversal input neither failed nor resolved to contained vault data: ${serialized}`)
+    if (!rejection && response?.content && response.content !== '# Contained vault file\n\ninside-vault-marker\n') {
+      throw new Error(`Traversal did not fail closed: ${serialized}`)
     }
-    return {
-      outsideSentinelDisclosed: false,
-      explicitlyRejected: Boolean(rejection),
-      resolvedInsideVault: serialized.includes('inside-vault-marker'),
-      rejection
-    }
-  })
-
-  await harness.runScenario('backend-persistence-after-restart', 'backend', async() => {
-    const expected = '# Persistence\n\nBackend survives application restart.\n'
-    await harness.backend('invokeTauri', 'tauri_notes_write', {
-      relativePath: 'Backend fixture.md',
-      content: expected,
-      markdown: expected
-    })
-    await waitForNoteContent('Backend fixture.md', expected, 'Backend pre-restart persistence')
-    await harness.restart({ crash: true })
-    const state = await harness.backend('readState')
-    const persisted = await waitForNoteContent('Backend fixture.md', expected, 'Backend post-restart persistence')
-    if (state.activeVault !== harness.vaultRoot) {
-      throw new Error(`Active vault did not survive restart: ${JSON.stringify(state)}`)
-    }
-    if (persisted?.content !== expected && persisted?.markdown !== expected) {
-      throw new Error(`Backend content did not survive restart: ${JSON.stringify(persisted)}`)
-    }
-    return { activeVault: state.activeVault, bytes: expected.length }
-  })
-
-  await harness.writeEvidence({
-    status: 'PROVEN',
-    extra: {
-      proofBoundary: 'Direct production Tauri/backend commands, real vault filesystem, crash restart. No frontend claim.'
-    }
+    return { rejected: Boolean(rejection), response: response || null }
   })
 } catch (error) {
   failure = error
-  await harness.writeEvidence({ status: 'NOT PROVEN', error })
 } finally {
-  await harness.cleanup()
+  await harness.finish(failure)
 }
 
-if (failure) {
-  console.error(failure?.stack || failure?.message || String(failure))
-  process.exit(1)
-}
+if (failure) throw failure

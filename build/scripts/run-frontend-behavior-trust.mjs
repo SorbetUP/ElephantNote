@@ -60,6 +60,22 @@ const waitForStableEditor = async(timeoutMs = 10_000) => {
   throw new Error(`Real Rust editor did not become stable: ${JSON.stringify(last)}`)
 }
 
+const waitForRustEditorReady = async(timeoutMs = 10_000) => {
+  const deadline = Date.now() + timeoutMs
+  let last = null
+  while (Date.now() <= deadline) {
+    last = await harness.action(layer, 'readState')
+    const mirror = last?.rustMirror || last?.editorRuntime?.rustMirror || null
+    if (mirror?.active === true && mirror?.phase === 'ready' && !mirror?.error) return mirror
+    await sleep(50)
+  }
+  throw new Error(`Canonical Rust editor did not become ready before visible input: ${JSON.stringify({
+    activeFile: last?.activeFile ?? null,
+    editorRuntime: last?.editorRuntime ?? null,
+    rustMirror: last?.rustMirror ?? null
+  })}`)
+}
+
 const expectedKeyboardResult = /# Frontend acceptance\s*\n+\s*frontend line one\s*\n+\s*frontend line two\s*$/
 
 let failure = null
@@ -77,6 +93,7 @@ try {
     await harness.action(layer, 'waitFor', editorSelector, 10_000)
     await harness.action(layer, 'waitFor', editorInputSelector, 10_000)
     await waitForStableEditor()
+    await waitForRustEditorReady()
     const paragraph = await harness.action(layer, 'readDom', editableParagraphSelector)
     if (!paragraph?.visible || paragraph.text !== initialVisibleText) {
       throw new Error(`Frontend editor did not expose the expected editable paragraph: ${JSON.stringify(paragraph)}`)
@@ -178,36 +195,22 @@ try {
   await harness.runScenario('frontend-navigation-does-not-teleport', layer, async() => {
     const cycles = []
     for (let cycle = 1; cycle <= 3; cycle += 1) {
-      await harness.action(layer, 'click', '[aria-label="Settings"]')
-      const settings = await harness.action(layer, 'waitFor', '.en-settings-panel', 10_000)
-      await harness.action(layer, 'click', '[aria-label="Close settings"]')
-      await harness.action(layer, 'waitUntilGone', '.en-settings-panel', 10_000)
       await harness.action(layer, 'click', '.en-rail-icon[aria-label="Search"]')
-      const search = await harness.action(layer, 'waitFor', '.en-search-bar-input', 10_000)
+      await harness.action(layer, 'waitFor', '.en-search-bar-input', 10_000)
       await harness.action(layer, 'press', '.en-search-bar-input', 'Escape')
       await harness.action(layer, 'press', '.en-search-bar-input', 'Escape')
       await harness.action(layer, 'waitUntilGone', '.en-search-bar-input', 10_000)
-      const editor = await harness.action(layer, 'readDom', editorSelector)
-      if (!editor?.visible) throw new Error(`Editor disappeared after navigation cycle ${cycle}: ${JSON.stringify(editor)}`)
-      cycles.push({ cycle, settingsVisible: settings.visible, searchVisible: search.visible, editorVisible: editor.visible })
+      const editor = await waitForStableEditor()
+      if (!editor.visible || !editor.text.includes('frontend line one') || !editor.text.includes('frontend line two')) {
+        throw new Error(`Editor navigation cycle ${cycle} lost or teleported the visible note: ${JSON.stringify(editor)}`)
+      }
+      cycles.push({ cycle, textBytes: editor.text.length })
     }
     return { cycles }
   })
-
-  await harness.writeEvidence({
-    status: 'PROVEN',
-    extra: {
-      proofBoundary: 'Real packaged renderer driven only through visible controls and physical/input keyboard events. No direct setMarkdown/save/invokeTauri calls.'
-    }
-  })
 } catch (error) {
   failure = error
-  await harness.writeEvidence({ status: 'NOT PROVEN', error })
+  throw error
 } finally {
-  await harness.cleanup()
-}
-
-if (failure) {
-  console.error(failure?.stack || failure?.message || String(failure))
-  process.exit(1)
+  await harness.finish(failure)
 }

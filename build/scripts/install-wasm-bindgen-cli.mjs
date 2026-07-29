@@ -10,6 +10,15 @@ const root = resolve(import.meta.dirname, '../..')
 const lockPath = join(root, 'Elephant/crates/muya-wasm/Cargo.lock')
 const requiredBinaries = ['wasm-bindgen', 'wasm-bindgen-test-runner', 'wasm2es6js']
 
+const hasWasmTarget = () => {
+  try {
+    const installed = execFileSync('rustup', ['target', 'list', '--installed'], { encoding: 'utf8' })
+    return installed.split(/\r?\n/).includes('wasm32-unknown-unknown')
+  } catch {
+    return false
+  }
+}
+
 const readLockedVersion = () => {
   const lock = readFileSync(lockPath, 'utf8')
   for (const block of lock.split('[[package]]')) {
@@ -93,6 +102,11 @@ const appendPath = () => {
 }
 
 const main = async() => {
+  if (!hasWasmTarget()) {
+    console.log('[wasm-bindgen-cli] wasm32-unknown-unknown target is not installed; skipping CLI setup for this job')
+    return
+  }
+
   const version = readLockedVersion()
   const current = installedVersion()
   mkdirSync(cargoBin, { recursive: true })

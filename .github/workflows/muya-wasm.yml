@@ -13,9 +13,11 @@ on:
       - 'Elephant/frontend/src/renderer/src/muya/**'
       - 'Elephant/frontend/src/renderer/src/pages/app.vue'
       - 'build/scripts/build-muya-wasm.mjs'
+      - 'build/scripts/install-wasm-bindgen-cli.mjs'
       - 'build/scripts/run-markdown-editor-trust.mjs'
       - 'package.json'
       - 'vite.tauri.config.mjs'
+      - '.github/actions/setup/action.yml'
       - '.github/workflows/muya-wasm.yml'
   workflow_dispatch:
 
@@ -30,7 +32,7 @@ jobs:
   rust-core-and-adapter:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -61,22 +63,21 @@ jobs:
         run: cargo check --manifest-path Elephant/crates/muya-wasm/Cargo.toml --target wasm32-unknown-unknown
 
       - name: Upload Rust diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
         with:
           name: muya-rust-contracts
           path: |
             muya-core-tests.txt
             muya-wasm-tests.txt
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 3
+          compression-level: 9
 
   bundled-web-build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: ./.github/actions/setup
+      - uses: actions/checkout@v6
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -84,11 +85,13 @@ jobs:
           toolchain: '1.91.0'
           targets: wasm32-unknown-unknown
 
-      - id: wasm-bindgen
-        name: Resolve wasm-bindgen version
+      - uses: ./.github/actions/setup
+
+      - name: Verify exact prebuilt wasm-bindgen CLI
         shell: bash
         run: |
-          version="$(cargo metadata \
+          set -euxo pipefail
+          expected="$(cargo metadata \
             --manifest-path Elephant/crates/muya-wasm/Cargo.toml \
             --format-version 1 | node -e '
               let input = ""
@@ -100,23 +103,7 @@ jobs:
                 process.stdout.write(pkg.version)
               })
             ')"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
-      - name: Cache wasm-bindgen CLI
-        uses: actions/cache@v4
-        with:
-          path: build/tools/wasm-bindgen
-          key: wasm-bindgen-cli-${{ runner.os }}-${{ steps.wasm-bindgen.outputs.version }}
-
-      - name: Install wasm-bindgen CLI
-        shell: bash
-        run: |
-          if [ ! -x build/tools/wasm-bindgen/bin/wasm-bindgen ]; then
-            cargo install wasm-bindgen-cli \
-              --version "${{ steps.wasm-bindgen.outputs.version }}" \
-              --locked \
-              --root build/tools/wasm-bindgen
-          fi
+          wasm-bindgen --version | grep -F "${expected}"
 
       - name: Lint Rust bridge production modules
         shell: bash
@@ -130,6 +117,7 @@ jobs:
             Elephant/frontend/src/renderer/src/muya \
             Elephant/frontend/src/renderer/src/pages/app.vue \
             build/scripts/build-muya-wasm.mjs \
+            build/scripts/install-wasm-bindgen-cli.mjs \
             vite.tauri.config.mjs \
             2>&1 | tee muya-rust-eslint.txt
 
@@ -137,15 +125,14 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          export PATH="$PWD/build/tools/wasm-bindgen/bin:$PATH"
           pnpm tauri:web:build:rust-editor
           test -f Elephant/frontend/src/muya/lib/rust/generated/muya_wasm.js
           test -f Elephant/frontend/src/muya/lib/rust/generated/muya_wasm_bg.wasm
           find build/out/renderer -name '*.wasm' -print -quit | grep .
 
       - name: Upload build diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
         with:
           name: muya-rust-web-build
           path: |
@@ -153,4 +140,5 @@ jobs:
             Elephant/frontend/src/muya/lib/rust/generated/muya_wasm.js
             Elephant/frontend/src/muya/lib/rust/generated/muya_wasm_bg.wasm
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 3
+          compression-level: 9

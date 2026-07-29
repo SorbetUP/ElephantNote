@@ -35,8 +35,9 @@ const tauriWebBuildSource = tauriWebBuildEntrypoint && existsSync(absolute(tauri
   ? readText(tauriWebBuildEntrypoint)
   : ''
 const addonPreparationCall = "runNode('build/scripts/prepare-tauri-addon-resources.mjs')"
+const rendererBuildCall = "runNode('Elephant/node_modules/vite/bin/vite.js'"
 const addonPreparationIndex = tauriWebBuildSource.indexOf(addonPreparationCall)
-const rendererBuildIndex = tauriWebBuildSource.indexOf('vite/bin/vite.js')
+const rendererBuildIndex = tauriWebBuildSource.indexOf(rendererBuildCall)
 
 const assertWorkspaceBuildHook = (config, label) => {
   const command = config.build?.beforeBuildCommand

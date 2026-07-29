@@ -4,9 +4,6 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - develop_next-mobile-recovery
-      - develop_next-unified-candidate2
-      - develop_next-integration-repair
       - develop
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -24,7 +21,6 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'push' ||
-      github.event.pull_request.base.ref == 'develop_next-integration-repair' ||
       github.event.pull_request.base.ref == 'develop'
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -103,7 +99,7 @@ jobs:
           set -euxo pipefail
           pnpm tauri:android:build 2>&1 | tee android-release-build.log
 
-      - name: Collect signed APK
+      - name: Collect and verify signed APK
         shell: bash
         run: |
           set -euxo pipefail
@@ -112,25 +108,26 @@ jobs:
             -type f -name '*-review-signed.apk' -print | head -n 1)
           test -s "$APK"
           test "$(stat -c '%s' "$APK")" -le $((24 * 1024 * 1024))
-          cp "$APK" build/android-review/Elephant-develop_next-arm64-release-review.apk
-          sha256sum build/android-review/Elephant-develop_next-arm64-release-review.apk \
+          cp "$APK" build/android-review/Elephant-arm64-release-review.apk
+          sha256sum build/android-review/Elephant-arm64-release-review.apk \
             | tee build/android-review/SHA256SUMS.txt
           cp android-release-build.log build/android-review/android-release-build.log
 
-      - name: Upload Android review APK
+      - name: Upload Android review APK for develop or manual review
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
         uses: actions/upload-artifact@v4
         with:
-          name: Elephant-develop_next-Android-arm64-release-review
+          name: Elephant-Android-arm64-release-review
           path: build/android-review/
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 3
+          compression-level: 0
 
   startup-smoke:
     name: Install, launch and exercise Android regressions
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'push' ||
-      github.event.pull_request.base.ref == 'develop_next-integration-repair' ||
       github.event.pull_request.base.ref == 'develop'
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -229,21 +226,32 @@ jobs:
             bash build/scripts/android_usage_regression_suite.sh
             bash build/scripts/android_editor_chrome_regression.sh
 
-      - name: Upload Android app usage diagnostics
-        if: always()
+      - name: Upload compact Android proof
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: Elephant-Android-app-usage-diagnostics
+          name: Elephant-Android-app-usage-proof
           path: |
-            android-startup-build.log
-            android-startup-logcat.txt
-            android-usage-logcat.txt
             android-usage-summary.json
             android-usage-junit.xml
             android-usage-results.tsv
             android-editor-chrome-validation.txt
+          if-no-files-found: warn
+          retention-days: 3
+          compression-level: 9
+
+      - name: Upload Android failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Elephant-Android-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            android-startup-build.log
+            android-startup-logcat.txt
+            android-usage-logcat.txt
             android-usage-*.log
             android-*.png
             android-*.xml
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 2
+          compression-level: 6

@@ -208,9 +208,21 @@ try {
     }
     return { cycles }
   })
+
+  await harness.writeEvidence({
+    status: 'PROVEN',
+    extra: {
+      proofBoundary: 'Real renderer driven only through visible controls and the live Muya/Rust contenteditable, with persisted vault verification.'
+    }
+  })
 } catch (error) {
   failure = error
-  throw error
+  await harness.writeEvidence({ status: 'NOT PROVEN', error })
 } finally {
-  await harness.finish(failure)
+  await harness.cleanup()
+}
+
+if (failure) {
+  console.error(failure?.stack || failure?.message || String(failure))
+  process.exit(1)
 }

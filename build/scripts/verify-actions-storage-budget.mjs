@@ -85,6 +85,8 @@ requireMarker('trust', 'actions/setup-node@v6', 'Node 24 setup-node action')
 requireMarker('trust', 'actions/upload-artifact@v7', 'Node 24 artifact upload action')
 requireMarker('setup', 'actions/setup-node@v6', 'Node 24 setup-node action')
 requireMarker('setup', 'package-manager-cache: false', 'explicit setup-node automatic-cache opt-out')
+requireMarker('setup', 'actions/cache@v5', 'Node 24 pnpm cache action')
+requireMarker('setup', "hashFiles('pnpm-lock.yaml')", 'lockfile-keyed pnpm cache')
 requireMarker('setup', 'install-wasm-bindgen-cli.mjs', 'verified prebuilt wasm-bindgen installer')
 
 requireMarker('desktop', 'Upload compact Tauri acceptance evidence', 'compact desktop evidence upload')
@@ -111,4 +113,4 @@ if (failures.length > 0) {
   process.exit(1)
 }
 
-console.log('[actions-storage-budget] PASS: artifacts are compact and migrated proof workflows use Node 24 actions plus verified prebuilt Rust tooling')
+console.log('[actions-storage-budget] PASS: artifacts are compact and migrated proof workflows use Node 24 actions, a lockfile cache, and verified prebuilt Rust tooling')

@@ -1,15 +1,19 @@
 name: Actions storage cleanup
 
 on:
-  workflow_dispatch:
   push:
     branches:
-      - main
-      - develop
+      - 'agent/**'
     paths:
       - .github/workflows/actions-storage-cleanup.yml
+  workflow_dispatch:
+    inputs:
+      keep_days:
+        description: Delete artifacts older than this many days
+        required: false
+        default: '3'
   schedule:
-    - cron: '37 3 * * *'
+    - cron: '23 3 * * *'
 
 permissions:
   actions: write
@@ -21,69 +25,59 @@ concurrency:
 
 jobs:
   cleanup:
-    name: Reclaim Actions storage
+    name: Delete obsolete workflow artifacts
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
-      - name: Delete temporary artifacts and stale caches
+      - name: Delete obsolete and expired artifacts
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          CURRENT_BRANCH: ${{ github.ref_name }}
+          CURRENT_SHA: ${{ github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          KEEP_DAYS: ${{ inputs.keep_days || '3' }}
         run: |
           set -euo pipefail
 
-          repo="$GITHUB_REPOSITORY"
-          # Editing this workflow or dispatching it triggers one full purge.
-          force_cleanup=false
-          if [[ "$GITHUB_EVENT_NAME" == "push" || "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
-            force_cleanup=true
-          fi
+          cutoff_epoch="$(date -u -d "${KEEP_DAYS} days ago" +%s)"
+          scanned=0
+          deleted=0
+          deleted_bytes=0
 
-          now_epoch=$(date -u +%s)
-          artifact_cutoff=$((now_epoch - 24 * 60 * 60))
-          deleted_artifacts=0
-          deleted_caches=0
-          reclaimed_artifact_bytes=0
-          reclaimed_cache_bytes=0
+          while IFS=$'\t' read -r artifact_id artifact_name artifact_size created_at head_branch head_sha
+          do
+            [ -n "${artifact_id:-}" ] || continue
+            scanned=$((scanned + 1))
+            created_epoch="$(date -u -d "$created_at" +%s)"
+            delete_reason=''
 
-          while IFS=$'\t' read -r id created_at size name; do
-            [[ -z "${id:-}" ]] && continue
-            created_epoch=$(date -u -d "$created_at" +%s)
-            if [[ "$force_cleanup" == "true" || "$created_epoch" -lt "$artifact_cutoff" ]]; then
-              echo "Deleting artifact id=$id name=$name size=$size created=$created_at"
-              gh api --method DELETE "/repos/$repo/actions/artifacts/$id"
-              deleted_artifacts=$((deleted_artifacts + 1))
-              reclaimed_artifact_bytes=$((reclaimed_artifact_bytes + size))
+            if [ "$EVENT_NAME" = push ] && \
+               [ "$head_branch" = "$CURRENT_BRANCH" ] && \
+               [ "$head_sha" != "$CURRENT_SHA" ]; then
+              delete_reason="obsolete SHA on ${CURRENT_BRANCH}"
+            elif [ "$created_epoch" -lt "$cutoff_epoch" ]; then
+              delete_reason="older than ${KEEP_DAYS} days"
             fi
+
+            [ -n "$delete_reason" ] || continue
+            echo "Deleting artifact id=$artifact_id size=$artifact_size name=$artifact_name reason=$delete_reason"
+            gh api --method DELETE "repos/${REPOSITORY}/actions/artifacts/${artifact_id}"
+            deleted=$((deleted + 1))
+            deleted_bytes=$((deleted_bytes + artifact_size))
           done < <(
-            gh api --paginate "/repos/$repo/actions/artifacts?per_page=100" \
-              --jq '.artifacts[] | [.id, .created_at, .size_in_bytes, .name] | @tsv'
+            gh api --paginate "repos/${REPOSITORY}/actions/artifacts?per_page=100" \
+              --jq '.artifacts[] | [.id, .name, .size_in_bytes, .created_at, (.workflow_run.head_branch // ""), (.workflow_run.head_sha // "")] | @tsv'
           )
 
-          # Caches are not part of the 0.5 GB artifact allowance and improve CI
-          # speed. Clear them only during an explicit/forced cleanup, not daily.
-          if [[ "$force_cleanup" == "true" ]]; then
-            while IFS=$'\t' read -r id ref last_accessed size key; do
-              [[ -z "${id:-}" ]] && continue
-              echo "Deleting cache id=$id ref=$ref key=$key size=$size last_accessed=$last_accessed"
-              gh api --method DELETE "/repos/$repo/actions/caches/$id"
-              deleted_caches=$((deleted_caches + 1))
-              reclaimed_cache_bytes=$((reclaimed_cache_bytes + size))
-            done < <(
-              gh api --paginate "/repos/$repo/actions/caches?per_page=100" \
-                --jq '.actions_caches[] | [.id, .ref, .last_accessed_at, .size_in_bytes, .key] | @tsv'
-            )
-          fi
-
+          deleted_mib="$(awk -v bytes="$deleted_bytes" 'BEGIN { printf "%.2f", bytes / 1048576 }')"
           {
-            echo "## Actions storage cleanup"
+            echo '## Actions artifact cleanup'
             echo
-            echo "- Forced cleanup: $force_cleanup"
-            echo "- Artifacts deleted: $deleted_artifacts"
-            echo "- Artifact bytes requested for deletion: $reclaimed_artifact_bytes"
-            echo "- Caches deleted: $deleted_caches"
-            echo "- Cache bytes requested for deletion: $reclaimed_cache_bytes"
-            echo
-            echo "Scheduled runs keep only the latest 24 hours of artifacts."
-            echo "Caches are preserved during scheduled runs to avoid slowing CI."
+            echo "- Scanned: ${scanned}"
+            echo "- Deleted: ${deleted}"
+            echo "- Freed current storage: ${deleted_mib} MiB"
+            echo "- Retention threshold: ${KEEP_DAYS} days"
+            echo '- Dependency caches preserved: yes'
           } >> "$GITHUB_STEP_SUMMARY"

@@ -187,23 +187,23 @@ try {
       throw new Error(`Restart persistence write returned the wrong path: ${JSON.stringify(written)}`)
     }
     await waitForStableNoteContent(restartPath, expected, 'Pre-restart persistence stabilization')
-    await harness.restart()
+    await harness.restart({ crash: true })
     await harness.setup('selectVault', harness.vaultRoot)
-    const restored = await waitForStableNoteContent(restartPath, expected, 'Post-restart persisted note verification')
+    const restored = await waitForStableNoteContent(restartPath, expected, 'Post-SIGKILL persisted note verification')
     const disk = harness.readVaultFile(restartPath)
     if (disk !== expected) throw new Error(`Restart persistence disk content differs: ${JSON.stringify({ expected, disk })}`)
     return {
       path: restartPath,
       bytes: expected.length,
       restoredBytes: String(restored?.content ?? restored?.markdown ?? '').length,
-      restartMode: 'graceful-full-process-restart'
+      restartMode: 'sigkill-full-process-restart'
     }
   })
 
   await harness.writeEvidence({
     status: 'PROVEN',
     extra: {
-      proofBoundary: 'Production Tauri/backend commands against a real vault filesystem, including full-process restart persistence.'
+      proofBoundary: 'Production Tauri/backend commands against a real vault filesystem, including SIGKILL full-process restart persistence.'
     }
   })
 } catch (error) {

@@ -89,6 +89,16 @@ jobs:
             unzip -t "$archive"
           done
 
+      - name: Record packaged addon checksums
+        shell: bash
+        run: |
+          set -euxo pipefail
+          find build/addons build/out/addons/releases -type f -name '*.enaddon' -print0 2>/dev/null \
+            | sort -z \
+            | xargs -0 -r sha256sum \
+            | tee addon-package-sha256.txt
+          test -s addon-package-sha256.txt
+
       - uses: ./.github/actions/setup
 
       - name: Install exact wasm-bindgen CLI
@@ -120,8 +130,8 @@ jobs:
             fi
           done
 
-      - name: Upload package and build evidence
-        if: always()
+      - name: Upload compact package and build evidence
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: addon-platform-package-validation
@@ -131,12 +141,12 @@ jobs:
             trusted-addon-package.txt
             physical-addon-packages.txt
             mobile-addon-packages.txt
+            addon-package-sha256.txt
             addon-build.txt
-            build/addons/*.enaddon
-            build/out/addons/releases/**/*.enaddon
             build/out/addons/releases/**/*.json
           if-no-files-found: ignore
-          retention-days: 30
+          retention-days: 3
+          compression-level: 9
 
   validate-addon-rust:
     runs-on: ubuntu-latest
@@ -196,8 +206,18 @@ jobs:
           done
           find build/out/addons/releases -name '*.enaddon' -print -exec unzip -t {} \;
 
-      - name: Upload Rust and physical package validation
-        if: always()
+      - name: Record native addon package checksums
+        shell: bash
+        run: |
+          set -euxo pipefail
+          find build/out/addons/releases -type f -name '*.enaddon' -print0 \
+            | sort -z \
+            | xargs -0 -r sha256sum \
+            | tee addon-rust-package-sha256.txt
+          test -s addon-rust-package-sha256.txt
+
+      - name: Upload compact Rust and physical package validation
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: addon-platform-rust-validation
@@ -205,7 +225,8 @@ jobs:
             addon-rust-tests.txt
             physical-addon-tests.txt
             physical-addon-build.txt
-            build/out/addons/releases/**/*.enaddon
+            addon-rust-package-sha256.txt
             build/out/addons/releases/**/*.json
           if-no-files-found: ignore
-          retention-days: 30
+          retention-days: 3
+          compression-level: 9

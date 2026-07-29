@@ -9,7 +9,7 @@ const failures = []
 const read = (relativePath) => {
   const absolutePath = path.join(root, relativePath)
   if (!fs.existsSync(absolutePath)) {
-    failures.push(`Missing Actions storage policy file: ${relativePath}`)
+    failures.push(`Missing Actions policy file: ${relativePath}`)
     return ''
   }
   return fs.readFileSync(absolutePath, 'utf8')
@@ -20,7 +20,13 @@ const workflows = {
   e2e: '.github/workflows/e2e.yml',
   android: '.github/workflows/android-apk.yml',
   addons: '.github/workflows/addon-platform-validation.yml',
-  cleanup: '.github/workflows/actions-storage-cleanup.yml'
+  cleanup: '.github/workflows/actions-storage-cleanup.yml',
+  storageGuard: '.github/workflows/actions-storage-guard.yml',
+  trust: '.github/workflows/test.yml',
+  muya: '.github/workflows/muya-wasm.yml',
+  production: '.github/workflows/test-performance-hardening.yml',
+  rustEditor: '.github/workflows/rust-editor-production-validation.yml',
+  setup: '.github/actions/setup/action.yml'
 }
 
 const contents = Object.fromEntries(
@@ -67,6 +73,20 @@ for (const key of ['desktop', 'e2e', 'android', 'addons']) {
   }
 }
 
+for (const key of ['desktop', 'muya', 'production', 'rustEditor']) {
+  forbid(key, 'cargo install wasm-bindgen-cli', 'source compilation of wasm-bindgen CLI')
+  requireMarker(key, 'actions/checkout@v6', 'Node 24 checkout action')
+  requireMarker(key, 'actions/upload-artifact@v7', 'Node 24 artifact upload action')
+}
+
+requireMarker('storageGuard', 'actions/checkout@v6', 'Node 24 checkout action')
+requireMarker('trust', 'actions/checkout@v6', 'Node 24 checkout action')
+requireMarker('trust', 'actions/setup-node@v6', 'Node 24 setup-node action')
+requireMarker('trust', 'actions/upload-artifact@v7', 'Node 24 artifact upload action')
+requireMarker('setup', 'actions/setup-node@v6', 'Node 24 setup-node action')
+requireMarker('setup', 'package-manager-cache: false', 'explicit setup-node automatic-cache opt-out')
+requireMarker('setup', 'install-wasm-bindgen-cli.mjs', 'verified prebuilt wasm-bindgen installer')
+
 requireMarker('desktop', 'Upload compact Tauri acceptance evidence', 'compact desktop evidence upload')
 requireMarker('desktop', 'compression-level: 9', 'maximum compression for desktop evidence')
 requireMarker('e2e', 'Upload compact Linux proof diagnostics', 'compact AppImage proof upload')
@@ -91,4 +111,4 @@ if (failures.length > 0) {
   process.exit(1)
 }
 
-console.log('[actions-storage-budget] PASS: PR artifacts are compact, short-lived and automatically cleaned')
+console.log('[actions-storage-budget] PASS: artifacts are compact and migrated proof workflows use Node 24 actions plus verified prebuilt Rust tooling')

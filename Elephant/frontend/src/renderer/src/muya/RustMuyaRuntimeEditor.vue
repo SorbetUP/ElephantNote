@@ -340,7 +340,11 @@ watch(
     })
     const echoIndex = internalPropEchoes.indexOf(normalized)
     if (echoIndex >= 0) {
-      internalPropEchoes.splice(0, echoIndex + 1)
+      // Vue and the parent document adapter can deliver internally emitted values
+      // out of order while Rust is accepting rapid physical keystrokes. Remove only
+      // the observed echo; dropping all earlier entries makes a late older echo look
+      // external and remounts the live contenteditable in the middle of typing.
+      internalPropEchoes.splice(echoIndex, 1)
       return
     }
     if (!userMutationObserved && equivalentTrailingParagraph(normalized, runtimeMarkdown)) {

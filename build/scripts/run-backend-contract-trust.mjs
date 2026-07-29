@@ -6,6 +6,7 @@ import { createRealAppHarness } from './lib/real-app-harness.mjs'
 
 const roundtripPath = 'Backend runtime roundtrip.md'
 const initialRoundtrip = '# Backend runtime roundtrip fixture\n\nInitial write target.\n'
+const restartPath = 'Backend restart persistence.md'
 
 const harness = createRealAppHarness({
   suite: 'backend-contract',
@@ -13,6 +14,7 @@ const harness = createRealAppHarness({
   initialFiles: {
     'Backend fixture.md': '# Backend fixture\n\nInitial backend content.\n',
     [roundtripPath]: initialRoundtrip,
+    [restartPath]: '# Backend restart fixture\n\nInitial restart content.\n',
     'outside.md': '# Contained vault file\n\ninside-vault-marker\n'
   }
 })
@@ -92,16 +94,8 @@ try {
       title: 'Lifecycle'
     })
     const createdPath = 'Backend contracts/Lifecycle.md'
-    await waitForStableNoteContent(
-      createdPath,
-      '# Lifecycle\n',
-      'Production note creation stabilization'
-    )
+    await waitForStableNoteContent(createdPath, '# Lifecycle\n', 'Production note creation stabilization')
 
-    // Prove create independently, then remove that editor-observable object before
-    // proving the production write command. The write target is part of the vault
-    // before the renderer starts, so directory discovery cannot create a stale
-    // editor snapshot after the backend write and overwrite the command result.
     await harness.backend('invokeTauri', 'tauri_entries_delete', { relativePath: createdPath })
     await waitForStableNoteContent(roundtripPath, initialRoundtrip, 'Runtime backend write fixture stabilization')
 
@@ -181,10 +175,45 @@ try {
     }
     return { rejected: Boolean(rejection), response: response || null }
   })
+
+  await harness.runScenario('backend-persistence-after-restart', 'backend', async() => {
+    const expected = '# Backend restart persistence\n\nThis content must survive a complete application restart.\n'
+    const written = await harness.backend('invokeTauri', 'tauri_notes_write', {
+      relativePath: restartPath,
+      content: expected,
+      markdown: expected
+    })
+    if (written?.path !== restartPath) {
+      throw new Error(`Restart persistence write returned the wrong path: ${JSON.stringify(written)}`)
+    }
+    await waitForStableNoteContent(restartPath, expected, 'Pre-restart persistence stabilization')
+    await harness.restart()
+    await harness.setup('selectVault', harness.vaultRoot)
+    const restored = await waitForStableNoteContent(restartPath, expected, 'Post-restart persisted note verification')
+    const disk = harness.readVaultFile(restartPath)
+    if (disk !== expected) throw new Error(`Restart persistence disk content differs: ${JSON.stringify({ expected, disk })}`)
+    return {
+      path: restartPath,
+      bytes: expected.length,
+      restoredBytes: String(restored?.content ?? restored?.markdown ?? '').length,
+      restartMode: 'graceful-full-process-restart'
+    }
+  })
+
+  await harness.writeEvidence({
+    status: 'PROVEN',
+    extra: {
+      proofBoundary: 'Production Tauri/backend commands against a real vault filesystem, including full-process restart persistence.'
+    }
+  })
 } catch (error) {
   failure = error
+  await harness.writeEvidence({ status: 'NOT PROVEN', error })
 } finally {
-  await harness.finish(failure)
+  await harness.cleanup()
 }
 
-if (failure) throw failure
+if (failure) {
+  console.error(failure?.stack || failure?.message || String(failure))
+  process.exit(1)
+}

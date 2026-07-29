@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - develop
-      - 'agent/**'
   pull_request:
     types: [opened, synchronize, reopened]
 
@@ -250,8 +249,8 @@ jobs:
           done < <(find test-results -type f -name '*native-package-evidence.json' -print 2>/dev/null || true)
           find official-addon-evidence -maxdepth 1 -type f -print -exec cat {} \; || true
 
-      - name: Upload complete Linux automation diagnostics
-        if: always()
+      - name: Upload compact Linux proof diagnostics
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: linux-three-layer-distributed-appimage-proof-and-addon-diagnostics
@@ -267,23 +266,25 @@ jobs:
             tauri-linux-build.txt
             packaged-appimage.sha256
             automation-tests.txt
-            test-results/trust/**
-            test-results/trusted/backend-contract/**
-            test-results/trusted/frontend-behavior/**
-            test-results/trusted/packaged-user-journey/**
-            test-results/trusted/markdown-editor/**
-            test-results/observability/**
-            test-results/acceptance/**
-            official-addon-evidence/**
-            build/out/addons/releases/**
-            Elephant/backend/tauri/target/release/bundle/appimage/*.AppImage
+            test-results/trust/**/*.json
+            test-results/trusted/**/*.json
+            test-results/trusted/**/*.log
+            test-results/trusted/**/*.txt
+            test-results/observability/**/*.json
+            test-results/observability/**/*.log
+            test-results/observability/**/*.txt
+            test-results/acceptance/**/*.json
+            test-results/acceptance/**/*.log
+            test-results/acceptance/**/*.txt
+            official-addon-evidence/**/*.json
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 3
+          compression-level: 9
 
   concise-diagnostics:
     name: Concise three-layer failure diagnostics
     needs: e2e
-    if: always()
+    if: failure()
     runs-on: ubuntu-24.04
     steps:
       - name: Download proof diagnostics

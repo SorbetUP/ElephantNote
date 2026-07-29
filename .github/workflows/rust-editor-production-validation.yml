@@ -8,6 +8,7 @@ on:
       - develop_next-integration-repair
       - develop_next-unified-candidate2
     paths:
+      - '.github/actions/setup/action.yml'
       - '.github/workflows/rust-editor-production-validation.yml'
       - 'Elephant/crates/muya-core/**'
       - 'Elephant/crates/muya-wasm/**'
@@ -16,12 +17,14 @@ on:
       - 'Elephant/frontend/src/renderer/src/muya/**'
       - 'Elephant/frontend/src/renderer/src/components/editorWithTabs/**'
       - 'build/scripts/build-muya-wasm.mjs'
+      - 'build/scripts/install-wasm-bindgen-cli.mjs'
       - 'build/scripts/verify-rust-editor-ownership.mjs'
       - 'build/scripts/run-markdown-editor-trust.mjs'
       - 'vite.tauri.config.mjs'
       - 'package.json'
   pull_request:
     paths:
+      - '.github/actions/setup/action.yml'
       - '.github/workflows/rust-editor-production-validation.yml'
       - 'Elephant/crates/muya-core/**'
       - 'Elephant/crates/muya-wasm/**'
@@ -30,6 +33,7 @@ on:
       - 'Elephant/frontend/src/renderer/src/muya/**'
       - 'Elephant/frontend/src/renderer/src/components/editorWithTabs/**'
       - 'build/scripts/build-muya-wasm.mjs'
+      - 'build/scripts/install-wasm-bindgen-cli.mjs'
       - 'build/scripts/verify-rust-editor-ownership.mjs'
       - 'build/scripts/run-markdown-editor-trust.mjs'
       - 'vite.tauri.config.mjs'
@@ -47,7 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -70,11 +74,11 @@ jobs:
           cargo test --manifest-path Elephant/crates/muya-wasm/Cargo.toml 2>&1 | tee rust-editor-wasm-tests.txt
           cargo check --manifest-path Elephant/crates/muya-wasm/Cargo.toml --target wasm32-unknown-unknown
 
-      - id: wasm-bindgen
-        name: Resolve wasm-bindgen version
+      - name: Verify exact prebuilt wasm-bindgen CLI
         shell: bash
         run: |
-          version="$(cargo metadata \
+          set -euxo pipefail
+          expected="$(cargo metadata \
             --manifest-path Elephant/crates/muya-wasm/Cargo.toml \
             --format-version 1 | node -e '
               let input = ""
@@ -86,14 +90,7 @@ jobs:
                 process.stdout.write(pkg.version)
               })
             ')"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
-      - name: Install exact wasm-bindgen CLI
-        shell: bash
-        run: |
-          if ! wasm-bindgen --version 2>/dev/null | grep -q "${{ steps.wasm-bindgen.outputs.version }}$"; then
-            cargo install wasm-bindgen-cli --version "${{ steps.wasm-bindgen.outputs.version }}" --locked
-          fi
+          wasm-bindgen --version | grep -F "${expected}"
 
       - name: Build the real production WASM editor
         shell: bash
@@ -122,8 +119,8 @@ jobs:
           fi
 
       - name: Upload Rust editor diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
         with:
           name: rust-editor-production-diagnostics
           path: |
@@ -131,4 +128,5 @@ jobs:
             rust-editor-wasm-tests.txt
             rust-editor-ownership.txt
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 3
+          compression-level: 9

@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -40,14 +40,13 @@ jobs:
 
       - uses: ./.github/actions/setup
 
-      - name: Install exact wasm-bindgen CLI
+      - name: Verify exact prebuilt wasm-bindgen CLI
         shell: bash
         run: |
+          set -euxo pipefail
           VERSION=$(cargo metadata --manifest-path Elephant/crates/muya-wasm/Cargo.toml --format-version 1 \
             | python3 -c "import json,sys; data=json.load(sys.stdin); print(next(p['version'] for p in data['packages'] if p['name']=='wasm-bindgen'))")
-          if ! wasm-bindgen --version 2>/dev/null | grep -q "${VERSION}$"; then
-            cargo install wasm-bindgen-cli --version "$VERSION" --locked
-          fi
+          wasm-bindgen --version | grep -F "${VERSION}"
 
       - name: Enforce test trust policy
         run: pnpm test:trust:guard
@@ -74,8 +73,8 @@ jobs:
           pnpm tauri:web:build 2>&1 | tee production-renderer-build.txt
 
       - name: Upload production diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
         with:
           name: production-hardening
           path: |
@@ -85,4 +84,5 @@ jobs:
             tauri-rust-check.txt
             production-renderer-build.txt
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 3
+          compression-level: 9

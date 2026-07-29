@@ -236,7 +236,6 @@ jobs:
           name: Elephant-Android-app-usage-diagnostics
           path: |
             android-startup-build.log
-            android-release-build.log
             android-startup-logcat.txt
             android-usage-logcat.txt
             android-usage-summary.json
@@ -246,6 +245,5 @@ jobs:
             android-usage-*.log
             android-*.png
             android-*.xml
-            Elephant/backend/tauri/gen/android/app/build/outputs/apk/**/*-debug.apk
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 7

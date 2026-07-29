@@ -21,12 +21,10 @@ const harness = createRealAppHarness({
 const sleep = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds))
 
 const typeVisibleText = async(text) => {
-  // The acceptance bridge dispatches one realm-local, cancelable beforeinput
-  // event per character to the live contenteditable and waits for the matching
-  // Rust transaction to be rendered before sending the next character. This is
-  // the same visible Muya -> Rust input boundary as physical typing, while
-  // preventing WebKit from outrunning asynchronous Rust renders and replacing
-  // the focused descendants halfway through a word.
+  // Dispatch one cancelable beforeinput event per character to the live visible
+  // contenteditable and wait for its Rust transaction/render before continuing.
+  // This preserves the production Muya -> Rust input boundary while preventing
+  // WebKit from outrunning asynchronous renders and replacing the focused range.
   await harness.action(layer, 'insertText', editorInputSelector, String(text))
 }
 
@@ -129,32 +127,87 @@ try {
   await harness.runScenario('frontend-sidebar-toggle-roundtrip', layer, async() => {
     const before = await harness.action(layer, 'readDom', '.en-body')
     const beforeHidden = before.attributes.class?.includes('en-sidebar-hidden') === true
-    await harness.action(layer, 'click', '.en-icon-rail__item[data-item-id="sidebar-toggle"]')
-    const after = await harness.action(layer, 'readDom', '.en-body')
-    const afterHidden = after.attributes.class?.includes('en-sidebar-hidden') === true
-    if (beforeHidden === afterHidden) throw new Error('Visible sidebar control did not change the layout state.')
-    await harness.action(layer, 'click', '.en-icon-rail__item[data-item-id="sidebar-toggle"]')
-    const restored = await harness.action(layer, 'readDom', '.en-body')
+    await harness.action(layer, 'click', '.en-rail-sidebar-toggle')
+    const toggled = await waitForDom('.en-body', (value) => (value.attributes.class?.includes('en-sidebar-hidden') === true) !== beforeHidden, 'frontend-sidebar-toggle')
+    await harness.action(layer, 'click', '.en-rail-sidebar-toggle')
+    const restored = await waitForDom('.en-body', (value) => (value.attributes.class?.includes('en-sidebar-hidden') === true) === beforeHidden, 'frontend-sidebar-restore')
+    const toggledHidden = toggled.attributes.class?.includes('en-sidebar-hidden') === true
     const restoredHidden = restored.attributes.class?.includes('en-sidebar-hidden') === true
-    if (restoredHidden !== beforeHidden) throw new Error('Visible sidebar control did not restore the original layout state.')
-    return { beforeHidden, afterHidden, restoredHidden }
+    if (toggledHidden === beforeHidden || restoredHidden !== beforeHidden) throw new Error(`Sidebar frontend state did not round-trip: ${JSON.stringify({ before, toggled, restored })}`)
+    return { beforeHidden, toggledHidden, restoredHidden }
   })
 
-  await harness.runScenario('frontend-search-visible-result', layer, async() => {
-    await harness.action(layer, 'click', '.en-icon-rail__item[data-item-id="search"]')
-    await harness.action(layer, 'waitFor', '[data-testid="search-input"]', 10_000)
-    await harness.action(layer, 'fill', '[data-testid="search-input"]', uniqueSearchText)
-    const result = await waitForDom(
-      '[data-testid="search-results"]',
-      (value) => value?.visible && value.text.includes('Search target'),
-      'frontend-search-results'
-    )
-    return { text: result.text }
+  await harness.runScenario('frontend-search-visible-results', layer, async() => {
+    await harness.action(layer, 'click', '.en-rail-icon[aria-label="Search"]')
+    await harness.action(layer, 'waitFor', '.en-search-bar-input', 10_000)
+    await harness.action(layer, 'fill', '.en-search-bar-input', uniqueSearchText)
+    await harness.action(layer, 'press', '.en-search-bar-input', 'Enter')
+    const results = await waitForDom('.en-search-results', (value) => value?.visible && value.text.includes('Search target'), 'frontend-search-matching-result')
+    await harness.action(layer, 'fill', '.en-search-bar-input', 'no-such-frontend-result-9173')
+    await harness.action(layer, 'press', '.en-search-bar-input', 'Enter')
+    const empty = await waitForDom('.en-search-empty', (value) => value?.visible && Boolean(value.text.trim()), 'frontend-search-empty-result')
+    await harness.action(layer, 'press', '.en-search-bar-input', 'Escape')
+    await harness.action(layer, 'press', '.en-search-bar-input', 'Escape')
+    await harness.action(layer, 'waitUntilGone', '.en-search-bar-input', 10_000)
+    return { resultText: results.text, emptyText: empty.text }
+  })
+
+  await harness.runScenario('frontend-settings-visible-state', layer, async() => {
+    await harness.action(layer, 'click', '[aria-label="Settings"]')
+    await harness.action(layer, 'waitFor', '.en-settings-panel', 10_000)
+    await harness.action(layer, 'fill', '[aria-label="Search all settings"]', 'autosave')
+    const search = await waitForDom('.en-settings-search-results', (value) => value?.visible && value.text.includes('Autosave'), 'frontend-settings-autosave-search')
+    await harness.action(layer, 'fill', '[aria-label="Search all settings"]', '')
+    await harness.action(layer, 'click', '.en-settings-nav button:first-child')
+    await harness.action(layer, 'waitFor', '.en-settings-content[data-active-section="appearance"]', 10_000)
+    const before = await harness.action(layer, 'readDom', '.en-shell')
+    const initiallyDark = before.attributes.class?.includes('en-theme-dark') === true
+    const toggleSelector = initiallyDark ? '.en-segmented button:nth-child(1)' : '.en-segmented button:nth-child(2)'
+    const restoreSelector = initiallyDark ? '.en-segmented button:nth-child(2)' : '.en-segmented button:nth-child(1)'
+    await harness.action(layer, 'click', toggleSelector)
+    const toggled = await waitForDom('.en-shell', (value) => (value.attributes.class?.includes('en-theme-dark') === true) !== initiallyDark, 'frontend-theme-toggle')
+    await harness.action(layer, 'click', restoreSelector)
+    const restored = await waitForDom('.en-shell', (value) => value.attributes.class === before.attributes.class, 'frontend-theme-restore')
+    const toggledDark = toggled.attributes.class?.includes('en-theme-dark') === true
+    if (toggledDark === initiallyDark || restored.attributes.class !== before.attributes.class) throw new Error(`Theme frontend state did not round-trip: ${JSON.stringify({ before, toggled, restored })}`)
+    await harness.action(layer, 'click', '[aria-label="Close settings"]')
+    await harness.action(layer, 'waitUntilGone', '.en-settings-panel', 10_000)
+    return { initiallyDark, toggledDark, searchText: search.text }
+  })
+
+  await harness.runScenario('frontend-navigation-does-not-teleport', layer, async() => {
+    const cycles = []
+    for (let cycle = 1; cycle <= 3; cycle += 1) {
+      await harness.action(layer, 'click', '[aria-label="Settings"]')
+      const settings = await harness.action(layer, 'waitFor', '.en-settings-panel', 10_000)
+      await harness.action(layer, 'click', '[aria-label="Close settings"]')
+      await harness.action(layer, 'waitUntilGone', '.en-settings-panel', 10_000)
+      await harness.action(layer, 'click', '.en-rail-icon[aria-label="Search"]')
+      const search = await harness.action(layer, 'waitFor', '.en-search-bar-input', 10_000)
+      await harness.action(layer, 'press', '.en-search-bar-input', 'Escape')
+      await harness.action(layer, 'press', '.en-search-bar-input', 'Escape')
+      await harness.action(layer, 'waitUntilGone', '.en-search-bar-input', 10_000)
+      const editor = await harness.action(layer, 'readDom', editorSelector)
+      if (!editor?.visible) throw new Error(`Editor disappeared after navigation cycle ${cycle}: ${JSON.stringify(editor)}`)
+      cycles.push({ cycle, settingsVisible: settings.visible, searchVisible: search.visible, editorVisible: editor.visible })
+    }
+    return { cycles }
+  })
+
+  await harness.writeEvidence({
+    status: 'PROVEN',
+    extra: {
+      proofBoundary: 'Real packaged renderer driven only through visible controls and physical/input keyboard events. No direct setMarkdown/save/invokeTauri calls.'
+    }
   })
 } catch (error) {
   failure = error
+  await harness.writeEvidence({ status: 'NOT PROVEN', error })
 } finally {
-  await harness.finish({ failure })
+  await harness.cleanup()
 }
 
-if (failure) throw failure
+if (failure) {
+  console.error(failure?.stack || failure?.message || String(failure))
+  process.exit(1)
+}

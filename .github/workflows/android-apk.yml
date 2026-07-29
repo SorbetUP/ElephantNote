@@ -224,6 +224,7 @@ jobs:
           script: |
             bash build/scripts/android_startup_smoke.sh
             bash build/scripts/android_usage_regression_suite.sh
+            bash build/scripts/android_note_fixture_regression.sh
             bash build/scripts/android_editor_chrome_regression.sh
 
       - name: Upload compact Android proof
@@ -235,6 +236,7 @@ jobs:
             android-usage-summary.json
             android-usage-junit.xml
             android-usage-results.tsv
+            android-note-fixture-validation.txt
             android-editor-chrome-validation.txt
           if-no-files-found: warn
           retention-days: 3

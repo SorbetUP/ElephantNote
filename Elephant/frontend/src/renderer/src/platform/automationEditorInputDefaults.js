@@ -6,14 +6,96 @@ const editorElement = (target, selector) => {
   return element
 }
 
-const restoreSelectionAfterFocus = (target, element) => {
-  const selection = target.getSelection?.() || target.window?.getSelection?.()
-  const savedRange = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : null
+const browserSelectionFor = (target, element) => target.getSelection?.() ||
+  target.window?.getSelection?.() ||
+  element?.ownerDocument?.defaultView?.getSelection?.()
+
+const selectionOffsetsWithin = (target, element) => {
+  const selection = browserSelectionFor(target, element)
+  if (!selection?.anchorNode || !selection?.focusNode) return null
+  if (
+    (selection.anchorNode !== element && !element.contains?.(selection.anchorNode)) ||
+    (selection.focusNode !== element && !element.contains?.(selection.focusNode))
+  ) return null
+
+  const offsetOf = (node, offset) => {
+    const range = element.ownerDocument.createRange()
+    range.selectNodeContents(element)
+    range.setEnd(node, offset)
+    return range.toString().length
+  }
+
+  try {
+    return {
+      anchor: offsetOf(selection.anchorNode, selection.anchorOffset),
+      focus: offsetOf(selection.focusNode, selection.focusOffset)
+    }
+  } catch (error) {
+    throw new Error(`Unable to capture the visible editor selection before focus: ${error?.name || 'Error'}: ${error?.message || String(error)}`)
+  }
+}
+
+const liveTextPointAt = (element, requestedOffset) => {
+  const document = element.ownerDocument
+  const showText = document.defaultView?.NodeFilter?.SHOW_TEXT ?? 4
+  const walker = document.createTreeWalker(element, showText)
+  let remaining = Math.max(0, Number(requestedOffset) || 0)
+  let node = walker.nextNode()
+  let lastTextNode = null
+
+  while (node) {
+    lastTextNode = node
+    const length = String(node.data || '').length
+    if (remaining <= length) return { node, offset: remaining }
+    remaining -= length
+    node = walker.nextNode()
+  }
+
+  if (lastTextNode) {
+    return { node: lastTextNode, offset: String(lastTextNode.data || '').length }
+  }
+  return { node: element, offset: element.childNodes?.length || 0 }
+}
+
+export const restoreSelectionAfterFocus = (target, element) => {
+  const saved = selectionOffsetsWithin(target, element)
   element.focus?.()
-  if (!savedRange || !element.contains(savedRange.commonAncestorContainer)) return
-  const current = target.getSelection?.() || target.window?.getSelection?.()
-  current?.removeAllRanges()
-  current?.addRange(savedRange)
+  if (!saved) return false
+
+  const current = browserSelectionFor(target, element)
+  if (!current) throw new Error('Unable to restore the visible editor selection: Selection API is unavailable')
+
+  const anchor = liveTextPointAt(element, saved.anchor)
+  const focus = liveTextPointAt(element, saved.focus)
+  try {
+    if (typeof current.setBaseAndExtent === 'function') {
+      current.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset)
+    } else if (saved.anchor === saved.focus) {
+      const range = element.ownerDocument.createRange()
+      range.setStart(anchor.node, anchor.offset)
+      range.collapse(true)
+      current.removeAllRanges()
+      current.addRange(range)
+    } else if (typeof current.extend === 'function') {
+      const range = element.ownerDocument.createRange()
+      range.setStart(anchor.node, anchor.offset)
+      range.collapse(true)
+      current.removeAllRanges()
+      current.addRange(range)
+      current.extend(focus.node, focus.offset)
+    } else {
+      const range = element.ownerDocument.createRange()
+      const start = saved.anchor <= saved.focus ? anchor : focus
+      const end = saved.anchor <= saved.focus ? focus : anchor
+      range.setStart(start.node, start.offset)
+      range.setEnd(end.node, end.offset)
+      current.removeAllRanges()
+      current.addRange(range)
+    }
+  } catch (error) {
+    throw new Error(`Unable to restore the visible editor selection after focus: ${error?.name || 'Error'}: ${error?.message || String(error)}`)
+  }
+  return true
 }
 
 const rustEditorFor = (element) => element?.closest?.('[data-testid="muya-rust-runtime-editor"]') ||

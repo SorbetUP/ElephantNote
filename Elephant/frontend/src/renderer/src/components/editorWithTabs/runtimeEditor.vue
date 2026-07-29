@@ -1,7 +1,7 @@
 <template>
   <RustMuyaRuntimeEditor
     v-if="!sourceCode"
-    :model-value="toEditorMarkdown(markdown)"
+    :model-value="editorModelValue"
     :factory="rustRuntimeFactory"
     :on-file-drop="imageHandlers.dropped"
     :on-uri-drop="imageHandlers.uriDropped"
@@ -66,10 +66,32 @@ const { currentFile } = storeToRefs(editorStore)
 const { projectTree } = storeToRefs(projectStore)
 const sourceCode = computed(() => props.sourceCode)
 const rustRuntime = ref(null)
+const lastEditorMarkdown = ref(null)
 const tableDialogVisible = ref(false)
 let editorRuntimeBinding = null
 let disposeEditorRuntimeResource = null
 let disposeNativeInputDurability = () => {}
+
+const editorModelValue = computed(() => {
+  const converted = String(props.toEditorMarkdown(props.markdown) || '')
+  const canonical = lastEditorMarkdown.value
+
+  // The document adapter intentionally removes front matter and may also omit
+  // the final empty paragraph. That final newline is nevertheless Rust's real
+  // caret-bearing editor state between Enter and the following character.
+  // Feed the exact value emitted by the active editor back to Vue when the only
+  // difference is trailing line breaks, instead of remounting the contenteditable
+  // in the middle of a visible keyboard transaction.
+  if (
+    typeof canonical === 'string' &&
+    canonical.endsWith('\n') &&
+    converted === canonical.replace(/\n+$/, '')
+  ) {
+    return canonical
+  }
+
+  return converted
+})
 
 const persistEditorRecoveryCheckpoint = () => checkpointBufferedState().catch((error) => {
   console.error('[elephantnote:recovery] unable to persist editor checkpoint', error)
@@ -110,6 +132,7 @@ const handleRustRuntimeReady = (runtime) => {
   unpublishEditorRuntime()
   disposeNativeInputDurability()
   rustRuntime.value = runtime
+  lastEditorMarkdown.value = String(runtime?.muya?.getMarkdown?.() ?? editorModelValue.value)
   disposeNativeInputDurability = installNativeInputDurability(runtime)
   editorRuntimeBinding = createRustEditorRuntimeBinding({
     runtime,
@@ -169,11 +192,13 @@ const busHandlers = Object.freeze({
 })
 
 const handleRustMarkdownChange = (editorMarkdown) => {
+  const sourceEditorMarkdown = String(editorMarkdown || '')
+  lastEditorMarkdown.value = sourceEditorMarkdown
   const file = currentFile.value
   const changed = applyRustEditorMarkdown({
     editorStore,
     file,
-    editorMarkdown,
+    editorMarkdown: sourceEditorMarkdown,
     fromEditorMarkdown: props.fromEditorMarkdown
   })
 
@@ -199,8 +224,8 @@ const handleRustMarkdownChange = (editorMarkdown) => {
 
   editorRuntimeBinding?.notify({
     reason: 'document-change',
-    markdown: props.fromEditorMarkdown(String(editorMarkdown || '')),
-    editorMarkdown: String(editorMarkdown || '')
+    markdown: props.fromEditorMarkdown(sourceEditorMarkdown),
+    editorMarkdown: sourceEditorMarkdown
   })
 }
 
@@ -219,6 +244,7 @@ onBeforeUnmount(() => {
   disposeNativeInputDurability = () => {}
   unpublishEditorRuntime()
   rustRuntime.value = null
+  lastEditorMarkdown.value = null
   tableDialogVisible.value = false
   imageToolbar.close()
 })

@@ -119,6 +119,11 @@ const markInternalPropUpdate = (markdown) => {
   if (internalPropEchoes.length > 32) internalPropEchoes.splice(0, internalPropEchoes.length - 32)
 }
 
+const equivalentTrailingParagraph = (left, right) => {
+  const normalize = (value) => String(value || '').replace(/\n+$/, '')
+  return normalize(left) === normalize(right)
+}
+
 const flushMarkdownSync = () => {
   if (syncInFlight) return syncInFlight
   const generation = mountGeneration
@@ -262,13 +267,7 @@ const mountRuntime = async (markdown) => {
         onUriDrop: props.onUriDrop,
         onImageClick: props.onImageClick
       })
-      // Muya replaces its origin container with the real contenteditable node.
-      // Keep the Vue ref bound to that live node so later document remounts
-      // destroy and replace the visible editor rather than a detached placeholder.
       rootRef.value = muya.container
-      // The compatibility adapter starts the Rust session asynchronously in its
-      // constructor. Do not expose the editor or let Vue reconcile a canonical
-      // change until that session exists on the Tauri side.
       await muya.__rustMirror?.ready
       await muya.__rustCanonicalReady
       nextRuntime = {
@@ -296,9 +295,6 @@ const mountRuntime = async (markdown) => {
           })
           return
         }
-        // Record the exact Markdown emitted to the parent. Vue may deliver that
-        // echo after multiple microtasks or timers, so a one-tick boolean can no
-        // longer distinguish it from a genuine external document replacement.
         markInternalPropUpdate(runtimeMarkdown)
         emit('update:modelValue', runtimeMarkdown)
         emit('change', runtimeMarkdown)
@@ -345,6 +341,14 @@ watch(
     const echoIndex = internalPropEchoes.indexOf(normalized)
     if (echoIndex >= 0) {
       internalPropEchoes.splice(0, echoIndex + 1)
+      return
+    }
+    if (!userMutationObserved && equivalentTrailingParagraph(normalized, runtimeMarkdown)) {
+      console.info('[elephantnote:rust-editor] retained active runtime for equivalent pre-interaction trailing paragraph', {
+        generation: mountGeneration,
+        nextLength: normalized.length,
+        runtimeLength: runtimeMarkdown.length
+      })
       return
     }
     if (normalized !== runtimeMarkdown) void mountRuntime(normalized)

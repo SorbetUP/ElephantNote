@@ -161,9 +161,7 @@ export const installNativeInputDurability = (runtime) => {
         restoredMarkdownLength: restoredMarkdown.length,
         phase: 'content-state-rebuild'
       })
-      const rejected = Promise.reject(error)
-      rejected.catch(() => {})
-      return rejected
+      return undefined
     }
 
     const pending = mutationGate.enqueue(async() => {
@@ -228,7 +226,12 @@ export const installNativeInputDurability = (runtime) => {
 
     muya.__lastRustNativeInputRecovery = { sequence, promise: pending }
     pending.catch((error) => muya.__reportRustError?.(error))
-    return pending
+
+    // Muya's native input event pipeline is synchronous. The durability work is
+    // deliberately queued and observed through the checkpoint fence; leaking the
+    // Promise to Muya makes ordinary insertText/input dispatch fail before the
+    // Rust transaction and recovery checkpoint can complete.
+    return undefined
   }
 
   contentState.inputHandler = recoverNativeInput

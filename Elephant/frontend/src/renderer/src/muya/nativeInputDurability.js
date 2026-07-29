@@ -124,12 +124,12 @@ export const installNativeInputDurability = (runtime) => {
   const recoverNativeInput = (event) => {
     if (disposed) return undefined
 
-    // A synthetic automation helper may emit `input` even after the editor's
-    // `beforeinput` handler prevented the browser default and synchronously queued
-    // the real Rust mutation. In that case the DOM was not browser-mutated and
-    // rebuilding ContentState would apply the same keystroke a second time (or
-    // fail on an unchanged DOM). Wait for the already-owned Rust transaction.
-    if (mutationGate.pending > 0) return mutationGate.flush()
+    // A synthetic automation helper can emit `input` immediately after the
+    // Rust-owned `beforeinput` handler prevented the browser default and queued
+    // the canonical mutation. Muya's input handler is synchronous; returning the
+    // mutation gate Promise here breaks its event pipeline. Ignore this duplicate
+    // input event and let the durability fence await the checkpoint separately.
+    if (mutationGate.pending > 0) return undefined
 
     // Composition is already captured at the editor boundary and committed as
     // one Rust transaction on compositionend. The temporary DOM mutations must
@@ -238,6 +238,5 @@ export const installNativeInputDurability = (runtime) => {
     if (contentState.inputHandler === recoverNativeInput) {
       contentState.inputHandler = previousInputHandler
     }
-    muya.__lastRustNativeInputRecovery = null
   }
 }

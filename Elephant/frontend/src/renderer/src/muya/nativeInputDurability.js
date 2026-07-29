@@ -124,6 +124,13 @@ export const installNativeInputDurability = (runtime) => {
   const recoverNativeInput = (event) => {
     if (disposed) return undefined
 
+    // A synthetic automation helper may emit `input` even after the editor's
+    // `beforeinput` handler prevented the browser default and synchronously queued
+    // the real Rust mutation. In that case the DOM was not browser-mutated and
+    // rebuilding ContentState would apply the same keystroke a second time (or
+    // fail on an unchanged DOM). Wait for the already-owned Rust transaction.
+    if (mutationGate.pending > 0) return mutationGate.flush()
+
     // Composition is already captured at the editor boundary and committed as
     // one Rust transaction on compositionend. The temporary DOM mutations must
     // remain visual-only until that transaction renders the accepted document.

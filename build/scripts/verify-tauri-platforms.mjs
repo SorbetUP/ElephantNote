@@ -24,6 +24,20 @@ const libMin = readText('Elephant/backend/tauri/src/lib_min.rs')
 const addonServices = readText('Elephant/backend/tauri/src/addon_services.rs')
 const desktopAcceptanceWorkflow = readText('.github/workflows/tauri-desktop-acceptance.yml')
 
+const resolveNodeEntrypoint = (command) => {
+  const match = String(command || '').trim().match(/^node\s+([^\s;&|]+\.mjs)(?:\s|$)/)
+  return match?.[1] || null
+}
+
+const tauriWebBuildCommand = packageJson.scripts?.['tauri:web:build']
+const tauriWebBuildEntrypoint = resolveNodeEntrypoint(tauriWebBuildCommand)
+const tauriWebBuildSource = tauriWebBuildEntrypoint && existsSync(absolute(tauriWebBuildEntrypoint))
+  ? readText(tauriWebBuildEntrypoint)
+  : ''
+const addonPreparationCall = "runNode('build/scripts/prepare-tauri-addon-resources.mjs')"
+const addonPreparationIndex = tauriWebBuildSource.indexOf(addonPreparationCall)
+const rendererBuildIndex = tauriWebBuildSource.indexOf('vite/bin/vite.js')
+
 const assertWorkspaceBuildHook = (config, label) => {
   const command = config.build?.beforeBuildCommand
   assert(command && typeof command === 'object', `${label} beforeBuildCommand must use the Tauri object form`)
@@ -67,9 +81,16 @@ assert(
   'Core desktop bundle must include only the controlled official addon resource root'
 )
 assert(
-  typeof packageJson.scripts['tauri:web:build'] === 'string' &&
-    packageJson.scripts['tauri:web:build'].includes('prepare-tauri-addon-resources.mjs'),
-  'Tauri production builds must prepare official addon resources before bundling'
+  typeof tauriWebBuildCommand === 'string' && Boolean(tauriWebBuildEntrypoint),
+  'Tauri web build must delegate to an explicit Node .mjs launcher'
+)
+assert(
+  Boolean(tauriWebBuildEntrypoint) && existsSync(absolute(tauriWebBuildEntrypoint)),
+  'Tauri web build launcher must exist'
+)
+assert(
+  addonPreparationIndex >= 0 && rendererBuildIndex > addonPreparationIndex,
+  'Tauri production build launcher must prepare official addon resources before invoking the renderer build'
 )
 assert(
   existsSync(absolute('build/scripts/prepare-tauri-addon-resources.mjs')),

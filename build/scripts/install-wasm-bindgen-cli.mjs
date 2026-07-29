@@ -143,7 +143,10 @@ const main = async() => {
     const extractDirectory = join(workDirectory, 'extract')
     mkdirSync(extractDirectory)
     writeFileSync(archivePath, archive)
-    execFileSync('tar', ['-xzf', archivePath, '-C', extractDirectory], { stdio: 'inherit' })
+    execFileSync('tar', ['-xzf', archiveName, '-C', 'extract'], {
+      cwd: workDirectory,
+      stdio: 'inherit'
+    })
 
     for (const binary of requiredBinaries) {
       const expectedName = executableName(binary)

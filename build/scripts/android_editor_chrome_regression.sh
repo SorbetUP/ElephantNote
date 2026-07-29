@@ -20,6 +20,26 @@ capture_screen() {
   test -s "$1"
 }
 
+wait_for_ui_pattern() {
+  local destination="$1"
+  local pattern="$2"
+  local label="$3"
+  local timeout_seconds="${4:-35}"
+  local deadline=$((SECONDS + timeout_seconds))
+
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    capture_ui "$destination" || true
+    if [ -s "$destination" ] && grep -Eq "$pattern" "$destination"; then
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "$label" >&2
+  [ -s "$destination" ] && cat "$destination" >&2
+  return 1
+}
+
 tap_ui_node() {
   local dump_file="$1"
   local needle="$2"
@@ -79,17 +99,22 @@ open_seeded_note() {
   sleep 2
   capture_ui android-editor-drawer.xml
   tap_ui_node android-editor-drawer.xml 'Getting Started'
-  sleep 2
-  capture_ui android-editor-expanded.xml
 
-  # Getting Started is a seeded folder. The historical test stopped after
-  # expanding it and mistook that tiny visual change for a failed note open.
+  # The folder children are loaded asynchronously. Poll the real Android
+  # accessibility tree rather than accepting a fixed-delay snapshot that can
+  # be stale while the visible drawer already contains the Welcome note.
+  wait_for_ui_pattern \
+    android-editor-expanded.xml \
+    'Welcome|Getting Started\.md|Close note|Note title|Add tag' \
+    'The Getting Started folder exposed no accessible seeded note.' \
+    35
+
   if grep -q 'Welcome' android-editor-expanded.xml; then
     tap_ui_node android-editor-expanded.xml 'Welcome'
   elif grep -q 'Getting Started.md' android-editor-expanded.xml; then
     tap_ui_node android-editor-expanded.xml 'Getting Started.md'
   elif ! grep -Eq 'Close note|Note title|Add tag' android-editor-expanded.xml; then
-    echo 'The Getting Started folder expanded but exposed no seeded note.' >&2
+    echo 'The Getting Started folder reached neither an accessible note nor the editor.' >&2
     cat android-editor-expanded.xml >&2
     return 1
   fi

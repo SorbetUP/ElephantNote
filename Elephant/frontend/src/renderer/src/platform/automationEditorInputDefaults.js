@@ -10,13 +10,18 @@ const browserSelectionFor = (target, element) => target.getSelection?.() ||
   target.window?.getSelection?.() ||
   element?.ownerDocument?.defaultView?.getSelection?.()
 
+const selectionBelongsTo = (selection, element) => Boolean(
+  selection?.anchorNode &&
+  selection?.focusNode &&
+  selection.anchorNode.isConnected !== false &&
+  selection.focusNode.isConnected !== false &&
+  (selection.anchorNode === element || element.contains?.(selection.anchorNode)) &&
+  (selection.focusNode === element || element.contains?.(selection.focusNode))
+)
+
 const selectionOffsetsWithin = (target, element) => {
   const selection = browserSelectionFor(target, element)
-  if (!selection?.anchorNode || !selection?.focusNode) return null
-  if (
-    (selection.anchorNode !== element && !element.contains?.(selection.anchorNode)) ||
-    (selection.focusNode !== element && !element.contains?.(selection.focusNode))
-  ) return null
+  if (!selectionBelongsTo(selection, element)) return null
 
   const offsetOf = (node, offset) => {
     const range = element.ownerDocument.createRange()
@@ -57,34 +62,44 @@ const liveTextPointAt = (element, requestedOffset) => {
   return { node: element, offset: element.childNodes?.length || 0 }
 }
 
-export const restoreSelectionAfterFocus = (target, element) => {
+export const restoreSelectionAfterFocus = (target, element, selector = null) => {
+  const currentBeforeFocus = browserSelectionFor(target, element)
+
+  // The visible selection created by selectText is already the authoritative
+  // browser range. Refocusing the contenteditable can synchronously recreate
+  // Muya descendants and invalidate a perfectly valid middle-of-paragraph
+  // selection before the keydown reaches the Rust owner. Synthetic events are
+  // dispatched directly to the element, so no focus transition is required.
+  if (selectionBelongsTo(currentBeforeFocus, element)) return element
+
   const saved = selectionOffsetsWithin(target, element)
   element.focus?.()
-  if (!saved) return false
+  const liveElement = selector ? editorElement(target, selector) : element
+  if (!saved) return liveElement
 
-  const current = browserSelectionFor(target, element)
+  const current = browserSelectionFor(target, liveElement)
   if (!current) throw new Error('Unable to restore the visible editor selection: Selection API is unavailable')
 
-  const anchor = liveTextPointAt(element, saved.anchor)
-  const focus = liveTextPointAt(element, saved.focus)
+  const anchor = liveTextPointAt(liveElement, saved.anchor)
+  const focus = liveTextPointAt(liveElement, saved.focus)
   try {
     if (typeof current.setBaseAndExtent === 'function') {
       current.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset)
     } else if (saved.anchor === saved.focus) {
-      const range = element.ownerDocument.createRange()
+      const range = liveElement.ownerDocument.createRange()
       range.setStart(anchor.node, anchor.offset)
       range.collapse(true)
       current.removeAllRanges()
       current.addRange(range)
     } else if (typeof current.extend === 'function') {
-      const range = element.ownerDocument.createRange()
+      const range = liveElement.ownerDocument.createRange()
       range.setStart(anchor.node, anchor.offset)
       range.collapse(true)
       current.removeAllRanges()
       current.addRange(range)
       current.extend(focus.node, focus.offset)
     } else {
-      const range = element.ownerDocument.createRange()
+      const range = liveElement.ownerDocument.createRange()
       const start = saved.anchor <= saved.focus ? anchor : focus
       const end = saved.anchor <= saved.focus ? focus : anchor
       range.setStart(start.node, start.offset)
@@ -95,7 +110,7 @@ export const restoreSelectionAfterFocus = (target, element) => {
   } catch (error) {
     throw new Error(`Unable to restore the visible editor selection after focus: ${error?.name || 'Error'}: ${error?.message || String(error)}`)
   }
-  return true
+  return liveElement
 }
 
 const rustEditorFor = (element) => element?.closest?.('[data-testid="muya-rust-runtime-editor"]') ||
@@ -294,19 +309,19 @@ export const installEditorAutomationInputDefaults = (target = globalThis) => {
   if (originalInsertText) {
     api.insertText = async(selector, text) => {
       if (typeof text !== 'string') throw new TypeError('insertText requires a string value')
-      const element = editorElement(target, selector)
-      const rustEditor = rustEditorFor(element)
-      if (!rustEditor) return originalInsertText(selector, text)
-
-      const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__
-      if (!activeMuya) throw new Error('The visible Rust editor has no active Muya runtime')
+      const initialElement = editorElement(target, selector)
+      if (!rustEditorFor(initialElement)) return originalInsertText(selector, text)
 
       let characterCount = 0
       for (const character of text) {
-        // Rendering the previous Rust transaction may recreate the active text
-        // nodes and move focus. Restore the live DOM selection before every real
-        // character event, just as the browser does between physical keystrokes.
-        restoreSelectionAfterFocus(target, element)
+        // A completed Rust render can replace the editable descendants between
+        // two characters. Resolve the current surface for every event and keep an
+        // existing live browser range untouched; only focus when no live range is
+        // available at all.
+        let element = editorElement(target, selector)
+        element = restoreSelectionAfterFocus(target, element, selector)
+        const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__
+        if (!activeMuya) throw new Error('The visible Rust editor has no active Muya runtime')
 
         const canonicalBefore = activeMuya.__rustMirror?.state
         const beforeRust = {
@@ -337,7 +352,8 @@ export const installEditorAutomationInputDefaults = (target = globalThis) => {
   api.press = async(selector, key) => {
     if (key !== 'Enter' && key !== 'Shift+Enter') return originalPress(selector, key)
 
-    const element = editorElement(target, selector)
+    let element = editorElement(target, selector)
+    element = restoreSelectionAfterFocus(target, element, selector)
     const KeyboardEventConstructor = element?.ownerDocument?.defaultView?.KeyboardEvent ||
       target.KeyboardEvent ||
       target.window?.KeyboardEvent
@@ -350,7 +366,6 @@ export const installEditorAutomationInputDefaults = (target = globalThis) => {
     const beforeRust = rustEditor ? { ...(target.__ELEPHANT_MUYA_RUST_MIRROR__ || {}) } : null
     const beforeEnterSequence = Number(activeMuya?.__lastRustEnterMutation?.sequence || 0)
 
-    restoreSelectionAfterFocus(target, element)
     const eventInit = {
       key: 'Enter',
       code: 'Enter',

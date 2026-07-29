@@ -42,6 +42,15 @@ jobs:
           set -euo pipefail
 
           cutoff_epoch="$(date -u -d "${KEEP_DAYS} days ago" +%s)"
+          artifact_snapshot="$(mktemp)"
+          trap 'rm -f "$artifact_snapshot"' EXIT
+
+          # Snapshot every page before deleting anything. Deleting while GitHub is
+          # paginating shifts later pages and can leave older large artifacts behind.
+          gh api --paginate "repos/${REPOSITORY}/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | [.id, .name, .size_in_bytes, .created_at, (.workflow_run.head_branch // ""), (.workflow_run.head_sha // "")] | @tsv' \
+            > "$artifact_snapshot"
+
           scanned=0
           deleted=0
           deleted_bytes=0
@@ -66,10 +75,7 @@ jobs:
             gh api --method DELETE "repos/${REPOSITORY}/actions/artifacts/${artifact_id}"
             deleted=$((deleted + 1))
             deleted_bytes=$((deleted_bytes + artifact_size))
-          done < <(
-            gh api --paginate "repos/${REPOSITORY}/actions/artifacts?per_page=100" \
-              --jq '.artifacts[] | [.id, .name, .size_in_bytes, .created_at, (.workflow_run.head_branch // ""), (.workflow_run.head_sha // "")] | @tsv'
-          )
+          done < "$artifact_snapshot"
 
           deleted_mib="$(awk -v bytes="$deleted_bytes" 'BEGIN { printf "%.2f", bytes / 1048576 }')"
           {

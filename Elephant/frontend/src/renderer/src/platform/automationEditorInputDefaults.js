@@ -299,6 +299,24 @@ const waitForRustMutation = async(target, before, mutationPromise, expectedMuya,
   throw new Error(`The visible Enter key did not reach a completed and rendered Rust editor mutation: ${JSON.stringify(last)}`)
 }
 
+const awaitActiveRustEditor = async(target, expectedMuya, label) => {
+  if (!expectedMuya) throw new Error(`The visible Rust editor has no active Muya runtime before ${label}`)
+  await expectedMuya.__rustMirror?.ready
+  await expectedMuya.__rustCanonicalReady
+  await expectedMuya.__rustMutationGate?.flush?.()
+  const published = target.__ELEPHANT_MUYA_RUST_MIRROR__
+  if (target.__ELEPHANT_ACTIVE_MUYA__ !== expectedMuya) {
+    throw new Error(`The visible editor remounted before ${label}`)
+  }
+  if (published?.phase === 'error') {
+    throw new Error(`Rust editor failed before ${label}: ${published.error || published.reason || 'unknown error'}`)
+  }
+  const canonicalState = expectedMuya.__rustMirror?.state
+  if (!canonicalState || String(expectedMuya.getMarkdown?.() ?? '') !== String(canonicalState.markdown ?? '')) {
+    throw new Error(`The visible editor was not synchronized with Rust before ${label}`)
+  }
+}
+
 export const installEditorAutomationInputDefaults = (target = globalThis) => {
   const api = target.__ELEPHANT_ACCEPTANCE_TEST__ || target.__ELEPHANT_AUTOMATION__
   if (!api || typeof api.press !== 'function' || api[PATCH_FLAG]) return false
@@ -321,7 +339,7 @@ export const installEditorAutomationInputDefaults = (target = globalThis) => {
         let element = editorElement(target, selector)
         element = restoreSelectionAfterFocus(target, element, selector)
         const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__
-        if (!activeMuya) throw new Error('The visible Rust editor has no active Muya runtime')
+        await awaitActiveRustEditor(target, activeMuya, `text input character ${characterCount + 1}`)
 
         const canonicalBefore = activeMuya.__rustMirror?.state
         const beforeRust = {
@@ -363,6 +381,7 @@ export const installEditorAutomationInputDefaults = (target = globalThis) => {
 
     const rustEditor = rustEditorFor(element)
     const activeMuya = rustEditor ? target.__ELEPHANT_ACTIVE_MUYA__ : null
+    if (rustEditor) await awaitActiveRustEditor(target, activeMuya, 'Enter')
     const beforeRust = rustEditor ? { ...(target.__ELEPHANT_MUYA_RUST_MIRROR__ || {}) } : null
     const beforeEnterSequence = Number(activeMuya?.__lastRustEnterMutation?.sequence || 0)
 

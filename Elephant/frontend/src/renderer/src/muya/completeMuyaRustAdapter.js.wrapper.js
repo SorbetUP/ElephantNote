@@ -197,6 +197,9 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
     muyaIndexCursor,
     blocks
   ) {
+    const ownerDocument = this.container?.ownerDocument || document
+    const activeElement = ownerDocument?.activeElement
+    const restoreEditorFocus = activeElement === this.container || this.container?.contains?.(activeElement)
     const result = this.__setProgrammaticMarkdown(
       markdown,
       cursor,
@@ -204,6 +207,19 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
       muyaIndexCursor,
       blocks
     )
+
+    // setMarkdown replaces Muya's editable descendants. WebKit can consequently
+    // move focus to the document body between two physical keystrokes even though
+    // the canonical cursor was rendered correctly. Restore focus to the same
+    // visible editor before the next native key event; the rendered Muya range
+    // remains authoritative for the caret and selection.
+    if (restoreEditorFocus && ownerDocument?.activeElement !== this.container) {
+      try {
+        this.container?.focus?.({ preventScroll: true })
+      } catch {
+        this.container?.focus?.()
+      }
+    }
 
     // Reading once after the synchronous Muya render is sufficient. Re-rendering
     // the exported Markdown with an index cursor re-injects Muya cursor DNA and

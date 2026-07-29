@@ -23,6 +23,8 @@
         class="en-sidebar-tree-toggle"
         type="button"
         :aria-label="expanded ? `Collapse ${entry.title}` : `Expand ${entry.title}`"
+        :aria-expanded="expanded"
+        :aria-busy="loading"
         @click.stop="toggleExpanded"
       >
         <component
@@ -35,6 +37,7 @@
         class="en-sidebar-tree-label"
         type="button"
         :title="entry.title"
+        :aria-label="`Open folder ${entry.title}`"
         @click.stop="openFolder"
       >
         {{ entry.title }}
@@ -68,6 +71,7 @@
       <button
         class="en-sidebar-tree-label"
         type="button"
+        :aria-label="`Open note ${entry.title}`"
         @click.stop="openNote(entry)"
       >
         {{ entry.title }}
@@ -92,6 +96,9 @@
     <div
       v-if="expanded"
       class="en-sidebar-tree-children"
+      role="group"
+      :aria-label="`${entry.title} contents`"
+      :aria-busy="loading"
     >
       <SidebarTreeEntry
         v-for="child in children"
@@ -181,10 +188,19 @@ const ensureChildren = async () => {
   if (loaded.value || loading.value) return
   loading.value = true
   try {
-    children.value = await props.loadDirectory(props.entry.path)
+    const result = await props.loadDirectory(props.entry.path)
+    children.value = Array.isArray(result) ? result : []
     loaded.value = true
+    console.info('[sidebar-tree] directory loaded', {
+      path: props.entry.path,
+      childCount: children.value.length,
+      childPaths: children.value.map((child) => child?.path || '').filter(Boolean)
+    })
   } catch (err) {
-    console.warn('Unable to load sidebar folder:', err)
+    console.warn('[sidebar-tree] unable to load sidebar folder', {
+      path: props.entry.path,
+      error: err?.message || String(err)
+    })
     children.value = []
   } finally {
     loading.value = false

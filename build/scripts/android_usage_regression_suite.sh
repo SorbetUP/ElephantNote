@@ -39,8 +39,13 @@ from PIL import Image, ImageStat
 path, label = sys.argv[1:]
 image = Image.open(path).convert('RGB')
 width, height = image.size
-region = image.crop((max(0, int(width * .03)), max(0, int(height * .04)), min(width, int(width * .97)), min(height, int(height * .94))))
-pixels = list(region.getdata())
+region = image.crop((
+    max(0, int(width * .03)),
+    max(0, int(height * .04)),
+    min(width, int(width * .97)),
+    min(height, int(height * .94))
+))
+pixels = list(region.get_flattened_data())
 white = sum(1 for red, green, blue in pixels if red >= 245 and green >= 245 and blue >= 245)
 non_white_ratio = 1 - white / max(1, len(pixels))
 contrast = max(ImageStat.Stat(region).stddev)
@@ -55,6 +60,26 @@ capture_checkpoint() {
   capture_ui "${prefix}.xml"
   capture_screen "${prefix}.png"
   assert_not_blank "${prefix}.png" "$prefix"
+}
+
+wait_for_ui_pattern() {
+  local destination="$1"
+  local pattern="$2"
+  local label="$3"
+  local timeout_seconds="${4:-35}"
+  local deadline=$((SECONDS + timeout_seconds))
+
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    capture_ui "$destination" || true
+    if [ -s "$destination" ] && grep -Eq "$pattern" "$destination"; then
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "$label" >&2
+  [ -s "$destination" ] && cat "$destination" >&2
+  return 1
 }
 
 tap_ui_node() {
@@ -172,6 +197,7 @@ PY
   then
     return 1
   fi
+
   if grep -Eq 'Tauri/Console:.*(Uncaught|ReferenceError|TypeError|SyntaxError)|Unhandled promise rejection|Command tauri_vault_read_binary not found|search\.initVault is not a function' "$LOG_FILE"; then
     echo "A renderer regression was detected during app usage testing." >&2
     grep -E 'Tauri/Console:.*(Uncaught|ReferenceError|TypeError|SyntaxError)|Unhandled promise rejection|Command tauri_vault_read_binary not found|search\.initVault is not a function' "$LOG_FILE" >&2 || true
@@ -181,17 +207,7 @@ PY
 
 wait_for_workspace() {
   local destination="$1"
-  local deadline=$((SECONDS + 35))
-  while [ "$SECONDS" -lt "$deadline" ]; do
-    capture_ui "$destination" || true
-    if [ -s "$destination" ] && grep -Eq 'Search notes|Open navigation|Getting Started' "$destination"; then
-      return 0
-    fi
-    sleep 2
-  done
-  echo 'Timed out waiting for the mobile workspace.' >&2
-  [ -s "$destination" ] && cat "$destination" >&2
-  return 1
+  wait_for_ui_pattern "$destination" 'Search notes|Open navigation|Getting Started' 'Timed out waiting for the mobile workspace.' 35
 }
 
 return_to_workspace() {
@@ -230,6 +246,9 @@ close_search() {
 
 open_seeded_note() {
   local prefix="$1"
+  local expanded_xml="${prefix}-expanded.xml"
+  local expanded_png="${prefix}-expanded.png"
+
   return_to_workspace
   capture_checkpoint "${prefix}-workspace"
   tap_ui_node "${prefix}-workspace.xml" 'Open navigation'
@@ -237,16 +256,26 @@ open_seeded_note() {
   capture_checkpoint "${prefix}-drawer"
   grep -q 'Getting Started' "${prefix}-drawer.xml"
   tap_ui_node "${prefix}-drawer.xml" 'Getting Started'
-  sleep 2
-  capture_checkpoint "${prefix}-expanded"
 
-  if grep -q 'Welcome' "${prefix}-expanded.xml"; then
-    tap_ui_node "${prefix}-expanded.xml" 'Welcome'
-  elif grep -q 'Getting Started.md' "${prefix}-expanded.xml"; then
-    tap_ui_node "${prefix}-expanded.xml" 'Getting Started.md'
-  else
-    echo 'The Getting Started folder exposed no seeded note.' >&2
-    cat "${prefix}-expanded.xml" >&2
+  # Folder children are loaded asynchronously. The previous fixed two-second
+  # snapshot could be stale even though the visible drawer already showed the
+  # Welcome note. Poll the real accessibility tree and keep the last dump on
+  # failure so a missing product node cannot be converted into a false pass.
+  wait_for_ui_pattern \
+    "$expanded_xml" \
+    'Welcome|Getting Started\.md|Close note' \
+    'The Getting Started folder exposed no accessible seeded note.' \
+    35
+  capture_screen "$expanded_png"
+  assert_not_blank "$expanded_png" "${prefix}-expanded"
+
+  if grep -q 'Welcome' "$expanded_xml"; then
+    tap_ui_node "$expanded_xml" 'Welcome'
+  elif grep -q 'Getting Started.md' "$expanded_xml"; then
+    tap_ui_node "$expanded_xml" 'Getting Started.md'
+  elif ! grep -Eq 'Close note|Note title|Add tag' "$expanded_xml"; then
+    echo 'The Getting Started folder reached neither an accessible note nor the editor.' >&2
+    cat "$expanded_xml" >&2
     return 1
   fi
 
@@ -254,8 +283,8 @@ open_seeded_note() {
   while [ "$SECONDS" -lt "$deadline" ]; do
     capture_ui "${prefix}-open.xml" || true
     if [ -s "${prefix}-open.xml" ] && grep -Fq 'Close note' "${prefix}-open.xml"; then
-      adb exec-out screencap -p > "${prefix}-open.png"
-      assert_screens_differ "${prefix}-expanded.png" "${prefix}-open.png" 1.0 "${prefix}_open"
+      capture_screen "${prefix}-open.png"
+      assert_screens_differ "$expanded_png" "${prefix}-open.png" 1.0 "${prefix}_open"
       return 0
     fi
     sleep 2
@@ -540,7 +569,7 @@ run_scenario() {
     message="$(tail -n 8 "$scenario_log" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g')"
     record_result "$id" failed "$duration" "$message"
     FAILURES=$((FAILURES + 1))
-    printf '[android-usage] FAIL %s (%ss)\n' "$id" >&2
+    printf '[android-usage] FAIL %s (%ss)\n' "$id" "$duration" >&2
     return_to_workspace >/dev/null 2>&1 || true
   fi
   CURRENT_SCENARIO=""

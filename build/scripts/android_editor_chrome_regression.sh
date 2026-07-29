@@ -93,47 +93,26 @@ wait_for_workspace() {
   grep -Eq 'Search notes|Open navigation' android-editor-workspace.xml
 }
 
-open_seeded_note() {
+create_production_note_fixture() {
   wait_for_workspace
-  tap_ui_node android-editor-workspace.xml 'Open navigation'
-  sleep 2
-  capture_ui android-editor-drawer.xml
-  tap_ui_node android-editor-drawer.xml 'Getting Started'
+  capture_ui android-editor-workspace.xml
 
-  # The folder children are loaded asynchronously. Poll the real Android
-  # accessibility tree rather than accepting a fixed-delay snapshot that can
-  # be stale while the visible drawer already contains the Welcome note.
-  wait_for_ui_pattern \
-    android-editor-expanded.xml \
-    'Welcome|Getting Started\.md|Close note|Note title|Add tag' \
-    'The Getting Started folder exposed no accessible seeded note.' \
-    35
-
-  if grep -q 'Welcome' android-editor-expanded.xml; then
-    tap_ui_node android-editor-expanded.xml 'Welcome'
-  elif grep -q 'Getting Started.md' android-editor-expanded.xml; then
-    tap_ui_node android-editor-expanded.xml 'Getting Started.md'
-  elif ! grep -Eq 'Close note|Note title|Add tag' android-editor-expanded.xml; then
-    echo 'The Getting Started folder reached neither an accessible note nor the editor.' >&2
-    cat android-editor-expanded.xml >&2
+  if ! grep -Fq 'New note' android-editor-workspace.xml; then
+    echo 'The production New note action is not exposed in the Android accessibility tree.' >&2
+    cat android-editor-workspace.xml >&2
     return 1
   fi
+  tap_ui_node android-editor-workspace.xml 'New note'
 
-  local deadline=$((SECONDS + 35))
-  while [ "$SECONDS" -lt "$deadline" ]; do
-    capture_ui "$UI_TREE" || true
-    if [ -s "$UI_TREE" ] && grep -Fq 'Close note' "$UI_TREE"; then
-      capture_screen "$SCREENSHOT"
-      return 0
-    fi
-    sleep 2
-  done
-  echo 'The seeded Android note did not reach the real editor chrome.' >&2
-  [ -s "$UI_TREE" ] && cat "$UI_TREE" >&2
-  return 1
+  wait_for_ui_pattern \
+    "$UI_TREE" \
+    'Close note' \
+    'The production New note action did not reach the real Android editor chrome.' \
+    35
+  capture_screen "$SCREENSHOT"
 }
 
-open_seeded_note
+create_production_note_fixture
 
 require_accessible_control() {
   local label="$1"
@@ -185,8 +164,8 @@ PY
 {
   echo "ui_tree=$UI_TREE"
   echo "screenshot=$SCREENSHOT"
-  echo "seeded_folder=expanded"
-  echo "seeded_note=opened"
+  echo "fixture=create-note-via-visible-fab"
+  echo "production_create_action=passed"
   echo "close_note=present"
   echo "note_title=present"
   echo "add_tag=present"

@@ -21,11 +21,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
+          package-manager-cache: false
 
       - name: Install pinned pnpm
         shell: bash
@@ -42,7 +43,7 @@ jobs:
 
       - name: Upload trust-policy failure diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-trust-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: |

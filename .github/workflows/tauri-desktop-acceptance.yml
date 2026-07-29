@@ -38,7 +38,7 @@ jobs:
             platform: macos
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Linux Tauri dependencies
         if: matrix.platform == 'linux'
@@ -66,16 +66,13 @@ jobs:
 
       - uses: ./.github/actions/setup
 
-      - name: Install exact wasm-bindgen CLI
+      - name: Verify exact prebuilt wasm-bindgen CLI
         shell: bash
         run: |
           set -euxo pipefail
           VERSION=$(cargo metadata --manifest-path Elephant/crates/muya-wasm/Cargo.toml --format-version 1 \
             | python3 -c "import json,sys; data=json.load(sys.stdin); print(next(p['version'] for p in data['packages'] if p['name']=='wasm-bindgen'))")
-          if ! wasm-bindgen --version 2>/dev/null | grep -q "${VERSION}$"; then
-            cargo install wasm-bindgen-cli --version "$VERSION" --locked
-          fi
-          wasm-bindgen --version
+          wasm-bindgen --version | grep -F "${VERSION}"
 
       - name: Validate platform contracts
         shell: bash
@@ -118,7 +115,7 @@ jobs:
 
       - name: Upload compact Tauri acceptance evidence
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tauri-desktop-acceptance-${{ matrix.name }}
           path: |

@@ -91,7 +91,7 @@ for (const category of categories) {
   if (!source.includes('await harness.writeEvidence')) fail(`${category.id} runner does not persist structured evidence`)
 
   for (const forbidden of category.forbiddenProofCommands || []) {
-    const forbiddenAction = new RegExp(`harness\\.action\\([^\\n]*['\"]${forbidden}['\"]`)
+    const forbiddenAction = new RegExp(`harness\\.action\\([^\\n]*['"]${forbidden}['"]`)
     if (forbiddenAction.test(source)) {
       fail(`${category.id} uses forbidden internal command ${forbidden} inside a claimed frontend/user action`)
     }
@@ -114,7 +114,8 @@ for (const marker of [
   "harness.action(layer, 'click'",
   "harness.action(layer, 'fill'",
   "harness.action(layer, 'press'",
-  "harness.action(layer, 'insertText'",
+  "execFileAsync('xdotool'",
+  'typeVisibleText(',
   "harness.action(layer, 'readDom'",
   'waitForVaultFile'
 ]) {

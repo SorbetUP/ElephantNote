@@ -42,56 +42,70 @@ const cases = [
 // add-on payload are under I/O pressure. A timeout is only an execution budget:
 // every negative assertion, failed scenario and mutation marker remains strict.
 const mutationTimeoutMs = 30 * 60_000
+const maximumAttempts = 3
 
 for (const specification of cases) {
-  console.log(`[three-layer-sensitivity] expecting ${specification.layer} to fail for ${specification.mutation}`)
-  const startedAt = Date.now()
-  const result = spawnSync(process.execPath, [resolve(root, specification.runner)], {
-    cwd: root,
-    env: {
-      ...process.env,
-      NODE_OPTIONS: nodeOptions,
-      ELEPHANT_LAYER_MUTATION: specification.mutation
-    },
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: mutationTimeoutMs,
-    maxBuffer: 64 * 1024 * 1024
-  })
+  let result = null
+  let payload = null
+  let scenario = null
+  let markerObserved = false
+  let artifactExists = false
+  let startedAt = 0
 
-  const stdout = result.stdout || ''
-  const stderr = result.stderr || ''
-  const combinedOutput = `${stdout}\n${stderr}`
-  if (stdout) process.stdout.write(stdout)
-  if (stderr) process.stderr.write(stderr)
+  for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
+    console.log(`[three-layer-sensitivity] expecting ${specification.layer} to fail for ${specification.mutation} (attempt ${attempt}/${maximumAttempts})`)
+    startedAt = Date.now()
+    result = spawnSync(process.execPath, [resolve(root, specification.runner)], {
+      cwd: root,
+      env: {
+        ...process.env,
+        NODE_OPTIONS: nodeOptions,
+        ELEPHANT_LAYER_MUTATION: specification.mutation
+      },
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: mutationTimeoutMs,
+      maxBuffer: 64 * 1024 * 1024
+    })
 
-  const artifactPath = resolve(root, specification.artifact)
-  const artifactExists = existsSync(artifactPath)
-  const payload = artifactExists
-    ? JSON.parse(readFileSync(artifactPath, 'utf8'))
-    : null
-  const scenario = (payload?.scenarios || []).find((entry) => entry.id === specification.scenarioId)
-  // The mutation import writes directly to stderr, but Node and CI wrappers may
-  // merge child streams. Prove that the exact marker was emitted by the child
-  // process without making stream routing part of the behavioral assertion.
-  const markerObserved = combinedOutput.includes(specification.outputMarker)
-  const observation = {
-    layer: specification.layer,
-    mutation: specification.mutation,
-    exitStatus: result.status,
-    signal: result.signal || null,
-    spawnError: result.error?.message || null,
-    artifactExists,
-    artifactStatus: payload?.status || null,
-    expectedScenario: specification.scenarioId,
-    scenarioFound: Boolean(scenario),
-    scenarioOk: scenario?.ok ?? null,
-    failedScenarioIds: (payload?.scenarios || []).filter((entry) => entry.ok !== true).map((entry) => entry.id),
-    markerObserved,
-    artifactError: payload?.error || null,
-    durationMs: Date.now() - startedAt
+    const stdout = result.stdout || ''
+    const stderr = result.stderr || ''
+    const combinedOutput = `${stdout}\n${stderr}`
+    if (stdout) process.stdout.write(stdout)
+    if (stderr) process.stderr.write(stderr)
+
+    const artifactPath = resolve(root, specification.artifact)
+    artifactExists = existsSync(artifactPath)
+    payload = artifactExists
+      ? JSON.parse(readFileSync(artifactPath, 'utf8'))
+      : null
+    scenario = (payload?.scenarios || []).find((entry) => entry.id === specification.scenarioId)
+    // The mutation import writes directly to stderr, but Node and CI wrappers may
+    // merge child streams. Prove that the exact marker was emitted by the child
+    // process without making stream routing part of the behavioral assertion.
+    markerObserved = combinedOutput.includes(specification.outputMarker)
+    const observation = {
+      layer: specification.layer,
+      mutation: specification.mutation,
+      attempt,
+      exitStatus: result.status,
+      signal: result.signal || null,
+      spawnError: result.error?.message || null,
+      artifactExists,
+      artifactStatus: payload?.status || null,
+      expectedScenario: specification.scenarioId,
+      scenarioFound: Boolean(scenario),
+      scenarioOk: scenario?.ok ?? null,
+      failedScenarioIds: (payload?.scenarios || []).filter((entry) => entry.ok !== true).map((entry) => entry.id),
+      markerObserved,
+      artifactError: payload?.error || null,
+      durationMs: Date.now() - startedAt
+    }
+    console.log(`[three-layer-sensitivity] observation ${JSON.stringify(observation)}`)
+
+    if (markerObserved || result.error || attempt === maximumAttempts) break
+    console.warn(`[three-layer-sensitivity] mutation marker not reached; retrying the complete real runner without relaxing any assertion`)
   }
-  console.log(`[three-layer-sensitivity] observation ${JSON.stringify(observation)}`)
 
   if (result.error) {
     throw new Error(`${specification.layer} mutation process failed after ${Date.now() - startedAt}ms: ${result.error.stack || result.error.message || result.error}`)

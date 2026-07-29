@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+
 import { createRealAppHarness } from './lib/real-app-harness.mjs'
 
+const execFileAsync = promisify(execFile)
 const layer = 'frontend'
 const editorSelector = '[data-testid="muya-rust-runtime-editor"]'
 const editorInputSelector = `${editorSelector}[contenteditable="true"], ${editorSelector} [contenteditable="true"]`
@@ -19,6 +23,13 @@ const harness = createRealAppHarness({
 })
 
 const sleep = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds))
+
+const typeVisibleText = async(text) => {
+  await execFileAsync('xdotool', ['type', '--clearmodifiers', '--delay', '35', '--', String(text)], {
+    env: process.env,
+    timeout: 10_000
+  })
+}
 
 const waitForDom = async(selector, predicate, label, timeoutMs = 10_000) => {
   const deadline = Date.now() + timeoutMs
@@ -85,13 +96,12 @@ try {
       throw new Error(`Frontend editor did not select the complete editable paragraph: ${JSON.stringify({ paragraph, selection })}`)
     }
 
-    // Keep selection anchored in the visible paragraph, but dispatch browser input
-    // at the live contenteditable boundary where Muya installs its production
-    // beforeinput listener. The automation bridge restores the descendant range
-    // after focus, then requires Rust to claim, publish and render each mutation.
-    await harness.action(layer, 'insertText', editorInputSelector, 'frontend line one')
+    // Type through the real X11 keyboard path while the visible descendant range
+    // remains selected. This avoids a synthetic WebKit InputEvent constructor bug
+    // while preserving the production Muya -> Rust -> autosave path and visible UI.
+    await typeVisibleText('frontend line one')
     await harness.action(layer, 'press', editorInputSelector, 'Enter')
-    await harness.action(layer, 'insertText', editorInputSelector, 'frontend line two')
+    await typeVisibleText('frontend line two')
 
     const deadline = Date.now() + 10_000
     let state = null
@@ -193,7 +203,7 @@ try {
   await harness.writeEvidence({
     status: 'PROVEN',
     extra: {
-      proofBoundary: 'Real packaged renderer driven only through visible controls and input events. No direct setMarkdown/save/invokeTauri calls.'
+      proofBoundary: 'Real packaged renderer driven only through visible controls and physical/input keyboard events. No direct setMarkdown/save/invokeTauri calls.'
     }
   })
 } catch (error) {

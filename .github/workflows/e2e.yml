@@ -116,7 +116,9 @@ jobs:
           set -euxo pipefail
           node build/scripts/run-observable.mjs --label tauri-linux-build -- \
             pnpm build:linux 2>&1 | tee tauri-linux-build.txt
-          APPIMAGE_PATH="$(find Elephant/backend/tauri/target/release/bundle/appimage -maxdepth 1 -type f -name '*.AppImage' -print -quit)"
+          APPIMAGE_GLOB='Elephant/backend/tauri/target/release/bundle/appimage/*.AppImage'
+          compgen -G "$APPIMAGE_GLOB" >/dev/null
+          APPIMAGE_PATH="$(compgen -G "$APPIMAGE_GLOB" | head -n 1)"
           test -n "$APPIMAGE_PATH"
           test -f "$APPIMAGE_PATH"
           chmod +x "$APPIMAGE_PATH"
@@ -213,6 +215,17 @@ jobs:
           }
           console.log('[three-layer-proof] PROVEN backend + frontend + distributed AppImage user journey')
           NODE
+
+          for proof_glob in \
+            'test-results/trusted/backend-contract/**' \
+            'test-results/trusted/frontend-behavior/**' \
+            'test-results/trusted/packaged-user-journey/**'
+          do
+            compgen -G "$proof_glob" >/dev/null || {
+              echo "Missing mandatory local proof files: $proof_glob" >&2
+              exit 1
+            }
+          done
 
       - name: Run exhaustive official addon suite through the external app API
         shell: bash

@@ -110,10 +110,10 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
     // canonical Muya normalization only after that reset has completed;
     // issuing both resets synchronously can make the second command observe a
     // session that has not been initialized yet.
-    this.__rustCanonicalReady = this.__rustMirror?.ready
-      ?.then(() => this.__rustMirror.reset(markdown, 'constructor-canonical', { muyaIndexCursor }))
+    this.__rustCanonicalReady = Promise.resolve(this.__rustMirror?.ready)
+      .then(() => this.__rustMirror.reset(markdown, 'constructor-canonical', { muyaIndexCursor }))
       .then(() => this.__refreshClipboard())
-      .catch(this.__reportRustError)
+    this.__rustCanonicalReady.catch(this.__reportRustError)
   }
 
   getMarkdown () {
@@ -247,11 +247,15 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
     )
     this.__rustComposition = null
 
-    this.__rustMirror?.reset(rendered.markdown, 'set-markdown-canonical', {
-      muyaIndexCursor: rendered.muyaIndexCursor
-    })
+    // A visible setMarkdown remount is complete only after Rust has accepted the
+    // exact document Muya rendered. Chain every reset behind the prior canonical
+    // barrier so a following physical key cannot race an older session reset.
+    this.__rustCanonicalReady = Promise.resolve(this.__rustCanonicalReady || this.__rustMirror?.ready)
+      .then(() => this.__rustMirror.reset(rendered.markdown, 'set-markdown-canonical', {
+        muyaIndexCursor: rendered.muyaIndexCursor
+      }))
       .then(() => this.__refreshClipboard())
-      .catch(this.__reportRustError)
+    this.__rustCanonicalReady.catch(this.__reportRustError)
 
     return rendered.result
   }
@@ -313,6 +317,10 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
 
   __applyRust (name, operation) {
     const execute = async() => {
+      // Never let a real keyboard/input command overtake the reset produced by a
+      // preceding visible remount. This is the canonical lifecycle boundary for
+      // both physical events and the external acceptance API.
+      await this.__rustCanonicalReady
       await this.__repairVisibleDocumentFromRust(name)
       return super.__applyRust(name, operation)
     }

@@ -229,7 +229,18 @@ const install = (target = globalThis) => {
     const liveSelection = selectionOffsetsWithin(target, element)
     if (element !== initialElement || !liveSelection) restoreSelection(target, element, savedSelection)
 
-    for (const character of value) await dispatchVisibleCharacter(target, selector, character)
+    let characterIndex = 0
+    for (const character of value) {
+      characterIndex += 1
+      try {
+        await dispatchVisibleCharacter(target, selector, character)
+      } catch (error) {
+        // WebKit's Error.stack can contain only the source location and omit the
+        // actual message. Throw a primitive string so the external automation
+        // transport preserves the exact failed character and editor invariant.
+        throw `Visible Rust insertText failed at character ${characterIndex}/${value.length} ${JSON.stringify(character)}: ${error?.message || String(error)}; stack=${error?.stack || 'none'}`
+      }
+    }
     return api.readDom(selector)
   }
 

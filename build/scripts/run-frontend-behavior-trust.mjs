@@ -6,6 +6,7 @@ const layer = 'frontend'
 const editorSelector = '[data-testid="muya-rust-runtime-editor"]'
 const editorInputSelector = `${editorSelector}[contenteditable="true"], ${editorSelector} [contenteditable="true"]`
 const editableParagraphSelector = `${editorSelector} .ag-paragraph-content`
+const secondParagraphSelector = `${editorSelector} .ag-paragraph:nth-child(2) .ag-paragraph-content`
 const uniqueSearchText = 'frontend-search-marker-9173'
 const initialVisibleText = 'Initial visible text.'
 
@@ -112,6 +113,11 @@ try {
 
     await typeVisibleText('frontend line one')
     await harness.action(layer, 'press', editorInputSelector, 'Enter')
+    await harness.action(layer, 'waitFor', secondParagraphSelector, 10_000)
+    const secondLineCaret = await harness.action(layer, 'selectText', secondParagraphSelector, 0, 0)
+    if (secondLineCaret?.start !== 0 || secondLineCaret?.end !== 0 || secondLineCaret?.text !== '') {
+      throw new Error(`Frontend Enter did not expose a selectable second visible paragraph: ${JSON.stringify(secondLineCaret)}`)
+    }
     await typeVisibleText('frontend line two')
 
     const deadline = Date.now() + 10_000
@@ -138,7 +144,7 @@ try {
       (value) => value?.visible && value.text.includes('frontend line one') && value.text.includes('frontend line two'),
       'frontend-editor-visible-persistence'
     )
-    return { persistedBytes: persisted.length, displayedTextBytes: displayed.text.length, selection }
+    return { persistedBytes: persisted.length, displayedTextBytes: displayed.text.length, selection, secondLineCaret }
   })
 
   await harness.runScenario('frontend-sidebar-toggle-roundtrip', layer, async() => {

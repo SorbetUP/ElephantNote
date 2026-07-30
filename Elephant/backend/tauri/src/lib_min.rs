@@ -76,11 +76,12 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_elephant_android_vault::init());
 
     #[cfg(not(mobile))]
-    let builder = builder.plugin(tauri_plugin_window_state::Builder::default().build());
+    let builder = builder
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_window_state::Builder::default().build());
 
     builder
         .setup(|app| {
@@ -256,6 +257,23 @@ mod tests {
         assert_eq!(
             info.get("desktop").and_then(|value| value.as_bool()),
             Some(!cfg!(mobile))
+        );
+    }
+
+    #[test]
+    fn notification_plugin_is_registered_only_in_the_desktop_builder() {
+        let source = include_str!("lib_min.rs");
+        let (mobile_builder, desktop_builder) = source
+            .split_once("#[cfg(not(mobile))]")
+            .expect("the desktop-only Tauri builder must remain explicit");
+
+        assert!(
+            !mobile_builder.contains("tauri_plugin_notification::init()"),
+            "Android/iOS must not initialize the notification plugin during the about:blank relaunch phase"
+        );
+        assert!(
+            desktop_builder.contains(".plugin(tauri_plugin_notification::init())"),
+            "desktop builds must retain notification support"
         );
     }
 }

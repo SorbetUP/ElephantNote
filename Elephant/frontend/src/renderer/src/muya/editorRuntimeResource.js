@@ -1,4 +1,10 @@
 const BLOCK_SELECTOR = '[data-elephant-editor-layer="block"][data-elephant-editor-kind]'
+const SEMANTIC_ATTRIBUTE_FILTER = [
+  'data-elephant-editor-layer',
+  'data-elephant-editor-kind',
+  'data-elephant-editor-node',
+  'data-language'
+]
 
 const blockDescriptor = (element) => Object.freeze({
   nodeId: Number(element.getAttribute('data-elephant-editor-node')) || null,
@@ -7,6 +13,15 @@ const blockDescriptor = (element) => Object.freeze({
   element
 })
 
+const microtask = (root, callback) => {
+  const queue = root?.ownerDocument?.defaultView?.queueMicrotask || globalThis.queueMicrotask
+  if (typeof queue === 'function') {
+    queue(callback)
+    return
+  }
+  Promise.resolve().then(callback)
+}
+
 export const createRustEditorRuntimeBinding = ({ runtime, getMarkdown = () => '' } = {}) => {
   if (!runtime?.bridge || typeof runtime.bridge.dispatch !== 'function') {
     throw new TypeError('A live Rust editor runtime is required')
@@ -14,7 +29,27 @@ export const createRustEditorRuntimeBinding = ({ runtime, getMarkdown = () => ''
 
   const listeners = new Set()
   const root = runtime.domContainer || null
+  const elementIds = new WeakMap()
+  let nextElementId = 1
   let disposed = false
+  let observer = null
+  let domNotificationQueued = false
+
+  const semanticElements = () => root?.querySelectorAll ? [...root.querySelectorAll(BLOCK_SELECTOR)] : []
+  const elementId = (element) => {
+    if (!elementIds.has(element)) elementIds.set(element, nextElementId++)
+    return elementIds.get(element)
+  }
+  const semanticSignature = () => semanticElements()
+    .map((element) => [
+      elementId(element),
+      element.getAttribute('data-elephant-editor-node') || '',
+      element.getAttribute('data-elephant-editor-kind') || '',
+      element.getAttribute('data-language') || ''
+    ].join(':'))
+    .join('|')
+
+  let lastSemanticSignature = semanticSignature()
 
   const payload = (detail = {}) => Object.freeze({
     engine: 'rust',
@@ -31,6 +66,30 @@ export const createRustEditorRuntimeBinding = ({ runtime, getMarkdown = () => ''
     for (const listener of [...listeners]) listener(event)
   }
 
+  const scheduleSemanticDomNotification = () => {
+    if (disposed || domNotificationQueued) return
+    domNotificationQueued = true
+    microtask(root, () => {
+      domNotificationQueued = false
+      if (disposed) return
+      const nextSignature = semanticSignature()
+      if (nextSignature === lastSemanticSignature) return
+      lastSemanticSignature = nextSignature
+      notify({ reason: 'dom-change' })
+    })
+  }
+
+  const MutationObserverConstructor = root?.ownerDocument?.defaultView?.MutationObserver || globalThis.MutationObserver
+  if (root?.querySelectorAll && typeof MutationObserverConstructor === 'function') {
+    observer = new MutationObserverConstructor(scheduleSemanticDomNotification)
+    observer.observe(root, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: SEMANTIC_ATTRIBUTE_FILTER
+    })
+  }
+
   const resource = Object.freeze({
     apiVersion: 1,
     owner: 'elephant.core.editor',
@@ -42,8 +101,7 @@ export const createRustEditorRuntimeBinding = ({ runtime, getMarkdown = () => ''
     queryBlocks(options = {}) {
       const kind = typeof options === 'string' ? options : String(options.kind || '')
       const language = typeof options === 'object' ? String(options.language || '') : ''
-      if (!root?.querySelectorAll) return []
-      return [...root.querySelectorAll(BLOCK_SELECTOR)]
+      return semanticElements()
         .filter((element) => !kind || element.getAttribute('data-elephant-editor-kind') === kind)
         .filter((element) => !language || element.getAttribute('data-language') === language)
         .map(blockDescriptor)
@@ -63,6 +121,9 @@ export const createRustEditorRuntimeBinding = ({ runtime, getMarkdown = () => ''
     notify,
     dispose() {
       disposed = true
+      observer?.disconnect()
+      observer = null
+      domNotificationQueued = false
       listeners.clear()
     }
   })

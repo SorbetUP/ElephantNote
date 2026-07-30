@@ -1,104 +1,152 @@
-const PATCH_FLAG = '__elephantCanonicalInsertTextInstalled'
+const PATCH_FLAG = '__elephantCanonicalInsertTextPreflightInstalled'
+const EDITOR_INPUT_FLAG = '__elephantEditorInputDefaultsInstalled'
+const DURABILITY_FLAG = '__elephantEditorDurabilityAutomationFenceInstalled'
 
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 
-const restoreSelectionAfterFocus = (target, element) => {
-  const selection = target.getSelection?.() || target.window?.getSelection?.()
-  const savedRange = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : null
-  element.focus?.()
-  if (!savedRange || !element.contains(savedRange.commonAncestorContainer)) return
-  const current = target.getSelection?.() || target.window?.getSelection?.()
-  current?.removeAllRanges()
-  current?.addRange(savedRange)
+const browserSelectionFor = (target, element) => target.getSelection?.() ||
+  target.window?.getSelection?.() ||
+  element?.ownerDocument?.defaultView?.getSelection?.()
+
+const selectionOffsetsWithin = (target, element) => {
+  const selection = browserSelectionFor(target, element)
+  if (!selection?.anchorNode || !selection?.focusNode) return null
+  if (
+    (selection.anchorNode !== element && !element.contains?.(selection.anchorNode)) ||
+    (selection.focusNode !== element && !element.contains?.(selection.focusNode))
+  ) return null
+
+  const offsetOf = (node, offset) => {
+    const range = element.ownerDocument.createRange()
+    range.selectNodeContents(element)
+    range.setEnd(node, offset)
+    return range.toString().length
+  }
+
+  try {
+    return {
+      anchor: offsetOf(selection.anchorNode, selection.anchorOffset),
+      focus: offsetOf(selection.focusNode, selection.focusOffset),
+      textLength: String(element.textContent || '').length
+    }
+  } catch {
+    return null
+  }
 }
 
-const waitForRustMutation = async(target, before, timeoutMs = 5000) => {
+const textPointAt = (element, requestedOffset) => {
+  const document = element.ownerDocument
+  const showText = document.defaultView?.NodeFilter?.SHOW_TEXT ?? 4
+  const walker = document.createTreeWalker(element, showText)
+  let remaining = Math.max(0, Number(requestedOffset) || 0)
+  let node = walker.nextNode()
+  let last = null
+
+  while (node) {
+    last = node
+    const length = String(node.data || '').length
+    if (remaining <= length) return { node, offset: remaining }
+    remaining -= length
+    node = walker.nextNode()
+  }
+
+  if (last) return { node: last, offset: String(last.data || '').length }
+  return { node: element, offset: element.childNodes?.length || 0 }
+}
+
+const restoreSelection = (target, element, saved) => {
+  if (!saved) return
+  const liveLength = String(element.textContent || '').length
+  const selectedInterimEnd = saved.anchor === saved.focus && saved.focus === saved.textLength
+  const anchorOffset = selectedInterimEnd ? liveLength : Math.min(saved.anchor, liveLength)
+  const focusOffset = selectedInterimEnd ? liveLength : Math.min(saved.focus, liveLength)
+  const anchor = textPointAt(element, anchorOffset)
+  const focus = textPointAt(element, focusOffset)
+  const selection = browserSelectionFor(target, element)
+  if (!selection) throw new Error('The live Rust editor has no Selection API')
+
+  if (typeof selection.setBaseAndExtent === 'function') {
+    selection.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset)
+    return
+  }
+
+  const range = element.ownerDocument.createRange()
+  const start = anchorOffset <= focusOffset ? anchor : focus
+  const end = anchorOffset <= focusOffset ? focus : anchor
+  range.setStart(start.node, start.offset)
+  range.setEnd(end.node, end.offset)
+  selection.removeAllRanges()
+  selection.addRange(range)
+}
+
+const waitForLiveRustEditor = async(target, selector, timeoutMs = 10_000) => {
   const deadline = Date.now() + timeoutMs
+  let last = null
+
   while (Date.now() <= deadline) {
-    const current = target.__ELEPHANT_MUYA_RUST_MIRROR__
-    if (current?.phase === 'error') {
-      throw new Error(`Rust editor failed while applying text input: ${current.error || current.reason || 'unknown error'}`)
+    const element = target.document?.querySelector?.(selector)
+    const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__
+    const published = target.__ELEPHANT_MUYA_RUST_MIRROR__
+    const canonical = activeMuya?.__rustMirror?.state
+    const sameSurface = Boolean(element && activeMuya?.container === element)
+    const synchronized = canonical && String(activeMuya?.getMarkdown?.() ?? '') === String(canonical.markdown ?? '')
+    const idle = Number(activeMuya?.__rustMutationGate?.pending || 0) === 0
+
+    last = {
+      element: Boolean(element),
+      activeMuya: Boolean(activeMuya),
+      sameSurface,
+      phase: published?.phase || null,
+      revision: Number(published?.revision || 0),
+      canonicalRevision: Number(canonical?.revision || 0),
+      synchronized: Boolean(synchronized),
+      idle
     }
-    if (
-      Number(current?.revision) > Number(before?.revision || 0) ||
-      Number(current?.markdownLength) !== Number(before?.markdownLength || 0)
-    ) return current
+
+    if (published?.phase === 'error') {
+      throw new Error(`Rust editor failed before visible text input: ${published.error || published.reason || 'unknown error'}`)
+    }
+    if (sameSurface && published?.phase === 'ready' && synchronized && idle) return { element, activeMuya }
     await wait(20)
   }
-  throw new Error('The visible text input did not reach a completed Rust editor mutation')
+
+  throw new Error(`The visible Rust editor did not become ready before text input: ${JSON.stringify(last)}`)
 }
 
 const install = (target = globalThis) => {
   const api = target.__ELEPHANT_ACCEPTANCE_TEST__ || target.__ELEPHANT_AUTOMATION__
   if (!api || api[PATCH_FLAG]) return false
+  if (!api[EDITOR_INPUT_FLAG] || !api[DURABILITY_FLAG] || typeof api.insertText !== 'function') return false
 
+  const originalInsertText = api.insertText.bind(api)
   api.insertText = async(selector, value) => {
     if (!selector || typeof selector !== 'string') throw new TypeError('insertText requires a CSS selector')
     if (typeof value !== 'string') throw new TypeError('insertText requires a string value')
-    const element = target.document?.querySelector?.(selector)
-    if (!element) throw new Error(`insertText target was not found: ${selector}`)
 
-    restoreSelectionAfterFocus(target, element)
-    const InputEventConstructor = target.InputEvent || target.window?.InputEvent
-    if (typeof InputEventConstructor !== 'function') throw new Error('insertText requires InputEvent support')
+    const initialElement = target.document?.querySelector?.(selector)
+    const isRustTarget = Boolean(
+      initialElement?.closest?.('[data-testid="muya-rust-runtime-editor"]') ||
+      initialElement?.querySelector?.('[data-testid="muya-rust-runtime-editor"]')
+    )
+    if (!isRustTarget) return originalInsertText(selector, value)
 
-    const beforeRust = { ...(target.__ELEPHANT_MUYA_RUST_MIRROR__ || {}) }
-    const inputEvent = new InputEventConstructor('beforeinput', {
-      inputType: 'insertText',
-      data: value,
-      bubbles: true,
-      cancelable: true,
-      composed: true
-    })
-    const dispatched = element.dispatchEvent(inputEvent)
-
-    if (dispatched && !inputEvent.defaultPrevented) {
-      const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__
-      if (typeof activeMuya?.__beforeInput !== 'function') {
-        throw new Error('The visible editor did not claim insertText and no canonical Muya handler is active')
-      }
-
-      let fallbackPrevented = false
-      const fallbackEvent = {
-        inputType: 'insertText',
-        data: value,
-        target: element,
-        currentTarget: element,
-        isComposing: false,
-        defaultPrevented: false,
-        preventDefault() {
-          fallbackPrevented = true
-          this.defaultPrevented = true
-        },
-        stopPropagation() {},
-        stopImmediatePropagation() {}
-      }
-      await activeMuya.__beforeInput(fallbackEvent)
-      if (!fallbackPrevented) {
-        throw new Error('The canonical Muya handler did not claim insertText')
-      }
-    }
-
-    await waitForRustMutation(target, beforeRust)
-    console.info('[automation-api] canonical visible text input completed', {
-      selector,
-      valueLength: value.length,
-      dispatched,
-      browserClaimed: inputEvent.defaultPrevented
-    })
-    return api.readDom(selector)
+    const savedSelection = selectionOffsetsWithin(target, initialElement)
+    const { element } = await waitForLiveRustEditor(target, selector)
+    restoreSelection(target, element, savedSelection)
+    return originalInsertText(selector, value)
   }
 
   Object.defineProperty(api, PATCH_FLAG, { value: true, enumerable: false })
+  console.info('[automation-api] installed live Rust editor text-input preflight')
   return true
 }
 
 const installWhenReady = async(target = globalThis) => {
-  for (let attempt = 0; attempt < 500; attempt += 1) {
+  for (let attempt = 0; attempt < 1000; attempt += 1) {
     if (install(target)) return true
     await wait(20)
   }
-  console.error('[automation-api] canonical insertText patch was not installed')
+  console.error('[automation-api] live Rust editor text-input preflight was not installed')
   return false
 }
 

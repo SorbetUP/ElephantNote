@@ -79,16 +79,14 @@ const restoreSelection = (target, element, saved) => {
   selection.addRange(range)
 }
 
-const terminalLineEndingEquivalent = (exported, canonical, canonicalState) => {
-  const canonicalAtLogicalEnd = canonicalState?.selection?.anchor === canonical.length &&
-    canonicalState?.selection?.focus === canonical.length
-  if (!canonicalAtLogicalEnd) return false
-
-  // Muya and Rust intentionally differ only in how they serialize the final
-  // empty paragraph. This is the same equivalence used by the production adapter:
-  // never ignore non-terminal content, and only accept it while Rust owns the
-  // logical caret at the document end.
-  return exported.replace(/\n+$/, '') === canonical.replace(/\n+$/, '')
+const terminalLineEndingEquivalent = (exported, canonical) => {
+  // Muya omits exactly one final empty paragraph that Rust retains as a terminal
+  // LF. The position of the caret does not change that serialization fact. Keep
+  // the comparison strict: only one terminal LF may differ and every preceding
+  // character must remain identical.
+  if (Math.abs(exported.length - canonical.length) !== 1) return false
+  if (!exported.endsWith('\n') && !canonical.endsWith('\n')) return false
+  return exported.replace(/\n$/, '') === canonical.replace(/\n$/, '')
 }
 
 const canonicalSurfaceIsSynchronized = (activeMuya, canonicalState) => {
@@ -96,7 +94,7 @@ const canonicalSurfaceIsSynchronized = (activeMuya, canonicalState) => {
   try {
     const exported = String(activeMuya.getMarkdown() ?? '')
     const canonical = String(canonicalState.markdown ?? '')
-    return exported === canonical || terminalLineEndingEquivalent(exported, canonical, canonicalState)
+    return exported === canonical || terminalLineEndingEquivalent(exported, canonical)
   } catch {
     // Muya can briefly expose a half-rendered ContentState while the queued Rust
     // transaction is repainting the contenteditable. That transient serializer

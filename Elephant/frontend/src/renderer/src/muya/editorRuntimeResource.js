@@ -26,6 +26,15 @@ const microtask = (root, callback) => {
   Promise.resolve().then(callback)
 }
 
+const containsSemanticBlock = (node) => node?.nodeType === 1 && Boolean(
+  node.matches?.(BLOCK_SELECTOR) || node.querySelector?.(BLOCK_SELECTOR)
+)
+
+const changesSemanticBlockStructure = (mutation) => {
+  if (mutation.type === 'attributes') return true
+  return [...mutation.addedNodes, ...mutation.removedNodes].some(containsSemanticBlock)
+}
+
 export const createRustEditorRuntimeBinding = ({ runtime, getMarkdown = () => '' } = {}) => {
   if (!runtime?.bridge || typeof runtime.bridge.dispatch !== 'function') {
     throw new TypeError('A live Rust editor runtime is required')
@@ -85,7 +94,9 @@ export const createRustEditorRuntimeBinding = ({ runtime, getMarkdown = () => ''
 
   const MutationObserverConstructor = root?.ownerDocument?.defaultView?.MutationObserver || globalThis.MutationObserver
   if (root?.querySelectorAll && typeof MutationObserverConstructor === 'function') {
-    observer = new MutationObserverConstructor(scheduleSemanticDomNotification)
+    observer = new MutationObserverConstructor((mutations) => {
+      if (mutations.some(changesSemanticBlockStructure)) scheduleSemanticDomNotification()
+    })
     observer.observe(root, {
       childList: true,
       subtree: true,

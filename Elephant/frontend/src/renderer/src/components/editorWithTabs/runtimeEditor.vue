@@ -45,7 +45,7 @@ import RuntimeImageToolbar from './runtimeImageToolbar.vue'
 import RuntimeTableDialog from './runtimeTableDialog.vue'
 import { rustBusCommand } from './runtimeEditorCommands'
 import { createRuntimeImageHandlers } from './runtimeEditorImages'
-import { useRuntimeImageToolbar } from './runtimeImageToolbarState'
+import { useRuntimeImageToolbar } from './runtimeEditorImageToolbarState'
 import { applyRustEditorMarkdown } from './runtimeEditorState'
 
 const props = defineProps({
@@ -76,16 +76,14 @@ const editorModelValue = computed(() => {
   const converted = String(props.toEditorMarkdown(props.markdown) || '')
   const canonical = lastEditorMarkdown.value
 
-  // The document adapter intentionally removes front matter and may also omit
-  // the final empty paragraph. That final newline is nevertheless Rust's real
-  // caret-bearing editor state between Enter and the following character.
-  // Feed the exact value emitted by the active editor back to Vue when the only
-  // difference is trailing line breaks, instead of remounting the contenteditable
-  // in the middle of a visible keyboard transaction.
+  // Prefer the exact active Rust document whenever the parent value is the
+  // adapter's round-trip of that document. This recognizes transformed echoes
+  // (front matter extraction, trailing paragraph normalization, and similar
+  // document-adapter changes) without treating an unrelated external document
+  // replacement as an internal echo.
   if (
     typeof canonical === 'string' &&
-    canonical.endsWith('\n') &&
-    converted === canonical.replace(/\n+$/, '')
+    String(props.fromEditorMarkdown(canonical) || '') === String(props.markdown || '')
   ) {
     return canonical
   }

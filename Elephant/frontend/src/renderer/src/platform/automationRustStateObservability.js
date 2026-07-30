@@ -65,6 +65,22 @@ const rustStateSnapshot = (target, baseState = {}) => {
   }
 }
 
+const isVisibleSurface = (target, element) => {
+  if (!element || element.isConnected === false || element.hidden || element.getAttribute?.('aria-hidden') === 'true') return false
+  const style = target.getComputedStyle?.(element) || element.ownerDocument?.defaultView?.getComputedStyle?.(element)
+  return style?.display !== 'none' && style?.visibility !== 'hidden'
+}
+
+const visibleRustEditorSurface = (target) => {
+  const activeContainer = target.__ELEPHANT_ACTIVE_MUYA__?.container
+  if (isVisibleSurface(target, activeContainer)) return activeContainer
+
+  const candidates = target.document?.querySelectorAll?.(
+    '[data-testid="muya-rust-runtime-editor"], .muya-rust-runtime-editor, [data-muya-editor="true"], .muya-editor, .en-editor-host'
+  ) || []
+  return [...candidates].find((element) => isVisibleSurface(target, element)) || null
+}
+
 const waitForOpenedRustEditor = async(target, readBaseState, expectedPath) => {
   const deadline = Date.now() + OPEN_NOTE_READY_TIMEOUT_MS
   let last = null
@@ -100,6 +116,20 @@ const enhance = (target, api) => {
 
   const originalReadState = api.readState.bind(api)
   api.readState = (...args) => rustStateSnapshot(target, originalReadState(...args))
+
+  if (typeof api.readDisplayed === 'function') {
+    const originalReadDisplayed = api.readDisplayed.bind(api)
+    api.readDisplayed = (...args) => {
+      const baseState = originalReadDisplayed(...args)
+      const surface = visibleRustEditorSurface(target)
+      if (!surface) return baseState
+      return {
+        ...baseState,
+        displayedText: surface.innerText || surface.textContent || '',
+        displayedHtml: surface.innerHTML || ''
+      }
+    }
+  }
 
   if (typeof api.openNote === 'function') {
     const originalOpenNote = api.openNote.bind(api)

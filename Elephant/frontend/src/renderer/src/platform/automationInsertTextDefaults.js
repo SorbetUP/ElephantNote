@@ -113,6 +113,67 @@ const waitForLiveRustEditor = async(target, selector, timeoutMs = 10_000) => {
   throw new Error(`The visible Rust editor did not become ready before text input: ${JSON.stringify(last)}`)
 }
 
+const dispatchVisibleCharacter = async(target, selector, character) => {
+  const { element, activeMuya } = await waitForLiveRustEditor(target, selector)
+  const before = activeMuya?.__rustMirror?.state
+  const beforeRevision = Number(before?.revision || 0)
+  const beforeMarkdown = String(before?.markdown || '')
+  const InputEventConstructor = target.InputEvent || target.window?.InputEvent
+  if (typeof InputEventConstructor !== 'function') {
+    throw new Error('Visible Rust text input requires InputEvent support')
+  }
+
+  element.focus?.()
+  const event = new InputEventConstructor('beforeinput', {
+    inputType: 'insertText',
+    data: character,
+    bubbles: true,
+    cancelable: true,
+    composed: true
+  })
+  if (event.inputType !== 'insertText') {
+    Object.defineProperty(event, 'inputType', {
+      configurable: true,
+      enumerable: true,
+      value: 'insertText'
+    })
+  }
+  if (event.data !== character) {
+    Object.defineProperty(event, 'data', {
+      configurable: true,
+      enumerable: true,
+      value: character
+    })
+  }
+
+  element.dispatchEvent(event)
+  if (!event.defaultPrevented) {
+    throw new Error('The visible Rust editor did not claim the insertText beforeinput event')
+  }
+
+  const deadline = Date.now() + 10_000
+  while (Date.now() <= deadline) {
+    const live = target.__ELEPHANT_ACTIVE_MUYA__
+    const state = live?.__rustMirror?.state
+    const published = target.__ELEPHANT_MUYA_RUST_MIRROR__
+    const idle = Number(live?.__rustMutationGate?.pending || 0) === 0
+    const synchronized = state && String(live?.getMarkdown?.() ?? '') === String(state.markdown ?? '')
+    if (published?.phase === 'error') {
+      throw new Error(`Rust editor failed while applying visible text: ${published.error || published.reason || 'unknown error'}`)
+    }
+    if (
+      Number(state?.revision || 0) > beforeRevision &&
+      String(state?.markdown || '') !== beforeMarkdown &&
+      published?.phase === 'ready' &&
+      synchronized &&
+      idle
+    ) return state
+    await wait(20)
+  }
+
+  throw new Error(`The visible insertText event did not complete a Rust mutation: ${JSON.stringify({ beforeRevision, character })}`)
+}
+
 const install = (target = globalThis) => {
   const api = target.__ELEPHANT_ACCEPTANCE_TEST__ || target.__ELEPHANT_AUTOMATION__
   if (!api || api[PATCH_FLAG]) return false
@@ -132,18 +193,11 @@ const install = (target = globalThis) => {
 
     const savedSelection = selectionOffsetsWithin(target, initialElement)
     const { element } = await waitForLiveRustEditor(target, selector)
-
-    // The readiness wait normally resolves against the same live contenteditable.
-    // Re-applying an already-valid WebKit Selection through setBaseAndExtent can
-    // throw for Muya ranges that cross non-editable decorations. Preserve the real
-    // browser selection in place, and reconstruct it only if the editor was
-    // actually remounted or the wait displaced the caret outside the live surface.
     const liveSelection = selectionOffsetsWithin(target, element)
-    if (element !== initialElement || !liveSelection) {
-      restoreSelection(target, element, savedSelection)
-    }
+    if (element !== initialElement || !liveSelection) restoreSelection(target, element, savedSelection)
 
-    return originalInsertText(selector, value)
+    for (const character of value) await dispatchVisibleCharacter(target, selector, character)
+    return api.readDom(selector)
   }
 
   Object.defineProperty(api, PATCH_FLAG, { value: true, enumerable: false })

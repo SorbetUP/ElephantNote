@@ -61,18 +61,30 @@ const isMutatingBeforeInput = (event) => {
     inputType.startsWith('format')
 }
 
+const isMutatingKeyDown = (event) => {
+  if (event?.isComposing) return false
+  const key = String(event?.key || '')
+  if (key === 'Enter' || key === 'Backspace' || key === 'Delete') return true
+  return key.length === 1 && !event?.ctrlKey && !event?.metaKey && !event?.altKey
+}
+
 const installUserMutationBoundary = () => {
   const root = rootRef.value
   if (!root) return () => {}
   const beforeInput = (event) => {
     if (isMutatingBeforeInput(event)) markUserMutation(`beforeinput:${event.inputType}`)
   }
+  const keyDown = (event) => {
+    if (isMutatingKeyDown(event)) markUserMutation(`keydown:${event.key}`)
+  }
   const paste = () => markUserMutation('paste')
   const drop = () => markUserMutation('drop')
+  root.addEventListener('keydown', keyDown, true)
   root.addEventListener('beforeinput', beforeInput, true)
   root.addEventListener('paste', paste, true)
   root.addEventListener('drop', drop, true)
   return () => {
+    root.removeEventListener('keydown', keyDown, true)
     root.removeEventListener('beforeinput', beforeInput, true)
     root.removeEventListener('paste', paste, true)
     root.removeEventListener('drop', drop, true)

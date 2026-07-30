@@ -79,6 +79,19 @@ const restoreSelection = (target, element, saved) => {
   selection.addRange(range)
 }
 
+const canonicalSurfaceIsSynchronized = (activeMuya, canonical) => {
+  if (!canonical || typeof activeMuya?.getMarkdown !== 'function') return false
+  try {
+    return String(activeMuya.getMarkdown() ?? '') === String(canonical.markdown ?? '')
+  } catch {
+    // Muya can briefly expose a half-rendered ContentState while the queued Rust
+    // transaction is repainting the contenteditable. That transient serializer
+    // exception is not a failed user mutation; the ready/idle loop below must
+    // wait for the same real surface to settle and then evaluate it again.
+    return false
+  }
+}
+
 const waitForLiveRustEditor = async(target, selector, timeoutMs = 10_000) => {
   const deadline = Date.now() + timeoutMs
   let last = null
@@ -89,7 +102,7 @@ const waitForLiveRustEditor = async(target, selector, timeoutMs = 10_000) => {
     const published = target.__ELEPHANT_MUYA_RUST_MIRROR__
     const canonical = activeMuya?.__rustMirror?.state
     const sameSurface = Boolean(element && activeMuya?.container === element)
-    const synchronized = canonical && String(activeMuya?.getMarkdown?.() ?? '') === String(canonical.markdown ?? '')
+    const synchronized = canonicalSurfaceIsSynchronized(activeMuya, canonical)
     const idle = Number(activeMuya?.__rustMutationGate?.pending || 0) === 0
 
     last = {
@@ -152,12 +165,20 @@ const dispatchVisibleCharacter = async(target, selector, character) => {
   }
 
   const deadline = Date.now() + 10_000
+  let last = null
   while (Date.now() <= deadline) {
     const live = target.__ELEPHANT_ACTIVE_MUYA__
     const state = live?.__rustMirror?.state
     const published = target.__ELEPHANT_MUYA_RUST_MIRROR__
     const idle = Number(live?.__rustMutationGate?.pending || 0) === 0
-    const synchronized = state && String(live?.getMarkdown?.() ?? '') === String(state.markdown ?? '')
+    const synchronized = canonicalSurfaceIsSynchronized(live, state)
+    last = {
+      revision: Number(state?.revision || 0),
+      markdownLength: String(state?.markdown || '').length,
+      phase: published?.phase || null,
+      idle,
+      synchronized
+    }
     if (published?.phase === 'error') {
       throw new Error(`Rust editor failed while applying visible text: ${published.error || published.reason || 'unknown error'}`)
     }
@@ -171,7 +192,7 @@ const dispatchVisibleCharacter = async(target, selector, character) => {
     await wait(20)
   }
 
-  throw new Error(`The visible insertText event did not complete a Rust mutation: ${JSON.stringify({ beforeRevision, character })}`)
+  throw new Error(`The visible insertText event did not complete a Rust mutation: ${JSON.stringify({ beforeRevision, character, last })}`)
 }
 
 const install = (target = globalThis) => {

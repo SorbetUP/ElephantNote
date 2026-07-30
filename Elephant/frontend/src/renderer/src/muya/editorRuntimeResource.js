@@ -14,9 +14,13 @@ const blockDescriptor = (element) => Object.freeze({
 })
 
 const microtask = (root, callback) => {
-  const queue = root?.ownerDocument?.defaultView?.queueMicrotask || globalThis.queueMicrotask
-  if (typeof queue === 'function') {
-    queue(callback)
+  const windowRef = root?.ownerDocument?.defaultView
+  if (typeof windowRef?.queueMicrotask === 'function') {
+    windowRef.queueMicrotask(callback)
+    return
+  }
+  if (typeof globalThis.queueMicrotask === 'function') {
+    globalThis.queueMicrotask(callback)
     return
   }
   Promise.resolve().then(callback)

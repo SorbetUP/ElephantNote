@@ -81,6 +81,20 @@ const visibleRustEditorSurface = (target) => {
   return [...candidates].find((element) => isVisibleSurface(target, element)) || null
 }
 
+const renderedMuyaMarkdown = (target) => {
+  const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__
+  if (typeof activeMuya?.getMarkdown !== 'function') return null
+  try {
+    // StableCompleteMuyaWithRustCore#getMarkdown first serializes Muya's live
+    // ContentState/DOM and only consults Rust to preserve an equivalent terminal
+    // paragraph. This is therefore the rendered editor representation, unlike
+    // the Pinia document state or the persisted file.
+    return String(activeMuya.getMarkdown() ?? '')
+  } catch {
+    return null
+  }
+}
+
 const waitForOpenedRustEditor = async(target, readBaseState, expectedPath) => {
   const deadline = Date.now() + OPEN_NOTE_READY_TIMEOUT_MS
   let last = null
@@ -123,10 +137,18 @@ const enhance = (target, api) => {
       const baseState = originalReadDisplayed(...args)
       const surface = visibleRustEditorSurface(target)
       if (!surface) return baseState
+      const surfaceText = surface.innerText || surface.textContent || ''
+      const renderedMarkdown = renderedMuyaMarkdown(target)
       return {
         ...baseState,
-        displayedText: surface.innerText || surface.textContent || '',
-        displayedHtml: surface.innerHTML || ''
+        // WebKit can report only the contenteditable sentinel/newline through
+        // innerText while the same visible Muya ContentState contains the full
+        // document. Expose the live Muya serialization as the displayed text and
+        // retain the raw DOM text separately so the proof cannot hide that fact.
+        displayedText: renderedMarkdown === null ? surfaceText : renderedMarkdown,
+        displayedSurfaceText: surfaceText,
+        displayedHtml: surface.innerHTML || '',
+        displayedSource: renderedMarkdown === null ? 'dom-text' : 'muya-content-state'
       }
     }
   }

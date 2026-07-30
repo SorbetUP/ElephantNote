@@ -52,6 +52,20 @@ const textPointAt = (element, requestedOffset) => {
   return { node: element, offset: element.childNodes?.length || 0 }
 }
 
+const synchronizeMuyaSelection = (target) => {
+  const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__
+  if (!activeMuya?.contentState) return
+  const selectionChanges = activeMuya.contentState.selectionChange()
+  if (selectionChanges?.start && selectionChanges?.end) {
+    activeMuya.contentState.cursor = {
+      start: { ...selectionChanges.start },
+      end: { ...selectionChanges.end },
+      isEdit: true
+    }
+  }
+  activeMuya.dispatchSelectionChange?.(activeMuya.contentState.cursor)
+}
+
 const restoreSelectionOffsets = (target, element, saved) => {
   if (!element || !saved) return false
   const selection = browserSelectionFor(target, element)
@@ -70,8 +84,20 @@ const restoreSelectionOffsets = (target, element, saved) => {
     selection.removeAllRanges()
     selection.addRange(range)
   }
-  element.ownerDocument.dispatchEvent(new element.ownerDocument.defaultView.Event('selectionchange', { bubbles: true }))
+  const EventConstructor = element.ownerDocument.defaultView?.Event
+  if (typeof EventConstructor === 'function') {
+    element.ownerDocument.dispatchEvent(new EventConstructor('selectionchange', { bubbles: true }))
+  }
+  synchronizeMuyaSelection(target)
   return true
+}
+
+const canonicalEditorState = (target) => {
+  const state = target.__ELEPHANT_ACTIVE_MUYA__?.__rustMirror?.state
+  return {
+    revision: Number(state?.revision || 0),
+    markdown: String(state?.markdown ?? '')
+  }
 }
 
 const diagnosticError = (command, error) => {
@@ -95,31 +121,35 @@ const install = (target = globalThis) => {
   api.press = async(selector, key) => {
     const initialElement = target.document?.querySelector?.(selector)
     const savedSelection = selectionOffsetsWithin(target, initialElement)
+    const before = canonicalEditorState(target)
     try {
       return await originalPress(selector, key)
     } catch (error) {
       const message = error?.message || String(error)
-      const liveElement = target.document?.querySelector?.(selector)
-      const surfaceWasReplaced = Boolean(
-        savedSelection &&
-        liveElement &&
-        (liveElement !== initialElement || initialElement?.isConnected === false)
-      )
       const enterWasNotClaimed = (key === 'Enter' || key === 'Shift+Enter') &&
         message.includes('was not claimed by a new Rust editor command path')
 
-      if (surfaceWasReplaced && enterWasNotClaimed) {
-        restoreSelectionOffsets(target, liveElement, savedSelection)
-        console.warn('[automation-api] retrying Enter on the replacement Rust editor surface', {
-          selector,
-          key,
-          anchor: savedSelection.anchor,
-          focus: savedSelection.focus
-        })
-        try {
-          return await originalPress(selector, key)
-        } catch (retryError) {
-          throw diagnosticError(`press(${JSON.stringify(key)}) after Rust surface replacement`, retryError)
+      if (savedSelection && enterWasNotClaimed) {
+        // Give a genuinely accepted asynchronous transaction one event-loop turn
+        // before considering a retry. Never dispatch a second Enter if Rust or
+        // the canonical Markdown already moved.
+        await wait(40)
+        const after = canonicalEditorState(target)
+        const unchanged = after.revision === before.revision && after.markdown === before.markdown
+        const liveElement = target.document?.querySelector?.(selector)
+        if (unchanged && liveElement && restoreSelectionOffsets(target, liveElement, savedSelection)) {
+          console.warn('[automation-api] retrying Enter after restoring the canonical selection', {
+            selector,
+            key,
+            anchor: savedSelection.anchor,
+            focus: savedSelection.focus,
+            surfaceReplaced: liveElement !== initialElement || initialElement?.isConnected === false
+          })
+          try {
+            return await originalPress(selector, key)
+          } catch (retryError) {
+            throw diagnosticError(`press(${JSON.stringify(key)}) after selection restoration`, retryError)
+          }
         }
       }
 

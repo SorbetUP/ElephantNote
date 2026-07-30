@@ -132,7 +132,17 @@ const install = (target = globalThis) => {
 
     const savedSelection = selectionOffsetsWithin(target, initialElement)
     const { element } = await waitForLiveRustEditor(target, selector)
-    restoreSelection(target, element, savedSelection)
+
+    // The readiness wait normally resolves against the same live contenteditable.
+    // Re-applying an already-valid WebKit Selection through setBaseAndExtent can
+    // throw for Muya ranges that cross non-editable decorations. Preserve the real
+    // browser selection in place, and reconstruct it only if the editor was
+    // actually remounted or the wait displaced the caret outside the live surface.
+    const liveSelection = selectionOffsetsWithin(target, element)
+    if (element !== initialElement || !liveSelection) {
+      restoreSelection(target, element, savedSelection)
+    }
+
     return originalInsertText(selector, value)
   }
 

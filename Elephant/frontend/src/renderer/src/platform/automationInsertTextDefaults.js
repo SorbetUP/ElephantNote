@@ -235,10 +235,17 @@ const install = (target = globalThis) => {
       try {
         await dispatchVisibleCharacter(target, selector, character)
       } catch (error) {
-        // WebKit's Error.stack can contain only the source location and omit the
-        // actual message. Throw a primitive string so the external automation
-        // transport preserves the exact failed character and editor invariant.
-        throw `Visible Rust insertText failed at character ${characterIndex}/${value.length} ${JSON.stringify(character)}: ${error?.message || String(error)}; stack=${error?.stack || 'none'}`
+        // Some WebKit builds expose a stack containing only a source location.
+        // Keep a real Error for lint and runtime semantics, but normalize its
+        // stack so the external automation transport always retains the exact
+        // failed character and invariant message.
+        const message = `Visible Rust insertText failed at character ${characterIndex}/${value.length} ${JSON.stringify(character)}: ${error?.message || String(error)}; stack=${error?.stack || 'none'}`
+        const wrappedError = new Error(message)
+        const stack = String(wrappedError.stack || '')
+        if (!stack.includes(message)) {
+          wrappedError.stack = `${wrappedError.name}: ${message}${stack ? `\n${stack}` : ''}`
+        }
+        throw wrappedError
       }
     }
     return api.readDom(selector)

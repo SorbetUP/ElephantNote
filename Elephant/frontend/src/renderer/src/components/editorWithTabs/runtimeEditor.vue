@@ -45,7 +45,7 @@ import RuntimeImageToolbar from './runtimeImageToolbar.vue'
 import RuntimeTableDialog from './runtimeTableDialog.vue'
 import { rustBusCommand } from './runtimeEditorCommands'
 import { createRuntimeImageHandlers } from './runtimeEditorImages'
-import { useRuntimeImageToolbar } from './runtimeEditorImageToolbarState'
+import { useRuntimeImageToolbar } from './runtimeImageToolbarState'
 import { applyRustEditorMarkdown } from './runtimeEditorState'
 
 const props = defineProps({

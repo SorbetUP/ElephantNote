@@ -1,17 +1,29 @@
-const BLOCK_SELECTOR = '[data-elephant-editor-layer="block"][data-elephant-editor-kind]'
+const CANONICAL_BLOCK_SELECTOR = '[data-elephant-editor-layer="block"][data-elephant-editor-kind]'
+const MUYA_CODE_BLOCK_SELECTOR = '.ag-fence-code'
+const SEMANTIC_BLOCK_SELECTOR = `${CANONICAL_BLOCK_SELECTOR}, ${MUYA_CODE_BLOCK_SELECTOR}`
 const SEMANTIC_ATTRIBUTE_FILTER = [
+  'class',
   'data-elephant-editor-layer',
   'data-elephant-editor-kind',
   'data-elephant-editor-node',
-  'data-language'
+  'data-language',
+  'data-lang',
+  'data-code-language'
 ]
 
-const blockDescriptor = (element) => Object.freeze({
-  nodeId: Number(element.getAttribute('data-elephant-editor-node')) || null,
-  kind: element.getAttribute('data-elephant-editor-kind') || '',
-  language: element.getAttribute('data-language') || '',
-  element
-})
+const legacyBlockKind = (element) => {
+  if (element?.classList?.contains('ag-fence-code')) return 'code_block'
+  return ''
+}
+
+const legacyBlockLanguage = (element) => String(
+  element?.dataset?.language ||
+  element?.dataset?.lang ||
+  element?.getAttribute?.('data-code-language') ||
+  element?.querySelector?.('[data-language]')?.getAttribute?.('data-language') ||
+  element?.querySelector?.('[data-lang]')?.getAttribute?.('data-lang') ||
+  ''
+)
 
 const microtask = (root, callback) => {
   const windowRef = root?.ownerDocument?.defaultView
@@ -27,11 +39,15 @@ const microtask = (root, callback) => {
 }
 
 const containsSemanticBlock = (node) => node?.nodeType === 1 && Boolean(
-  node.matches?.(BLOCK_SELECTOR) || node.querySelector?.(BLOCK_SELECTOR)
+  node.matches?.(SEMANTIC_BLOCK_SELECTOR) || node.querySelector?.(SEMANTIC_BLOCK_SELECTOR)
 )
 
 const changesSemanticBlockStructure = (mutation) => {
-  if (mutation.type === 'attributes') return true
+  if (mutation.type === 'attributes') {
+    return containsSemanticBlock(mutation.target) ||
+      mutation.attributeName === 'class' ||
+      mutation.attributeName?.startsWith?.('data-elephant-editor-')
+  }
   return [...mutation.addedNodes, ...mutation.removedNodes].some(containsSemanticBlock)
 }
 
@@ -48,11 +64,58 @@ export const createRustEditorRuntimeBinding = ({ runtime, getMarkdown = () => ''
   let observer = null
   let domNotificationQueued = false
 
-  const semanticElements = () => root?.querySelectorAll ? [...root.querySelectorAll(BLOCK_SELECTOR)] : []
   const elementId = (element) => {
+    const explicit = Number(element?.getAttribute?.('data-elephant-editor-node'))
+    if (Number.isInteger(explicit) && explicit > 0) return explicit
+
+    const legacyId = Number(String(element?.id || '').match(/(\d+)$/)?.[1])
+    if (Number.isInteger(legacyId) && legacyId > 0) {
+      elementIds.set(element, legacyId)
+      nextElementId = Math.max(nextElementId, legacyId + 1)
+      return legacyId
+    }
+
     if (!elementIds.has(element)) elementIds.set(element, nextElementId++)
     return elementIds.get(element)
   }
+
+  const normalizeSemanticElement = (element) => {
+    if (!element?.setAttribute) return null
+
+    const canonicalKind = element.getAttribute('data-elephant-editor-kind') || ''
+    const kind = canonicalKind || legacyBlockKind(element)
+    if (!kind) return null
+
+    if (element.getAttribute('data-elephant-editor-layer') !== 'block') {
+      element.setAttribute('data-elephant-editor-layer', 'block')
+    }
+    if (canonicalKind !== kind) element.setAttribute('data-elephant-editor-kind', kind)
+    if (!element.getAttribute('data-elephant-editor-node')) {
+      element.setAttribute('data-elephant-editor-node', String(elementId(element)))
+    }
+
+    const language = element.getAttribute('data-language') || legacyBlockLanguage(element)
+    if (language && element.getAttribute('data-language') !== language) {
+      element.setAttribute('data-language', language)
+    }
+    return element
+  }
+
+  const semanticElements = () => {
+    if (!root?.querySelectorAll) return []
+    const found = [...root.querySelectorAll(SEMANTIC_BLOCK_SELECTOR)]
+      .map(normalizeSemanticElement)
+      .filter(Boolean)
+    return [...new Set(found)]
+  }
+
+  const blockDescriptor = (element) => Object.freeze({
+    nodeId: elementId(element),
+    kind: element.getAttribute('data-elephant-editor-kind') || '',
+    language: element.getAttribute('data-language') || '',
+    element
+  })
+
   const semanticSignature = () => semanticElements()
     .map((element) => [
       elementId(element),

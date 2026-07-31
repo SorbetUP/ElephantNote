@@ -1,12 +1,243 @@
 const PATCH_STATE = '__elephantEnterFallbackState'
 const INSTALL_DEADLINE_MS = 30_000
+const READY_TIMEOUT_MS = 5_000
+const MUTATION_TIMEOUT_MS = 5_000
 const POLL_MS = 20
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
-const eventConstructorFor = (target, element) => (
-  element?.ownerDocument?.defaultView?.InputEvent || target.InputEvent || target.window?.InputEvent
+const browserSelectionFor = (target, element) => target.getSelection?.() ||
+  target.window?.getSelection?.() ||
+  element?.ownerDocument?.defaultView?.getSelection?.()
+
+const selectionBelongsTo = (selection, element) => Boolean(
+  selection?.anchorNode &&
+  selection?.focusNode &&
+  selection.anchorNode.isConnected !== false &&
+  selection.focusNode.isConnected !== false &&
+  (selection.anchorNode === element || element.contains?.(selection.anchorNode)) &&
+  (selection.focusNode === element || element.contains?.(selection.focusNode))
 )
+
+const selectionOffsetsWithin = (target, element) => {
+  const selection = browserSelectionFor(target, element)
+  if (!selectionBelongsTo(selection, element)) return null
+
+  const offsetOf = (node, offset) => {
+    const range = element.ownerDocument.createRange()
+    range.selectNodeContents(element)
+    range.setEnd(node, offset)
+    return range.toString().length
+  }
+
+  try {
+    return {
+      anchor: offsetOf(selection.anchorNode, selection.anchorOffset),
+      focus: offsetOf(selection.focusNode, selection.focusOffset)
+    }
+  } catch {
+    return null
+  }
+}
+
+const terminalLineEndingEquivalent = (left, right) => {
+  const first = String(left ?? '')
+  const second = String(right ?? '')
+  if (Math.abs(first.length - second.length) !== 1) return false
+  if (!first.endsWith('\n') && !second.endsWith('\n')) return false
+  return first.replace(/\n$/, '') === second.replace(/\n$/, '')
+}
+
+const canonicalSurfaceIsSynchronized = (activeMuya, canonical) => {
+  if (!canonical || typeof activeMuya?.getMarkdown !== 'function') return false
+  try {
+    const visible = String(activeMuya.getMarkdown() ?? '')
+    const markdown = String(canonical.markdown ?? '')
+    return visible === markdown || terminalLineEndingEquivalent(visible, markdown)
+  } catch {
+    return false
+  }
+}
+
+const rustEditorFor = (element) => element?.closest?.('[data-testid="muya-rust-runtime-editor"]') ||
+  element?.querySelector?.('[data-testid="muya-rust-runtime-editor"]')
+
+const waitForLiveRustEditor = async(target, selector) => {
+  const deadline = Date.now() + READY_TIMEOUT_MS
+  let last = null
+
+  while (Date.now() <= deadline) {
+    const element = target.document?.querySelector?.(selector)
+    const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__
+    const published = target.__ELEPHANT_MUYA_RUST_MIRROR__
+    const canonical = activeMuya?.__rustMirror?.state
+    const sameSurface = Boolean(element && activeMuya?.container === element)
+    const idle = Number(activeMuya?.__rustMutationGate?.pending || 0) === 0
+    const synchronized = canonicalSurfaceIsSynchronized(activeMuya, canonical)
+
+    last = {
+      element: Boolean(element),
+      activeMuya: Boolean(activeMuya),
+      sameSurface,
+      phase: published?.phase || null,
+      revision: Number(published?.revision || 0),
+      canonicalRevision: Number(canonical?.revision || 0),
+      idle,
+      synchronized
+    }
+
+    if (published?.phase === 'error') {
+      throw new Error(`Rust editor failed before Enter: ${published.error || published.reason || 'unknown error'}`)
+    }
+    if (sameSurface && published?.phase === 'ready' && canonical && idle && synchronized) {
+      return { element, activeMuya, canonical }
+    }
+    await sleep(POLL_MS)
+  }
+
+  throw new Error(`The current visible Rust editor did not become ready before Enter: ${JSON.stringify(last)}`)
+}
+
+const restoreVisibleSelection = async(api, target, selector, element, savedSelection) => {
+  if (!savedSelection) {
+    throw new Error('Enter requires a visible browser selection inside the current Rust editor')
+  }
+
+  const current = selectionOffsetsWithin(target, element)
+  if (current?.anchor === savedSelection.anchor && current?.focus === savedSelection.focus) return current
+  if (typeof api.selectText !== 'function') {
+    throw new Error('Enter cannot restore the visible selection because selectText is unavailable')
+  }
+
+  await api.selectText(selector, savedSelection.anchor, savedSelection.focus)
+  const liveElement = target.document?.querySelector?.(selector)
+  const restored = liveElement ? selectionOffsetsWithin(target, liveElement) : null
+  if (restored?.anchor !== savedSelection.anchor || restored?.focus !== savedSelection.focus) {
+    throw new Error(`Enter could not restore the visible selection on the active Rust surface: ${JSON.stringify({
+      expected: savedSelection,
+      restored
+    })}`)
+  }
+  return restored
+}
+
+const createBeforeInput = (target, element, inputType) => {
+  const InputEventConstructor = element?.ownerDocument?.defaultView?.InputEvent ||
+    target.InputEvent ||
+    target.window?.InputEvent
+  if (typeof InputEventConstructor !== 'function') {
+    throw new Error('Visible Rust Enter requires InputEvent support')
+  }
+  return new InputEventConstructor('beforeinput', {
+    inputType,
+    data: null,
+    bubbles: true,
+    cancelable: true,
+    composed: true
+  })
+}
+
+const waitForCompletedMutation = async(target, expectedMuya, before, selector, key) => {
+  const deadline = Date.now() + MUTATION_TIMEOUT_MS
+  let last = null
+
+  while (Date.now() <= deadline) {
+    const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__
+    const published = target.__ELEPHANT_MUYA_RUST_MIRROR__
+    const canonical = expectedMuya?.__rustMirror?.state
+    const idle = Number(expectedMuya?.__rustMutationGate?.pending || 0) === 0
+    const synchronized = canonicalSurfaceIsSynchronized(expectedMuya, canonical)
+    const changed = Number(canonical?.revision || 0) > Number(before.revision || 0) ||
+      String(canonical?.markdown ?? '') !== String(before.markdown ?? '')
+    const publishedCurrent = canonical &&
+      published?.phase === 'ready' &&
+      Number(published?.revision || 0) >= Number(canonical.revision || 0) &&
+      Number(published?.markdownLength || 0) === String(canonical.markdown ?? '').length
+
+    last = {
+      sameRuntime: activeMuya === expectedMuya,
+      phase: published?.phase || null,
+      beforeRevision: Number(before.revision || 0),
+      canonicalRevision: Number(canonical?.revision || 0),
+      publishedRevision: Number(published?.revision || 0),
+      beforeMarkdownLength: String(before.markdown ?? '').length,
+      canonicalMarkdownLength: String(canonical?.markdown ?? '').length,
+      publishedMarkdownLength: Number(published?.markdownLength || 0),
+      idle,
+      synchronized,
+      changed
+    }
+
+    if (published?.phase === 'error') {
+      throw new Error(`Rust editor failed while applying ${key}: ${published.error || published.reason || 'unknown error'}`)
+    }
+    if (activeMuya !== expectedMuya) {
+      throw new Error(`The visible editor remounted while applying ${key}`)
+    }
+    if (changed && publishedCurrent && idle && synchronized) {
+      console.info('[automation-api] completed Enter on the current visible Rust generation', {
+        selector,
+        key,
+        revision: canonical.revision,
+        markdownLength: String(canonical.markdown ?? '').length
+      })
+      return canonical
+    }
+    await sleep(POLL_MS)
+  }
+
+  throw new Error(`The claimed visible ${key} did not produce a completed Rust mutation: ${JSON.stringify(last)}`)
+}
+
+const dispatchVisibleEnter = async(api, target, selector, key, initialElement) => {
+  const savedSelection = selectionOffsetsWithin(target, initialElement)
+  const ready = await waitForLiveRustEditor(target, selector)
+  await restoreVisibleSelection(api, target, selector, ready.element, savedSelection)
+
+  const element = target.document?.querySelector?.(selector)
+  const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__
+  const before = activeMuya?.__rustMirror?.state
+  if (!element || activeMuya !== ready.activeMuya || activeMuya?.container !== element || !before) {
+    throw new Error('The Rust editor generation changed after restoring the visible Enter selection')
+  }
+
+  const KeyboardEventConstructor = element.ownerDocument?.defaultView?.KeyboardEvent ||
+    target.KeyboardEvent ||
+    target.window?.KeyboardEvent
+  if (typeof KeyboardEventConstructor !== 'function') {
+    throw new Error('Visible Rust Enter requires KeyboardEvent support')
+  }
+
+  const eventInit = {
+    key: 'Enter',
+    code: 'Enter',
+    keyCode: 13,
+    which: 13,
+    shiftKey: key === 'Shift+Enter',
+    bubbles: true,
+    cancelable: true,
+    composed: true
+  }
+  const keydown = new KeyboardEventConstructor('keydown', eventInit)
+  element.dispatchEvent(keydown)
+
+  let beforeInput = null
+  if (!keydown.defaultPrevented) {
+    beforeInput = createBeforeInput(target, element, key === 'Shift+Enter' ? 'insertLineBreak' : 'insertParagraph')
+    element.dispatchEvent(beforeInput)
+  }
+  element.dispatchEvent(new KeyboardEventConstructor('keyup', eventInit))
+
+  if (!keydown.defaultPrevented && !beforeInput?.defaultPrevented) {
+    throw new Error('The current visible Rust editor did not claim Enter through keydown or beforeinput')
+  }
+
+  await waitForCompletedMutation(target, activeMuya, {
+    revision: Number(before.revision || 0),
+    markdown: String(before.markdown ?? '')
+  }, selector, key)
+  return api.readDom(selector)
+}
 
 const install = (target = globalThis) => {
   const api = target.__ELEPHANT_ACCEPTANCE_TEST__ || target.__ELEPHANT_AUTOMATION__
@@ -15,68 +246,15 @@ const install = (target = globalThis) => {
   const previous = api[PATCH_STATE]
   if (previous?.wrapper === api.press) return true
 
-  // Other automation modules are loaded asynchronously and may replace `press`
-  // after this fallback first installs. Always wrap the current implementation,
-  // but never wrap our own wrapper. This keeps the fallback outermost without
-  // changing the visible-input assertions it enforces.
+  // Other automation modules are loaded asynchronously and may replace `press`.
+  // Keep this generation-aware wrapper outermost, but retain the original path
+  // for every non-Rust target and every key other than Enter.
   const originalPress = api.press.bind(api)
   const wrapper = async(selector, key) => {
-    try {
-      return await originalPress(selector, key)
-    } catch (error) {
-      const message = error?.message || String(error)
-      if ((key !== 'Enter' && key !== 'Shift+Enter') ||
-        !message.includes('The visible Enter key was not claimed by a new Rust editor command path')) {
-        throw error
-      }
-
-      const element = target.document?.querySelector?.(selector)
-      const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__
-      const before = activeMuya?.__rustMirror?.state
-      if (!element || !activeMuya || !before) throw error
-
-      const InputEventConstructor = eventConstructorFor(target, element)
-      if (typeof InputEventConstructor !== 'function') throw error
-      const beforeInput = new InputEventConstructor('beforeinput', {
-        inputType: key === 'Shift+Enter' ? 'insertLineBreak' : 'insertParagraph',
-        data: null,
-        bubbles: true,
-        cancelable: true,
-        composed: true
-      })
-      element.dispatchEvent(beforeInput)
-      if (!beforeInput.defaultPrevented) {
-        throw new Error('The visible editor did not claim the Enter beforeinput fallback')
-      }
-
-      await activeMuya.__rustMutationGate?.flush?.()
-      const deadline = Date.now() + 5_000
-      while (Date.now() <= deadline) {
-        if (target.__ELEPHANT_ACTIVE_MUYA__ !== activeMuya) {
-          throw new Error('The visible editor remounted while completing the Enter beforeinput fallback')
-        }
-        const canonical = activeMuya.__rustMirror?.state
-        const published = target.__ELEPHANT_MUYA_RUST_MIRROR__
-        const visible = activeMuya.getMarkdown?.()
-        const changed = Number(canonical?.revision || 0) > Number(before.revision || 0) ||
-          String(canonical?.markdown ?? '') !== String(before.markdown ?? '')
-        const synchronized = canonical &&
-          String(visible ?? '') === String(canonical.markdown ?? '') &&
-          Number(activeMuya.__rustMutationGate?.pending || 0) === 0 &&
-          Number(published?.revision || 0) >= Number(canonical.revision || 0)
-        if (changed && synchronized) {
-          console.info('[automation-api] completed Enter through claimed visible beforeinput fallback', {
-            selector,
-            key,
-            revision: canonical.revision,
-            markdownLength: canonical.markdown.length
-          })
-          return api.readDom(selector)
-        }
-        await sleep(POLL_MS)
-      }
-      throw new Error('The claimed Enter beforeinput fallback did not produce a completed Rust editor mutation')
-    }
+    if (key !== 'Enter' && key !== 'Shift+Enter') return originalPress(selector, key)
+    const initialElement = target.document?.querySelector?.(selector)
+    if (!initialElement || !rustEditorFor(initialElement)) return originalPress(selector, key)
+    return dispatchVisibleEnter(api, target, selector, key, initialElement)
   }
 
   api.press = wrapper

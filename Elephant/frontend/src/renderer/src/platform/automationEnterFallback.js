@@ -62,6 +62,12 @@ const canonicalSurfaceIsSynchronized = (activeMuya, canonical) => {
 const rustEditorFor = (element) => element?.closest?.('[data-testid="muya-rust-runtime-editor"]') ||
   element?.querySelector?.('[data-testid="muya-rust-runtime-editor"]')
 
+const sameRustSurface = (left, right) => {
+  const leftSurface = rustEditorFor(left)
+  const rightSurface = rustEditorFor(right)
+  return Boolean(leftSurface && leftSurface === rightSurface)
+}
+
 const instanceRustStatus = (activeMuya) => activeMuya?.__rustMirror?.status || null
 
 const instanceStatusMatchesCanonical = (status, canonical) => Boolean(
@@ -81,7 +87,7 @@ const waitForLiveRustEditor = async(target, selector) => {
     const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__
     const status = instanceRustStatus(activeMuya)
     const canonical = activeMuya?.__rustMirror?.state
-    const sameSurface = Boolean(element && activeMuya?.container === element)
+    const sameSurface = Boolean(element && sameRustSurface(activeMuya?.container, element))
     const idle = Number(activeMuya?.__rustMutationGate?.pending || 0) === 0
     const synchronized = canonicalSurfaceIsSynchronized(activeMuya, canonical)
     const statusCurrent = instanceStatusMatchesCanonical(status, canonical)
@@ -211,7 +217,7 @@ const dispatchVisibleEnter = async(api, target, selector, key, initialElement) =
   const element = target.document?.querySelector?.(selector)
   const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__
   const before = activeMuya?.__rustMirror?.state
-  if (!element || activeMuya !== ready.activeMuya || activeMuya?.container !== element || !before) {
+  if (!element || activeMuya !== ready.activeMuya || !sameRustSurface(activeMuya?.container, element) || !before) {
     throw new Error('The Rust editor generation changed after restoring the visible Enter selection')
   }
 

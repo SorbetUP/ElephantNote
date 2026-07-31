@@ -8,16 +8,18 @@ const read = (path) => readFileSync(resolve(root, path), 'utf8')
 const failures = []
 
 const runtimePath = 'Elephant/frontend/src/renderer/src/components/editorWithTabs/runtimeEditor.vue'
+const rustRuntimePath = 'Elephant/frontend/src/renderer/src/muya/RustMuyaRuntimeEditor.vue'
 const addonPath = 'addons/official/code-execution/main.js'
 const trustedRuntimePath = 'Elephant/frontend/src/renderer/src/addons/trustedAddonRuntime.js'
 const resourcePath = 'Elephant/frontend/src/renderer/src/muya/editorRuntimeResource.js'
 
-for (const path of [runtimePath, addonPath, trustedRuntimePath, resourcePath]) {
+for (const path of [runtimePath, rustRuntimePath, addonPath, trustedRuntimePath, resourcePath]) {
   if (!existsSync(resolve(root, path))) failures.push(`${path}: missing`)
 }
 
 if (failures.length === 0) {
   const runtime = read(runtimePath)
+  const rustRuntime = read(rustRuntimePath)
   const addon = read(addonPath)
   const trusted = read(trustedRuntimePath)
   const resource = read(resourcePath)
@@ -26,6 +28,9 @@ if (failures.length === 0) {
     [runtimePath, runtime, 'RustMuyaRuntimeEditor'],
     [runtimePath, runtime, "host.provide('editor.runtime'"],
     [runtimePath, runtime, "engine: 'rust'"],
+    [rustRuntimePath, rustRuntime, 'const hostElement = rootRef.value'],
+    [rustRuntimePath, rustRuntime, 'rootRef.value !== hostElement'],
+    [rustRuntimePath, rustRuntime, '!hostElement.isConnected'],
     [addonPath, addon, "queryBlocks?.({ kind: 'code_block' })"],
     [addonPath, addon, "runtime?.engine === 'rust'"],
     [trustedRuntimePath, trusted, "host?.get('editor.runtime')"],
@@ -39,6 +44,7 @@ if (failures.length === 0) {
   const forbidden = [
     [runtimePath, runtime, /from ['"]muya(?:\/lib)?['"]/],
     [runtimePath, runtime, /new\s+Muya\s*\(/],
+    [rustRuntimePath, rustRuntime, /rootRef\.value\s*=\s*muya\.container/],
     [addonPath, addon, /runtime\?\.engine\s*===\s*['"]muya-js['"]/],
     [addonPath, addon, /MutationObserver/],
     [trustedRuntimePath, trusted, /host\?\.get\(['"]muya['"]\)/]
@@ -54,4 +60,4 @@ if (failures.length > 0) {
   process.exit(1)
 }
 
-console.log('[rust-editor-ownership] OK: production editor and addon integration are Rust-owned')
+console.log('[rust-editor-ownership] OK: production editor and addon integration are Rust-owned on a stable live host')

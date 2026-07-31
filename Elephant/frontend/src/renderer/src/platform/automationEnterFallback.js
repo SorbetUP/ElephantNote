@@ -62,6 +62,16 @@ const canonicalSurfaceIsSynchronized = (activeMuya, canonical) => {
 const rustEditorFor = (element) => element?.closest?.('[data-testid="muya-rust-runtime-editor"]') ||
   element?.querySelector?.('[data-testid="muya-rust-runtime-editor"]')
 
+const instanceRustStatus = (activeMuya) => activeMuya?.__rustMirror?.status || null
+
+const instanceStatusMatchesCanonical = (status, canonical) => Boolean(
+  status?.phase === 'ready' &&
+  !status?.error &&
+  canonical &&
+  Number(status.revision || 0) >= Number(canonical.revision || 0) &&
+  Number(status.markdownLength || 0) === String(canonical.markdown ?? '').length
+)
+
 const waitForLiveRustEditor = async(target, selector) => {
   const deadline = Date.now() + READY_TIMEOUT_MS
   let last = null
@@ -69,32 +79,37 @@ const waitForLiveRustEditor = async(target, selector) => {
   while (Date.now() <= deadline) {
     const element = target.document?.querySelector?.(selector)
     const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__
-    const published = target.__ELEPHANT_MUYA_RUST_MIRROR__
+    const status = instanceRustStatus(activeMuya)
     const canonical = activeMuya?.__rustMirror?.state
     const sameSurface = Boolean(element && activeMuya?.container === element)
     const idle = Number(activeMuya?.__rustMutationGate?.pending || 0) === 0
     const synchronized = canonicalSurfaceIsSynchronized(activeMuya, canonical)
+    const statusCurrent = instanceStatusMatchesCanonical(status, canonical)
 
     last = {
       element: Boolean(element),
       activeMuya: Boolean(activeMuya),
       sameSurface,
-      phase: published?.phase || null,
-      revision: Number(published?.revision || 0),
+      phase: status?.phase || null,
+      statusRevision: Number(status?.revision || 0),
+      statusMarkdownLength: Number(status?.markdownLength || 0),
       canonicalRevision: Number(canonical?.revision || 0),
+      canonicalMarkdownLength: String(canonical?.markdown ?? '').length,
       idle,
-      synchronized
+      synchronized,
+      statusCurrent
     }
 
-    if (published?.phase === 'error') {
-      throw new Error(`Rust editor failed before Enter: ${published.error || published.reason || 'unknown error'}`)
+    if (status?.phase === 'error' || canonical?.error) {
+      throw new Error(`Rust editor failed before Enter: ${status?.error || canonical?.error || status?.reason || 'unknown error'}`)
     }
-    if (sameSurface && published?.phase === 'ready' && canonical && idle && synchronized) {
+    if (sameSurface && statusCurrent && idle && synchronized) {
       return { element, activeMuya, canonical }
     }
     await sleep(POLL_MS)
   }
 
+  console.error('[automation-api] Enter readiness timed out for the current Rust instance', last)
   throw new Error(`The current visible Rust editor did not become ready before Enter: ${JSON.stringify(last)}`)
 }
 
@@ -143,38 +158,36 @@ const waitForCompletedMutation = async(target, expectedMuya, before, selector, k
 
   while (Date.now() <= deadline) {
     const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__
-    const published = target.__ELEPHANT_MUYA_RUST_MIRROR__
+    const status = instanceRustStatus(expectedMuya)
     const canonical = expectedMuya?.__rustMirror?.state
     const idle = Number(expectedMuya?.__rustMutationGate?.pending || 0) === 0
     const synchronized = canonicalSurfaceIsSynchronized(expectedMuya, canonical)
     const changed = Number(canonical?.revision || 0) > Number(before.revision || 0) ||
       String(canonical?.markdown ?? '') !== String(before.markdown ?? '')
-    const publishedCurrent = canonical &&
-      published?.phase === 'ready' &&
-      Number(published?.revision || 0) >= Number(canonical.revision || 0) &&
-      Number(published?.markdownLength || 0) === String(canonical.markdown ?? '').length
+    const statusCurrent = instanceStatusMatchesCanonical(status, canonical)
 
     last = {
       sameRuntime: activeMuya === expectedMuya,
-      phase: published?.phase || null,
+      phase: status?.phase || null,
       beforeRevision: Number(before.revision || 0),
       canonicalRevision: Number(canonical?.revision || 0),
-      publishedRevision: Number(published?.revision || 0),
+      statusRevision: Number(status?.revision || 0),
       beforeMarkdownLength: String(before.markdown ?? '').length,
       canonicalMarkdownLength: String(canonical?.markdown ?? '').length,
-      publishedMarkdownLength: Number(published?.markdownLength || 0),
+      statusMarkdownLength: Number(status?.markdownLength || 0),
       idle,
       synchronized,
+      statusCurrent,
       changed
     }
 
-    if (published?.phase === 'error') {
-      throw new Error(`Rust editor failed while applying ${key}: ${published.error || published.reason || 'unknown error'}`)
+    if (status?.phase === 'error' || canonical?.error) {
+      throw new Error(`Rust editor failed while applying ${key}: ${status?.error || canonical?.error || status?.reason || 'unknown error'}`)
     }
     if (activeMuya !== expectedMuya) {
       throw new Error(`The visible editor remounted while applying ${key}`)
     }
-    if (changed && publishedCurrent && idle && synchronized) {
+    if (changed && statusCurrent && idle && synchronized) {
       console.info('[automation-api] completed Enter on the current visible Rust generation', {
         selector,
         key,
@@ -186,6 +199,7 @@ const waitForCompletedMutation = async(target, expectedMuya, before, selector, k
     await sleep(POLL_MS)
   }
 
+  console.error('[automation-api] Enter mutation timed out for the current Rust instance', last)
   throw new Error(`The claimed visible ${key} did not produce a completed Rust mutation: ${JSON.stringify(last)}`)
 }
 

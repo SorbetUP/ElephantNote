@@ -1,4 +1,4 @@
-const PATCH_FLAG = '__elephantEnterFallbackInstalled'
+const PATCH_STATE = '__elephantEnterFallbackState'
 const INSTALL_DEADLINE_MS = 30_000
 const POLL_MS = 20
 
@@ -10,10 +10,17 @@ const eventConstructorFor = (target, element) => (
 
 const install = (target = globalThis) => {
   const api = target.__ELEPHANT_ACCEPTANCE_TEST__ || target.__ELEPHANT_AUTOMATION__
-  if (!api || typeof api.press !== 'function' || api[PATCH_FLAG]) return false
+  if (!api || typeof api.press !== 'function') return false
 
+  const previous = api[PATCH_STATE]
+  if (previous?.wrapper === api.press) return true
+
+  // Other automation modules are loaded asynchronously and may replace `press`
+  // after this fallback first installs. Always wrap the current implementation,
+  // but never wrap our own wrapper. This keeps the fallback outermost without
+  // changing the visible-input assertions it enforces.
   const originalPress = api.press.bind(api)
-  api.press = async(selector, key) => {
+  const wrapper = async(selector, key) => {
     try {
       return await originalPress(selector, key)
     } catch (error) {
@@ -72,12 +79,18 @@ const install = (target = globalThis) => {
     }
   }
 
-  Object.defineProperty(api, PATCH_FLAG, { value: true, enumerable: false })
+  api.press = wrapper
+  Object.defineProperty(api, PATCH_STATE, {
+    configurable: true,
+    enumerable: false,
+    value: { wrapper, originalPress }
+  })
   return true
 }
 
 const deadline = Date.now() + INSTALL_DEADLINE_MS
 const timer = setInterval(() => {
-  if (install(globalThis) || Date.now() >= deadline) clearInterval(timer)
+  install(globalThis)
+  if (Date.now() >= deadline) clearInterval(timer)
 }, POLL_MS)
 install(globalThis)

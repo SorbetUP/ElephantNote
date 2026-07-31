@@ -68,8 +68,7 @@ const isMutatingKeyDown = (event) => {
   return key.length === 1 && !event?.ctrlKey && !event?.metaKey && !event?.altKey
 }
 
-const installUserMutationBoundary = () => {
-  const root = rootRef.value
+const installUserMutationBoundary = (root = rootRef.value) => {
   if (!root) return () => {}
   const beforeInput = (event) => {
     if (isMutatingBeforeInput(event)) markUserMutation(`beforeinput:${event.inputType}`)
@@ -242,6 +241,7 @@ const createCompatBridge = (muya) => {
 
 const mountRuntime = async (markdown) => {
   const generation = ++mountGeneration
+  const hostElement = rootRef.value
   console.info('[elephantnote:rust-editor] mount:start', {
     generation,
     markdownLength: String(markdown || '').length,
@@ -251,18 +251,23 @@ const mountRuntime = async (markdown) => {
   destroyRuntime()
   errorMessage.value = ''
   runtimeMarkdown = String(markdown || '')
-  rootRef.value?.replaceChildren()
+  if (!hostElement) {
+    reportError(new Error('Rust Muya runtime host is unavailable.'))
+    return
+  }
+  hostElement.replaceChildren()
   disposeUserMutationBoundary()
-  disposeUserMutationBoundary = installUserMutationBoundary()
+  disposeUserMutationBoundary = installUserMutationBoundary(hostElement)
 
   try {
     let nextRuntime
+    let activeMuya = null
     if (typeof props.factory === 'function') {
       nextRuntime = await initializeExperimentalRustRuntime(
         { markdown: runtimeMarkdown },
         {
           factory: props.factory,
-          domContainer: rootRef.value,
+          domContainer: hostElement,
           captureInput: true,
           applyPatches: scheduleMarkdownSync,
           onFileDrop: props.onFileDrop,
@@ -272,16 +277,16 @@ const mountRuntime = async (markdown) => {
         reportError
       )
     } else {
-      const muya = new StableCompleteMuyaWithRustCore(rootRef.value, {
+      const muya = new StableCompleteMuyaWithRustCore(hostElement, {
         markdown: runtimeMarkdown,
         t: (key) => key,
         onFileDrop: props.onFileDrop,
         onUriDrop: props.onUriDrop,
         onImageClick: props.onImageClick
       })
-      rootRef.value = muya.container
       await muya.__rustMirror?.ready
       await muya.__rustCanonicalReady
+      activeMuya = muya
       nextRuntime = {
         muya,
         bridge: createCompatBridge(muya),
@@ -294,7 +299,6 @@ const mountRuntime = async (markdown) => {
           if (globalThis.__ELEPHANT_ACTIVE_MUYA__ === muya) delete globalThis.__ELEPHANT_ACTIVE_MUYA__
         }
       }
-      globalThis.__ELEPHANT_ACTIVE_MUYA__ = muya
       muya.__onUserMutation = markUserMutation
       muya.on('change', (detail = {}) => {
         runtimeMarkdown = String(detail.markdown ?? muya.getMarkdown() ?? '')
@@ -313,11 +317,12 @@ const mountRuntime = async (markdown) => {
       })
       muya.on('crashed', () => reportError(new Error('Muya JS/Rust editor crashed.')))
     }
-    if (generation !== mountGeneration) {
-      nextRuntime.destroy()
+    if (generation !== mountGeneration || rootRef.value !== hostElement || !hostElement.isConnected) {
+      nextRuntime?.destroy?.()
       return
     }
     runtime = nextRuntime
+    if (activeMuya) globalThis.__ELEPHANT_ACTIVE_MUYA__ = activeMuya
     console.info('[elephantnote:rust-editor] mount:ready', {
       generation,
       revision: runtime.bridge.revision,

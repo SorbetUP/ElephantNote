@@ -64,7 +64,7 @@ globalThis.fetch = async(input, init = {}) => {
   // back. Keep the real setup command and UI path intact, but do not let the
   // verifier race openNote against the renderer's post-selection activation.
   if (mutation && isCommand && payload?.command === 'selectVault' && response.ok) {
-    await sleep(1_500)
+    await sleep(5_000)
   }
 
   return response

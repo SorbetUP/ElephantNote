@@ -20,6 +20,16 @@ const mutationResponse = (mutation, result = { mutated: true, mutation }) => new
   headers: { 'content-type': 'application/json' }
 })
 
+const commandSucceeded = async(response) => {
+  if (!response?.ok) return false
+  try {
+    const body = await response.clone().json()
+    return body?.ok === true
+  } catch {
+    return false
+  }
+}
+
 globalThis.fetch = async(input, init = {}) => {
   const url = typeof input === 'string' ? input : input?.url
   const payload = parseBody(init?.body)
@@ -55,16 +65,21 @@ globalThis.fetch = async(input, init = {}) => {
     return mutationResponse(mutation)
   }
 
-  const response = await originalFetch(input, init)
+  let response = await originalFetch(input, init)
 
-  // Selecting a vault acknowledges the backend command before the renderer has
-  // necessarily completed its asynchronous project-tree activation. The normal
-  // proof jobs get that settling time from their preceding build/startup work,
-  // while the mutation verifier launches three exact AppImage instances back to
-  // back. Keep the real setup command and UI path intact, but do not let the
-  // verifier race openNote against the renderer's post-selection activation.
-  if (mutation && isCommand && payload?.command === 'selectVault' && response.ok) {
-    await sleep(5_000)
+  // Vault selection returns after the backend accepts the path, while renderer
+  // activation and project-tree hydration continue asynchronously. Mutation
+  // verification starts exact AppImages back-to-back, so the fixture-only
+  // openNote setup command can legitimately race that activation. Retry the
+  // same authenticated setup command until the real renderer accepts it; the
+  // user-facing scenarios and every mutation assertion remain unchanged.
+  if (mutation && isCommand && payload?.command === 'openNote' && !(await commandSucceeded(response))) {
+    const deadline = Date.now() + 30_000
+    while (Date.now() < deadline) {
+      await sleep(500)
+      response = await originalFetch(input, init)
+      if (await commandSucceeded(response)) break
+    }
   }
 
   return response

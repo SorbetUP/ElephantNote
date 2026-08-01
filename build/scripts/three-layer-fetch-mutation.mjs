@@ -30,11 +30,17 @@ const commandSucceeded = async(response) => {
   }
 }
 
+let lastVaultSelection = null
+
 globalThis.fetch = async(input, init = {}) => {
   const url = typeof input === 'string' ? input : input?.url
   const payload = parseBody(init?.body)
   const isCommand = String(url || '').endsWith('/v1/command')
   const mutation = process.env.ELEPHANT_LAYER_MUTATION
+
+  if (mutation && isCommand && payload?.command === 'selectVault') {
+    lastVaultSelection = { input, init }
+  }
 
   if (
     mutation === 'backend-ignore-note-write' &&
@@ -70,12 +76,16 @@ globalThis.fetch = async(input, init = {}) => {
   // Vault selection returns after the backend accepts the path, while renderer
   // activation and project-tree hydration continue asynchronously. Mutation
   // verification starts exact AppImages back-to-back, so the fixture-only
-  // openNote setup command can legitimately race that activation. Retry the
-  // same authenticated setup command until the real renderer accepts it; the
-  // user-facing scenarios and every mutation assertion remain unchanged.
+  // openNote setup command can race that activation. On rejection, replay the
+  // same real vault selection before retrying openNote. This only stabilizes
+  // fixture activation; all visible actions and behavioral assertions remain
+  // unchanged and still execute against the distributed application.
   if (mutation && isCommand && payload?.command === 'openNote' && !(await commandSucceeded(response))) {
     const deadline = Date.now() + 30_000
     while (Date.now() < deadline) {
+      if (lastVaultSelection) {
+        await originalFetch(lastVaultSelection.input, lastVaultSelection.init)
+      }
       await sleep(500)
       response = await originalFetch(input, init)
       if (await commandSucceeded(response)) break

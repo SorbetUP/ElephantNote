@@ -15,6 +15,15 @@ const activeContentEditable = (activeMuya) => {
   return container.querySelector?.('[contenteditable="true"]') || null
 }
 
+const liveMuyaMarkdown = (activeMuya) => {
+  if (typeof activeMuya?.getMarkdown !== 'function') return null
+  try {
+    return String(activeMuya.getMarkdown() ?? '')
+  } catch {
+    return null
+  }
+}
+
 const rustStateSnapshot = (target, baseState = {}) => {
   const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__ || null
   const published = target.__ELEPHANT_MUYA_RUST_MIRROR__ || null
@@ -22,21 +31,21 @@ const rustStateSnapshot = (target, baseState = {}) => {
   const editable = activeContentEditable(activeMuya)
   const pending = finiteNumber(activeMuya?.__rustMutationGate?.pending)
   const canonicalMarkdown = typeof canonical?.markdown === 'string' ? canonical.markdown : null
+  const renderedMarkdown = liveMuyaMarkdown(activeMuya)
   const canonicalRevision = finiteNumber(canonical?.revision)
   const publishedRevision = finiteNumber(published?.revision)
   const publishedMarkdownLength = finiteNumber(published?.markdownLength)
   const canonicalMarkdownLength = canonicalMarkdown === null ? 0 : canonicalMarkdown.length
+  const renderedMatchesCanonical = canonicalMarkdown !== null && renderedMarkdown === canonicalMarkdown
   const canonicalReady = Boolean(
     activeMuya &&
     canonical &&
-    published?.phase === 'ready' &&
-    !published?.error &&
     !canonical?.error &&
     pending === 0 &&
-    publishedRevision >= canonicalRevision &&
-    publishedMarkdownLength === canonicalMarkdownLength
+    editable?.isConnected === true &&
+    renderedMatchesCanonical
   )
-  const phase = published?.phase === 'error'
+  const phase = published?.phase === 'error' || canonical?.error
     ? 'error'
     : canonicalReady
       ? 'ready'
@@ -69,6 +78,8 @@ const rustStateSnapshot = (target, baseState = {}) => {
       markdownLength: publishedMarkdownLength,
       canonicalRevision,
       canonicalMarkdownLength,
+      renderedMarkdownLength: renderedMarkdown === null ? 0 : renderedMarkdown.length,
+      renderedMatchesCanonical,
       pending
     }
   }
@@ -90,19 +101,7 @@ const visibleRustEditorSurface = (target) => {
   return [...candidates].find((element) => isVisibleSurface(target, element)) || null
 }
 
-const renderedMuyaMarkdown = (target) => {
-  const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__
-  if (typeof activeMuya?.getMarkdown !== 'function') return null
-  try {
-    // StableCompleteMuyaWithRustCore#getMarkdown first serializes Muya's live
-    // ContentState/DOM and only consults Rust to preserve an equivalent terminal
-    // paragraph. This is therefore the rendered editor representation, unlike
-    // the Pinia document state or the persisted file.
-    return String(activeMuya.getMarkdown() ?? '')
-  } catch {
-    return null
-  }
-}
+const renderedMuyaMarkdown = (target) => liveMuyaMarkdown(target.__ELEPHANT_ACTIVE_MUYA__)
 
 const waitForOpenedRustEditor = async(target, readBaseState, expectedPath) => {
   const deadline = Date.now() + OPEN_NOTE_READY_TIMEOUT_MS
@@ -119,6 +118,7 @@ const waitForOpenedRustEditor = async(target, readBaseState, expectedPath) => {
       last?.editorRuntime?.contentEditableConnected === true &&
       last?.rustMirror?.active === true &&
       last?.rustMirror?.phase === 'ready' &&
+      last?.rustMirror?.renderedMatchesCanonical === true &&
       !last?.rustMirror?.error &&
       last?.rustMirror?.pending === 0
     ) return last

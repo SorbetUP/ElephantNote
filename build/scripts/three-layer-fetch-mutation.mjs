@@ -9,6 +9,8 @@ const parseBody = (body) => {
   }
 }
 
+const sleep = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds))
+
 const mutationResponse = (mutation, result = { mutated: true, mutation }) => new Response(JSON.stringify({
   ok: true,
   requestId: `mutation-${mutation}`,
@@ -53,5 +55,17 @@ globalThis.fetch = async(input, init = {}) => {
     return mutationResponse(mutation)
   }
 
-  return originalFetch(input, init)
+  const response = await originalFetch(input, init)
+
+  // Selecting a vault acknowledges the backend command before the renderer has
+  // necessarily completed its asynchronous project-tree activation. The normal
+  // proof jobs get that settling time from their preceding build/startup work,
+  // while the mutation verifier launches three exact AppImage instances back to
+  // back. Keep the real setup command and UI path intact, but do not let the
+  // verifier race openNote against the renderer's post-selection activation.
+  if (mutation && isCommand && payload?.command === 'selectVault' && response.ok) {
+    await sleep(1_500)
+  }
+
+  return response
 }

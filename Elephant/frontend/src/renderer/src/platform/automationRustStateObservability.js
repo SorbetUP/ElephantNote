@@ -8,10 +8,18 @@ const finiteNumber = (value, fallback = 0) => Number.isFinite(Number(value))
 
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 
+const activeContentEditable = (activeMuya) => {
+  const container = activeMuya?.container || null
+  if (!container) return null
+  if (container.getAttribute?.('contenteditable') === 'true') return container
+  return container.querySelector?.('[contenteditable="true"]') || null
+}
+
 const rustStateSnapshot = (target, baseState = {}) => {
   const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__ || null
   const published = target.__ELEPHANT_MUYA_RUST_MIRROR__ || null
   const canonical = activeMuya?.__rustMirror?.state || null
+  const editable = activeContentEditable(activeMuya)
   const pending = finiteNumber(activeMuya?.__rustMutationGate?.pending)
   const canonicalMarkdown = typeof canonical?.markdown === 'string' ? canonical.markdown : null
   const canonicalRevision = finiteNumber(canonical?.revision)
@@ -49,7 +57,8 @@ const rustStateSnapshot = (target, baseState = {}) => {
     editorRuntime: {
       engine: activeMuya ? 'rust' : null,
       active: Boolean(activeMuya),
-      contentEditable: activeMuya?.container?.getAttribute?.('contenteditable') || null,
+      contentEditable: editable?.getAttribute?.('contenteditable') || null,
+      contentEditableConnected: editable?.isConnected === true,
       pendingMutations: pending
     },
     rustMirror: {
@@ -107,6 +116,7 @@ const waitForOpenedRustEditor = async(target, readBaseState, expectedPath) => {
       expectedActive &&
       last?.editorRuntime?.active === true &&
       last?.editorRuntime?.contentEditable === 'true' &&
+      last?.editorRuntime?.contentEditableConnected === true &&
       last?.rustMirror?.active === true &&
       last?.rustMirror?.phase === 'ready' &&
       !last?.rustMirror?.error &&

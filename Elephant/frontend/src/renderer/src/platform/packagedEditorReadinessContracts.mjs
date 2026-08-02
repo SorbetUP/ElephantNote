@@ -10,6 +10,26 @@ export const packagedNotePathMatches = (actualPath, expectedPath) => {
   return actual === expected || actual.endsWith(`/${expected}`)
 }
 
+export const resolveCanonicalTauriInvoke = (target = globalThis) => {
+  const nativeCore = target?.__TAURI__?.core
+  if (typeof nativeCore?.invoke === 'function') {
+    return {
+      kind: 'native',
+      invoke: nativeCore.invoke.bind(nativeCore)
+    }
+  }
+
+  const legacyIpc = target?.tauri?.ipcRenderer
+  if (typeof legacyIpc?.invoke === 'function') {
+    return {
+      kind: 'legacy',
+      invoke: legacyIpc.invoke.bind(legacyIpc)
+    }
+  }
+
+  return { kind: 'unavailable', invoke: null }
+}
+
 export const canonicalRustEditorIsReady = (state, expectedPath = '') => {
   const activePath = state?.activeFile?.path || state?.notePath || ''
   const pathReady = !expectedPath || packagedNotePathMatches(activePath, expectedPath)

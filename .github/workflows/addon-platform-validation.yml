@@ -18,11 +18,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
+          package-manager-cache: false
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -132,7 +133,7 @@ jobs:
 
       - name: Upload compact package and build evidence
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: addon-platform-package-validation
           path: |
@@ -152,7 +153,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Linux Tauri dependencies
         timeout-minutes: 12
@@ -165,9 +166,10 @@ jobs:
           timeout 600 sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
             libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
+          package-manager-cache: false
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -218,7 +220,7 @@ jobs:
 
       - name: Upload compact Rust and physical package validation
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: addon-platform-rust-validation
           path: |

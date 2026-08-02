@@ -25,14 +25,12 @@ runs:
       shell: bash
       run: node build/scripts/install-wasm-bindgen-cli.mjs
 
-    - name: Install Dependencies
+    - name: Install dependencies from the committed lockfile
       shell: bash
       run: |
-        set -o pipefail
-        pnpm install --frozen-lockfile --ignore-scripts || {
-          echo 'Frozen pnpm install failed; retrying without frozen lockfile so CI can reach tests.' >&2
-          pnpm install --no-frozen-lockfile --ignore-scripts
-        }
+        set -euxo pipefail
+        pnpm install --frozen-lockfile --ignore-scripts
+        git diff --exit-code -- package.json pnpm-lock.yaml
       env:
         GITHUB_TOKEN: ${{ github.token }}
 

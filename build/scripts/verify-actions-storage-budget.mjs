@@ -20,6 +20,7 @@ const workflows = {
   e2e: '.github/workflows/e2e.yml',
   android: '.github/workflows/android-apk.yml',
   addons: '.github/workflows/addon-platform-validation.yml',
+  ci: '.github/workflows/ci.yml',
   cleanup: '.github/workflows/actions-storage-cleanup.yml'
 }
 
@@ -54,18 +55,23 @@ forbid('addons', '            build/addons/*.enaddon', 'reference .enaddon archi
 forbid('addons', '            build/out/addons/releases/**/*.enaddon', 'physical .enaddon archives in validation evidence')
 forbid('cleanup', '/actions/caches/', 'cache deletion in the artifact cleanup workflow')
 
-for (const cachePath of [
+const oversizedCachePaths = [
   '~/.cargo/registry',
   '~/.cargo/git',
   '~/.gradle/caches',
   'Elephant/backend/tauri/target'
-]) {
-  forbid('android', cachePath, `oversized or stale-prone Android cache path ${cachePath}`)
+]
+for (const key of ['android', 'ci']) {
+  for (const cachePath of oversizedCachePaths) {
+    forbid(key, cachePath, `oversized or stale-prone cache path ${cachePath}`)
+  }
 }
-forbid('android', 'cargo install tauri-cli', 'per-job Tauri CLI compilation')
-forbid('android', 'cargo install wasm-bindgen-cli', 'per-job wasm-bindgen CLI compilation')
+for (const key of ['android', 'ci']) {
+  forbid(key, 'cargo install tauri-cli', 'per-job Tauri CLI compilation')
+  forbid(key, 'cargo install wasm-bindgen-cli', 'per-job wasm-bindgen CLI compilation')
+}
 
-for (const key of ['desktop', 'e2e', 'android', 'addons']) {
+for (const key of ['desktop', 'e2e', 'android', 'addons', 'ci']) {
   const uploadAlways = /- name: Upload[^\n]*\n\s+if: always\(\)/g.test(contents[key])
   if (uploadAlways) failures.push(`${workflows[key]}: upload-artifact must not run after cancellation`)
 
@@ -96,6 +102,8 @@ requireMarker('android', 'Cache Gradle wrapper only', 'bounded Android Gradle ca
 requireMarker('android', 'uses: ./.github/actions/setup-tauri-cli', 'shared pinned Android Tauri CLI setup')
 requireMarker('addons', 'addon-package-sha256.txt', 'addon package checksum evidence')
 requireMarker('addons', 'addon-rust-package-sha256.txt', 'native addon checksum evidence')
+requireMarker('ci', 'uses: ./.github/actions/setup-tauri-cli', 'shared pinned Tauri CLI setup for macOS smoke')
+requireMarker('ci', 'Verify exact prebuilt wasm-bindgen CLI', 'prebuilt wasm-bindgen verification instead of compilation')
 requireMarker('cleanup', "      - 'agent/**'", 'one-time agent branch cleanup trigger')
 requireMarker('cleanup', 'actions: write', 'Actions artifact deletion permission')
 requireMarker('cleanup', 'older than ${KEEP_DAYS} days', 'bounded artifact retention cleanup')

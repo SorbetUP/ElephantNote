@@ -25,7 +25,7 @@ jobs:
       ELEPHANT_E2E_EXHAUSTIVE_EVIDENCE: '1'
       ELEPHANT_E2E_REQUIRE_NATIVE_PACKAGES: '1'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -264,7 +264,7 @@ jobs:
 
       - name: Upload compact Linux proof diagnostics
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-three-layer-distributed-appimage-proof-and-addon-diagnostics
           path: |
@@ -301,7 +301,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Download proof diagnostics
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: linux-three-layer-distributed-appimage-proof-and-addon-diagnostics
           path: diagnostics

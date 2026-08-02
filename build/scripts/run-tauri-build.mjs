@@ -14,16 +14,6 @@ if (config) {
   tauriArgs.push('--config', resolve(root, config))
 }
 
-const llamaResult = spawnSync('node', ['build/scripts/ensure-tauri-llama-server.mjs'], {
-  cwd: root,
-  stdio: 'inherit',
-  shell: process.platform === 'win32'
-})
-
-if (llamaResult.status !== 0) {
-  process.exit(llamaResult.status ?? 1)
-}
-
 const result = spawnSync('cargo', tauriArgs, {
   cwd: join(root, 'Elephant/backend/tauri'),
   stdio: 'inherit',

@@ -1,0 +1,26 @@
+name: Setup pinned Tauri CLI
+description: Restore or install the exact cargo-tauri binary without caching Cargo registries or build targets
+
+inputs:
+  version:
+    description: Exact tauri-cli version
+    required: false
+    default: '2.11.2'
+
+runs:
+  using: composite
+  steps:
+    - name: Restore pinned cargo-tauri binary
+      uses: actions/cache@v5
+      with:
+        path: ~/.cargo/bin/cargo-tauri*
+        key: ${{ runner.os }}-${{ runner.arch }}-cargo-tauri-${{ inputs.version }}
+
+    - name: Install pinned Tauri CLI
+      shell: bash
+      run: |
+        set -euxo pipefail
+        if ! cargo tauri --version 2>/dev/null | grep -Fq '${{ inputs.version }}'; then
+          cargo install tauri-cli --version '${{ inputs.version }}' --locked
+        fi
+        cargo tauri --version | grep -F '${{ inputs.version }}'

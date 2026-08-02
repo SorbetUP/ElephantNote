@@ -66,23 +66,21 @@ assert.equal(canonicalRustEditorIsReady(ready, 'Getting Started/Welcome.md'), tr
 assert.equal(canonicalRustEditorIsReady({ ...ready, rustMirror: { ...ready.rustMirror, phase: 'initializing' } }, 'Getting Started/Welcome.md'), false)
 assert.equal(canonicalRustEditorIsReady({ ...ready, rustMirror: { ...ready.rustMirror, pending: 1 } }, 'Getting Started/Welcome.md'), false)
 
-const bootstrapSource = read('Elephant/frontend/src/renderer/src/platform/nativeTauriInvokeBootstrap.js')
+const rustEngineSource = read('Elephant/frontend/src/renderer/src/muya/rustEngineRuntime.js')
 const guardSource = read('Elephant/frontend/src/renderer/src/platform/packagedEditorReadinessGuards.js')
 const rendererHtml = read('Elephant/frontend/src/renderer/index.html')
-assert.match(bootstrapSource, /@tauri-apps\/api\/core/)
-assert.match(bootstrapSource, /value: \(command, payload\) => nativeInvoke\(command, payload\)/)
-assert.match(bootstrapSource, /official @tauri-apps\/api\/core invoke installed before renderer startup/)
+assert.match(rustEngineSource, /import \{ invoke as nativeTauriInvoke \} from '@tauri-apps\/api\/core'/)
+assert.match(rustEngineSource, /target\?\.__TAURI_INTERNALS__/)
+assert.match(rustEngineSource, /using official Tauri core invoke/)
+assert.ok(
+  rustEngineSource.indexOf('target?.__TAURI_INTERNALS__') < rustEngineSource.indexOf('target?.tauri?.ipcRenderer'),
+  'the Rust editor must select the official Tauri runtime before the legacy compatibility bridge'
+)
 assert.match(guardSource, /eventName !== 'selectionChange'/)
 assert.match(guardSource, /mirror\?\.status\?\.phase !== 'ready'/)
-assert.match(guardSource, /installNativeTauriInvokeBridge/)
-assert.match(guardSource, /resolveCanonicalTauriInvoke/)
 assert.match(guardSource, /packagedNotePathMatches/)
 assert.match(guardSource, /canonicalRustEditorIsReady/)
-assert.match(rendererHtml, /nativeTauriInvokeBootstrap\.js/)
 assert.match(rendererHtml, /packagedEditorReadinessGuards\.js/)
-assert.ok(
-  rendererHtml.indexOf('nativeTauriInvokeBootstrap.js') < rendererHtml.indexOf('/src/main.js'),
-  'the official Tauri invoke bootstrap must execute before the renderer entry point'
-)
+assert.doesNotMatch(rendererHtml, /nativeTauriInvokeBootstrap\.js/)
 
-console.log('[packaged-editor-readiness] official invoke bootstrap, path normalization and Rust initialization guards passed')
+console.log('[packaged-editor-readiness] native Rust invoke selection, path normalization and initialization guards passed')

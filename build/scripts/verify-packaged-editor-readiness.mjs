@@ -67,6 +67,7 @@ assert.equal(canonicalRustEditorIsReady({ ...ready, rustMirror: { ...ready.rustM
 assert.equal(canonicalRustEditorIsReady({ ...ready, rustMirror: { ...ready.rustMirror, pending: 1 } }, 'Getting Started/Welcome.md'), false)
 
 const rustEngineSource = read('Elephant/frontend/src/renderer/src/muya/rustEngineRuntime.js')
+const rustMirrorSource = read('Elephant/frontend/src/renderer/src/muya/realMuyaRustMirrorRuntime.js')
 const guardSource = read('Elephant/frontend/src/renderer/src/platform/packagedEditorReadinessGuards.js')
 const rendererHtml = read('Elephant/frontend/src/renderer/index.html')
 assert.match(rustEngineSource, /import \{ invoke as nativeTauriInvoke \} from '@tauri-apps\/api\/core'/)
@@ -76,6 +77,16 @@ assert.ok(
   rustEngineSource.indexOf('target?.__TAURI_INTERNALS__') < rustEngineSource.indexOf('target?.tauri?.ipcRenderer'),
   'the Rust editor must select the official Tauri runtime before the legacy compatibility bridge'
 )
+assert.match(rustMirrorSource, /const initialize = async\(\) =>/)
+assert.match(rustMirrorSource, /const state = await client\.create\(markdown\)/)
+assert.match(rustMirrorSource, /initializationPromise = Promise\.resolve\(\)/)
+assert.match(rustMirrorSource, /await initializationPromise\n    if \(draining\)/)
+assert.match(rustMirrorSource, /await initializationPromise\n        await flush\(\)/)
+assert.doesNotMatch(rustMirrorSource, /const ready = reset\(initialMarkdown, 'initial'\)/)
+assert.ok(
+  rustMirrorSource.indexOf('initializationPromise = Promise.resolve()') < rustMirrorSource.indexOf('const ready = initializationPromise'),
+  'the mirror readiness promise must be the explicit native session creation barrier'
+)
 assert.match(guardSource, /eventName !== 'selectionChange'/)
 assert.match(guardSource, /mirror\?\.status\?\.phase !== 'ready'/)
 assert.match(guardSource, /packagedNotePathMatches/)
@@ -83,4 +94,4 @@ assert.match(guardSource, /canonicalRustEditorIsReady/)
 assert.match(rendererHtml, /packagedEditorReadinessGuards\.js/)
 assert.doesNotMatch(rendererHtml, /nativeTauriInvokeBootstrap\.js/)
 
-console.log('[packaged-editor-readiness] native Rust invoke selection, path normalization and initialization guards passed')
+console.log('[packaged-editor-readiness] native session barrier, invoke selection, path normalization and initialization guards passed')

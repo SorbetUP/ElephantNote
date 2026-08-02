@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
@@ -30,6 +30,7 @@ const packageEnv = {}
 
 if (process.platform === 'linux') {
   executable = findFirst(resolve(bundleRoot, 'appimage'), (_path, name) => name.endsWith('.AppImage'))
+  if (executable) chmodSync(executable, 0o755)
   packagedFormat = 'linux-appimage'
   packageEnv.APPIMAGE_EXTRACT_AND_RUN = '1'
 } else if (process.platform === 'darwin') {

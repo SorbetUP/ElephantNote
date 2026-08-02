@@ -28,6 +28,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
+      - name: Materialize pinned addon sources without native builds
+        env:
+          ELEPHANT_SKIP_NATIVE_ADDON_BUILD: '1'
+        run: node build/scripts/sync-elephant-addons.mjs
+
       - name: Inventory repository and branches
         shell: bash
         run: |
@@ -40,8 +50,9 @@ jobs:
             refs/remotes/origin \
             > repository-reorganization-export/remote-branches.tsv
           git ls-tree -r --name-only HEAD > repository-reorganization-export/head-files.txt
-          find addons packs -type f -print | LC_ALL=C sort > repository-reorganization-export/addon-files.txt
-          tar -czf repository-reorganization-export/addons-and-packs.tar.gz addons packs
+          find -L addons packs -type f -print | LC_ALL=C sort > repository-reorganization-export/addon-files.txt
+          test -s repository-reorganization-export/addon-files.txt
+          tar --dereference -czf repository-reorganization-export/addons-and-packs.tar.gz addons packs
           sha256sum repository-reorganization-export/addons-and-packs.tar.gz \
             > repository-reorganization-export/addons-and-packs.sha256
 

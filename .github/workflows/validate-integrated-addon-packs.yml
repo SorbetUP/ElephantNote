@@ -8,15 +8,11 @@ on:
       - develop_next-mobile-recovery
     paths:
       - .github/workflows/validate-integrated-addon-packs.yml
-      - addons/catalog.json
-      - addons/official/**/manifest.json
-      - packs/**
+      - build/scripts/sync-elephant-addons.mjs
   pull_request:
     paths:
       - .github/workflows/validate-integrated-addon-packs.yml
-      - addons/catalog.json
-      - addons/official/**/manifest.json
-      - packs/**
+      - build/scripts/sync-elephant-addons.mjs
   workflow_dispatch:
 
 permissions:
@@ -32,6 +28,16 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
+      - name: Materialize pinned addon catalogue and packs
+        env:
+          ELEPHANT_SKIP_NATIVE_ADDON_BUILD: '1'
+        run: node build/scripts/sync-elephant-addons.mjs
 
       - name: Validate pack, catalogue and manifest consistency
         shell: bash

@@ -5,7 +5,18 @@ export const createRustCanonicalReadiness = ({
   reportClipboardError = () => {}
 }) => {
   const hasInitializedSessionBarrier = previousReady != null
-  const canonicalReady = Promise.resolve(previousReady).then(() => reset())
+  const runReset = () => Promise.resolve(previousReady).then(() => reset())
+  const canonicalReady = runReset().catch(async(error) => {
+    // A WebKit mount can publish the mirror object one microtask before the
+    // native session created by its initial reset is observable to the next
+    // canonical reset. This is a real lifecycle race, not an acceptable proof
+    // failure: preserve the same production reset and retry it once after the
+    // current task has yielded. Any persistent or different error still rejects
+    // the canonical readiness barrier and fails every caller unchanged.
+    if (error?.message !== 'Rust Muya session is not initialized.') throw error
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    return reset()
+  })
 
   // Muya calls the most-derived setMarkdown implementation from its base
   // constructor. During that bootstrap pass the Rust mirror has not exposed an

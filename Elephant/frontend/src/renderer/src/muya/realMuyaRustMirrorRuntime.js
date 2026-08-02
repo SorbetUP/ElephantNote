@@ -89,7 +89,6 @@ export const createRealMuyaRustMirror = ({
 
   const client = createRustMuyaEngineClient({ invoke, target, sessionId: createSessionId() })
   let destroyed = false
-  let initialized = false
   let initializationPromise = null
   let pending = null
   let draining = null
@@ -105,11 +104,19 @@ export const createRealMuyaRustMirror = ({
     status.phase = 'error'
     status.error = error instanceof Error ? error.message : String(error)
     publishStatus(target, status)
-    logger.error?.('[elephantnote:muya-rust] core failed', { error: status.error })
+    logger.error?.('[elephantnote:muya-rust] core failed', {
+      error: status.error,
+      sessionId: client.sessionId,
+      hasCanonicalState: Boolean(client.state),
+      destroyed
+    })
   }
 
   const refresh = async(reason) => {
     const state = client.state
+    if (!state) {
+      throw new Error(`Rust Muya session ${client.sessionId} has no canonical state before refresh:${reason}.`)
+    }
     const jsonState = await client.jsonState()
     if (jsonState.type !== 'muya-json-state' || !Array.isArray(jsonState.blocks)) {
       throw new Error('Rust Muya core returned an invalid document tree.')
@@ -139,7 +146,6 @@ export const createRealMuyaRustMirror = ({
       markdownLength: markdown.length
     })
     const state = await client.create(markdown)
-    initialized = true
     if (state.selection.anchor !== selection.anchor || state.selection.focus !== selection.focus) {
       await client.setSelection(selection.anchor, selection.focus)
     }
@@ -225,10 +231,27 @@ export const createRealMuyaRustMirror = ({
         await initializationPromise
         await flush()
         if (status.phase === 'error') throw new Error(status.error)
-        if (destroyed || !initialized) throw new Error('Rust Muya session is not initialized.')
+        if (destroyed) throw new Error(`Rust Muya session ${client.sessionId} is destroyed before ${reason}.`)
+        if (!client.state) {
+          throw new Error(`Rust Muya session ${client.sessionId} has no canonical state before ${reason}.`)
+        }
         const result = await operation(client)
         if (refreshAfter) await refresh(reason)
         return result
+      })
+      .catch((error) => {
+        logger.error?.('[elephantnote:muya-rust] command failed', {
+          reason,
+          sessionId: client.sessionId,
+          phase: status.phase,
+          revision: Number(client.state?.revision || 0),
+          hasCanonicalState: Boolean(client.state),
+          pending: Boolean(pending),
+          draining: Boolean(draining),
+          destroyed,
+          error: error instanceof Error ? error.message : String(error)
+        })
+        throw error
       })
     return commandQueue
   }

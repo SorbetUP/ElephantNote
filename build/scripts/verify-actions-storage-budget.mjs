@@ -54,6 +54,17 @@ forbid('addons', '            build/addons/*.enaddon', 'reference .enaddon archi
 forbid('addons', '            build/out/addons/releases/**/*.enaddon', 'physical .enaddon archives in validation evidence')
 forbid('cleanup', '/actions/caches/', 'cache deletion in the artifact cleanup workflow')
 
+for (const cachePath of [
+  '~/.cargo/registry',
+  '~/.cargo/git',
+  '~/.gradle/caches',
+  'Elephant/backend/tauri/target'
+]) {
+  forbid('android', cachePath, `oversized or stale-prone Android cache path ${cachePath}`)
+}
+forbid('android', 'cargo install tauri-cli', 'per-job Tauri CLI compilation')
+forbid('android', 'cargo install wasm-bindgen-cli', 'per-job wasm-bindgen CLI compilation')
+
 for (const key of ['desktop', 'e2e', 'android', 'addons']) {
   const uploadAlways = /- name: Upload[^\n]*\n\s+if: always\(\)/g.test(contents[key])
   if (uploadAlways) failures.push(`${workflows[key]}: upload-artifact must not run after cancellation`)
@@ -69,8 +80,10 @@ for (const key of ['desktop', 'e2e', 'android', 'addons']) {
 
 requireMarker('desktop', 'Upload compact Tauri acceptance evidence', 'compact desktop evidence upload')
 requireMarker('desktop', 'compression-level: 9', 'maximum compression for desktop evidence')
+requireMarker('desktop', 'uses: ./.github/actions/setup-tauri-cli', 'shared pinned Tauri CLI setup')
 requireMarker('e2e', 'Upload compact Linux proof diagnostics', 'compact AppImage proof upload')
 requireMarker('e2e', 'if: failure()\n    runs-on: ubuntu-24.04', 'failure-only concise diagnostics job')
+requireMarker('e2e', 'uses: ./.github/actions/setup-tauri-cli', 'shared pinned Tauri CLI setup')
 requireMarker('android', 'Upload Android review APK for develop or manual review', 'conditional APK publication')
 requireMarker(
   'android',
@@ -79,6 +92,8 @@ requireMarker(
 )
 requireMarker('android', 'Upload compact Android proof', 'compact Android success evidence')
 requireMarker('android', 'Upload Android failure diagnostics', 'failure-only Android screenshots and logs')
+requireMarker('android', 'Cache Gradle wrapper only', 'bounded Android Gradle cache')
+requireMarker('android', 'uses: ./.github/actions/setup-tauri-cli', 'shared pinned Android Tauri CLI setup')
 requireMarker('addons', 'addon-package-sha256.txt', 'addon package checksum evidence')
 requireMarker('addons', 'addon-rust-package-sha256.txt', 'native addon checksum evidence')
 requireMarker('cleanup', "      - 'agent/**'", 'one-time agent branch cleanup trigger')
@@ -91,4 +106,4 @@ if (failures.length > 0) {
   process.exit(1)
 }
 
-console.log('[actions-storage-budget] PASS: PR artifacts are compact, short-lived and automatically cleaned')
+console.log('[actions-storage-budget] PASS: PR artifacts and caches are compact, short-lived and automatically cleaned')

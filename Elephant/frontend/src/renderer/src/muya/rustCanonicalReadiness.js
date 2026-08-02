@@ -1,3 +1,27 @@
+const INITIAL_SESSION_TIMEOUT_MS = 5_000
+
+const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
+
+const withTimeout = async(promise, timeoutMs, message) => {
+  let timer = null
+  try {
+    return await Promise.race([
+      Promise.resolve(promise),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), timeoutMs)
+      })
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
+const isRecoverableInitializationFailure = (error) => {
+  const message = String(error?.message || error || '')
+  return message === 'Rust Muya session is not initialized.' ||
+    message === 'Rust Muya initial session readiness timed out.'
+}
+
 export const createRustCanonicalReadiness = ({
   previousReady,
   reset,
@@ -17,15 +41,21 @@ export const createRustCanonicalReadiness = ({
   // be a no-op rather than an unchained asynchronous reset.
   if (!hasInitializedSessionBarrier) return Promise.resolve()
 
-  const runReset = () => Promise.resolve(previousReady).then(() => reset())
+  const awaitInitialSession = () => withTimeout(
+    previousReady,
+    INITIAL_SESSION_TIMEOUT_MS,
+    'Rust Muya initial session readiness timed out.'
+  )
+
+  const runReset = () => awaitInitialSession().then(() => reset())
   const canonicalReady = runReset().catch(async(error) => {
-    // A WebKit mount can publish the mirror object one microtask before the
-    // native session created by its initial reset is observable to the next
-    // canonical reset. Preserve the production reset and retry it once after the
-    // current task has yielded. Any persistent or different error still rejects
-    // the canonical readiness barrier and fails every caller unchanged.
-    if (error?.message !== 'Rust Muya session is not initialized.') throw error
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    // WebKit can publish the mirror object before its queued native create has
+    // become observable, and a lost renderer wake-up can leave the original
+    // readiness promise pending forever. In both cases issue a fresh production
+    // reset after yielding. This does not accept a partial editor: the replacement
+    // reset must complete successfully and remains the canonical readiness barrier.
+    if (!isRecoverableInitializationFailure(error)) throw error
+    await wait(0)
     return reset()
   })
 

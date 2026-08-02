@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { extname, resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '../..')
-const workflowRoot = resolve(root, '.github/workflows')
+const actionRoots = [
+  resolve(root, '.github/workflows'),
+  resolve(root, '.github/actions')
+]
 
 const minimumMajors = new Map([
   ['checkout', 6],
@@ -45,13 +48,16 @@ export const inspectWorkflowSource = (source, filename = '<memory>') => {
   return errors
 }
 
-const listWorkflowFiles = (directory) => readdirSync(directory, { withFileTypes: true })
-  .flatMap((entry) => {
-    const absolute = resolve(directory, entry.name)
-    if (entry.isDirectory()) return listWorkflowFiles(absolute)
-    return ['.yml', '.yaml'].includes(extname(entry.name).toLowerCase()) ? [absolute] : []
-  })
-  .sort()
+const listActionFiles = (directory) => {
+  if (!existsSync(directory)) return []
+  return readdirSync(directory, { withFileTypes: true })
+    .flatMap((entry) => {
+      const absolute = resolve(directory, entry.name)
+      if (entry.isDirectory()) return listActionFiles(absolute)
+      return ['.yml', '.yaml'].includes(extname(entry.name).toLowerCase()) ? [absolute] : []
+    })
+    .sort()
+}
 
 const assertGuardSensitivity = () => {
   const valid = `
@@ -87,18 +93,18 @@ steps:
 
 assertGuardSensitivity()
 
-const workflowFiles = listWorkflowFiles(workflowRoot)
-const errors = workflowFiles.flatMap((absolute) => {
+const actionFiles = actionRoots.flatMap(listActionFiles).sort()
+const errors = actionFiles.flatMap((absolute) => {
   const relative = absolute.slice(root.length + 1)
   return inspectWorkflowSource(readFileSync(absolute, 'utf8'), relative)
 })
 
 if (errors.length > 0) {
-  console.error('[actions-node24] workflow runtime guard failed:')
+  console.error('[actions-node24] workflow/composite runtime guard failed:')
   for (const error of errors) console.error(`- ${error}`)
   process.exit(1)
 }
 
 console.log(
-  `[actions-node24] verified ${workflowFiles.length} workflow(s): tracked official actions use Node 24-compatible major lines`
+  `[actions-node24] verified ${actionFiles.length} workflow/composite action file(s): tracked official actions use Node 24-compatible major lines`
 )

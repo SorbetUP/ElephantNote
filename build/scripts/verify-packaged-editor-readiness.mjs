@@ -83,6 +83,12 @@ assert.match(rustMirrorSource, /initializationPromise = Promise\.resolve\(\)/)
 assert.match(rustMirrorSource, /await initializationPromise\n    if \(draining\)/)
 assert.match(rustMirrorSource, /await initializationPromise\n        await flush\(\)/)
 assert.doesNotMatch(rustMirrorSource, /const ready = reset\(initialMarkdown, 'initial'\)/)
+assert.doesNotMatch(rustMirrorSource, /let initialized = false/)
+assert.doesNotMatch(rustMirrorSource, /destroyed \|\| !initialized/)
+assert.match(rustMirrorSource, /if \(!client\.state\) \{/)
+assert.match(rustMirrorSource, /has no canonical state before \$\{reason\}/)
+assert.match(rustMirrorSource, /\[elephantnote:muya-rust\] command failed/)
+assert.match(rustMirrorSource, /sessionId: client\.sessionId/)
 assert.ok(
   rustMirrorSource.indexOf('initializationPromise = Promise.resolve()') < rustMirrorSource.indexOf('const ready = initializationPromise'),
   'the mirror readiness promise must be the explicit native session creation barrier'
@@ -94,4 +100,4 @@ assert.match(guardSource, /canonicalRustEditorIsReady/)
 assert.match(rendererHtml, /packagedEditorReadinessGuards\.js/)
 assert.doesNotMatch(rendererHtml, /nativeTauriInvokeBootstrap\.js/)
 
-console.log('[packaged-editor-readiness] native session barrier, invoke selection, path normalization and initialization guards passed')
+console.log('[packaged-editor-readiness] canonical state oracle, native session barrier, invoke selection and path guards passed')

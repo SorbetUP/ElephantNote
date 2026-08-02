@@ -6,19 +6,25 @@ const futureIncompatPatterns = [
   /the following packages contain code that will be rejected by a future\s+version of Rust/i,
   /future-incompatible warnings? (?:were|was) (?:found|reported)/i
 ]
+const ansiPattern = /\u001B\[[0-?]*[ -/]*[@-~]/g
+const normalizeOutput = (output) => String(output || '').replace(ansiPattern, '')
 
-export const containsFutureIncompatibility = (output) =>
-  futureIncompatPatterns.some((pattern) => pattern.test(String(output || '')))
+export const containsFutureIncompatibility = (output) => {
+  const normalized = normalizeOutput(output)
+  return futureIncompatPatterns.some((pattern) => pattern.test(normalized))
+}
 
 const assertSensitivity = () => {
   const clean = 'Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.23s'
   const dirty = `warning: the following packages contain code that will be rejected by a future
 version of Rust: multipart v0.18.0`
+  const coloredDirty = `\u001b[1;33mwarning\u001b[0m: the following packages contain code that will be rejected by a future
+version of Rust: buf_redux v0.8.4`
 
   if (containsFutureIncompatibility(clean)) {
     throw new Error('Cargo future-compat guard self-test rejected clean output')
   }
-  if (!containsFutureIncompatibility(dirty)) {
+  if (!containsFutureIncompatibility(dirty) || !containsFutureIncompatibility(coloredDirty)) {
     throw new Error('Cargo future-compat guard self-test missed a future-incompatible dependency')
   }
 }

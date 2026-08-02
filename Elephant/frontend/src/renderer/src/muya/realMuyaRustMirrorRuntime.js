@@ -180,7 +180,14 @@ export const createRealMuyaRustMirror = ({
       reason: String(reason || kind),
       continueGroup: kind === 'sync' && Boolean(options.continueGroup)
     }
-    return ensureDrain()
+
+    // ensureDrain() may return a drain that was already completing when this
+    // item was enqueued. Waiting only for that promise can therefore announce
+    // readiness before the new reset/sync has initialized the Rust session.
+    // flush() follows every drain scheduled from pending work and resolves only
+    // when the queue is actually empty.
+    ensureDrain()
+    return flush()
   }
 
   const sync = (markdown, reason = 'change', options = {}) => enqueue('sync', markdown, reason, options)
@@ -280,7 +287,7 @@ export const createRealMuyaRustMirror = ({
     indentSelection: command('rust-indent', (engine, options = {}) => engine.indentSelection(options)),
     toggleTask: command('rust-task', (engine) => engine.toggleTask()),
     setCodeLanguage: command('rust-code-language', (engine, language) => (
-      engine.setCodeLanguage(language)
+      engine.setCodeLanguage(String(language))
     )),
     insertLink: command('rust-insert-link', (engine, url, title = '') => (
       engine.insertLink(url, title)
@@ -301,4 +308,3 @@ export const createRealMuyaRustMirror = ({
     }
   }
 }
-

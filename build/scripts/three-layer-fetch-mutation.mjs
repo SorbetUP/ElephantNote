@@ -30,17 +30,11 @@ const commandSucceeded = async(response) => {
   }
 }
 
-let lastVaultSelection = null
-
 globalThis.fetch = async(input, init = {}) => {
   const url = typeof input === 'string' ? input : input?.url
   const payload = parseBody(init?.body)
   const isCommand = String(url || '').endsWith('/v1/command')
   const mutation = process.env.ELEPHANT_LAYER_MUTATION
-
-  if (mutation && isCommand && payload?.command === 'selectVault') {
-    lastVaultSelection = { input, init }
-  }
 
   if (
     mutation === 'backend-ignore-note-write' &&
@@ -73,20 +67,16 @@ globalThis.fetch = async(input, init = {}) => {
 
   let response = await originalFetch(input, init)
 
-  // Vault selection returns after the backend accepts the path, while renderer
-  // activation and project-tree hydration continue asynchronously. Mutation
-  // verification starts exact AppImages back-to-back, so the fixture-only
-  // openNote setup command can race that activation. Re-select the same real
-  // vault once, then let hydration make forward progress while retrying only
-  // openNote. Re-selecting on every poll resets the renderer's hydration and can
-  // starve the real file tree indefinitely. This stabilizes fixture activation
-  // only; all visible actions and behavioral assertions remain unchanged and
-  // still execute against the distributed application.
+  // Vault selection returns when the backend accepts the path, while the real
+  // renderer still hydrates its project tree asynchronously. The mutation
+  // verifier launches the exact AppImage repeatedly, which makes the fixture
+  // setup openNote command more likely to arrive during that hydration window.
+  // Retrying only that same fixture-activation command lets the real renderer
+  // finish naturally. Re-selecting the vault here is intentionally avoided:
+  // selecting an already-active vault restarts hydration and can keep openNote
+  // racing forever. No visible action or behavioral assertion is changed.
   if (mutation && isCommand && payload?.command === 'openNote' && !(await commandSucceeded(response))) {
-    if (lastVaultSelection) {
-      await originalFetch(lastVaultSelection.input, lastVaultSelection.init)
-    }
-    const deadline = Date.now() + 30_000
+    const deadline = Date.now() + 60_000
     while (Date.now() < deadline) {
       await sleep(500)
       response = await originalFetch(input, init)

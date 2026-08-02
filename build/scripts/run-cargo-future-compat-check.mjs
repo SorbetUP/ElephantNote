@@ -6,7 +6,8 @@ const futureIncompatPatterns = [
   /the following packages contain code that will be rejected by a future\s+version of Rust/i,
   /future-incompatible warnings? (?:were|was) (?:found|reported)/i
 ]
-const ansiPattern = /\u001B\[[0-?]*[ -/]*[@-~]/g
+const escapeCharacter = String.fromCharCode(27)
+const ansiPattern = new RegExp(`${escapeCharacter}\\[[0-?]*[ -/]*[@-~]`, 'g')
 const normalizeOutput = (output) => String(output || '').replace(ansiPattern, '')
 
 export const containsFutureIncompatibility = (output) => {

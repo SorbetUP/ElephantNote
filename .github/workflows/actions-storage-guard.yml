@@ -7,14 +7,20 @@ on:
       - develop
     paths:
       - '.github/workflows/**'
+      - build/scripts/run-tauri-build.mjs
       - build/scripts/verify-actions-storage-budget.mjs
       - build/scripts/verify-actions-node24.mjs
+      - build/scripts/verify-tauri-build-runtime-boundary.mjs
+      - Elephant/backend/tauri/tauri.conf.json
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - '.github/workflows/**'
+      - build/scripts/run-tauri-build.mjs
       - build/scripts/verify-actions-storage-budget.mjs
       - build/scripts/verify-actions-node24.mjs
+      - build/scripts/verify-tauri-build-runtime-boundary.mjs
+      - Elephant/backend/tauri/tauri.conf.json
   workflow_dispatch:
 
 permissions:
@@ -35,3 +41,5 @@ jobs:
         run: node build/scripts/verify-actions-storage-budget.mjs
       - name: Verify Node 24 action runtimes
         run: node build/scripts/verify-actions-node24.mjs
+      - name: Verify deterministic Tauri packaging boundary
+        run: node build/scripts/verify-tauri-build-runtime-boundary.mjs

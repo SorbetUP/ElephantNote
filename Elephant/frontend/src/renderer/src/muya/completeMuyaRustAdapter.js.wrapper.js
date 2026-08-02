@@ -1,5 +1,6 @@
 import CompleteMuyaWithRustCore from './completeMuyaRustAdapter.js'
 import { createRustAsyncMutationGate } from './rustAsyncMutationGate.js'
+import { createRustCanonicalReadiness } from './rustCanonicalReadiness.js'
 import { selectionToMuyaIndexCursor } from './realMuyaRustMirrorRuntime.js'
 
 const cloneState = (state) => state && ({
@@ -109,10 +110,14 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
     // The mirror's first reset initializes the Tauri session. Queue the
     // canonical Muya normalization only after that reset has completed;
     // issuing both resets synchronously can make the second command observe a
-    // session that has not been initialized yet.
-    this.__rustCanonicalReady = Promise.resolve(this.__rustMirror?.ready)
-      .then(() => this.__rustMirror.reset(markdown, 'constructor-canonical', { muyaIndexCursor }))
-      .then(() => this.__refreshClipboard())
+    // session that has not been initialized yet. Clipboard metadata is refreshed
+    // afterwards but is deliberately excluded from canonical editor readiness.
+    this.__rustCanonicalReady = createRustCanonicalReadiness({
+      previousReady: this.__rustMirror?.ready,
+      reset: () => this.__rustMirror.reset(markdown, 'constructor-canonical', { muyaIndexCursor }),
+      refreshClipboard: () => this.__refreshClipboard(),
+      reportClipboardError: this.__reportRustError
+    })
     this.__rustCanonicalReady.catch(this.__reportRustError)
   }
 
@@ -250,11 +255,15 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
     // A visible setMarkdown remount is complete only after Rust has accepted the
     // exact document Muya rendered. Chain every reset behind the prior canonical
     // barrier so a following physical key cannot race an older session reset.
-    this.__rustCanonicalReady = Promise.resolve(this.__rustCanonicalReady || this.__rustMirror?.ready)
-      .then(() => this.__rustMirror.reset(rendered.markdown, 'set-markdown-canonical', {
+    // Clipboard metadata remains ordered after that reset but cannot block it.
+    this.__rustCanonicalReady = createRustCanonicalReadiness({
+      previousReady: this.__rustCanonicalReady || this.__rustMirror?.ready,
+      reset: () => this.__rustMirror.reset(rendered.markdown, 'set-markdown-canonical', {
         muyaIndexCursor: rendered.muyaIndexCursor
-      }))
-      .then(() => this.__refreshClipboard())
+      }),
+      refreshClipboard: () => this.__refreshClipboard(),
+      reportClipboardError: this.__reportRustError
+    })
     this.__rustCanonicalReady.catch(this.__reportRustError)
 
     return rendered.result

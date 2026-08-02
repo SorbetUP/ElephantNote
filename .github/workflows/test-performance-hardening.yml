@@ -58,12 +58,14 @@ jobs:
           cargo test --manifest-path Elephant/crates/muya-core/Cargo.toml 2>&1 | tee markdown-core-contracts.txt
           cargo test --manifest-path Elephant/crates/muya-wasm/Cargo.toml 2>&1 | tee markdown-wasm-contracts.txt
 
-      - name: Check Tauri Rust backend
+      - name: Check Tauri Rust backend and future compatibility
         shell: bash
         run: |
           set -o pipefail
           node build/scripts/prepare-tauri-addon-resources.mjs
-          cargo check --manifest-path Elephant/backend/tauri/Cargo.toml --all-targets --no-default-features \
+          node build/scripts/run-cargo-future-compat-check.mjs \
+            --manifest-path Elephant/backend/tauri/Cargo.toml \
+            --all-targets --no-default-features \
             2>&1 | tee tauri-rust-check.txt
 
       - name: Build production renderer

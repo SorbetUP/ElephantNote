@@ -71,6 +71,10 @@ jobs:
         shell: bash
         run: pnpm tauri:platform:check
 
+      - name: Validate packaged editor readiness regressions
+        shell: bash
+        run: node build/scripts/verify-packaged-editor-readiness.mjs
+
       - name: Build packaged Tauri desktop application
         shell: bash
         run: |

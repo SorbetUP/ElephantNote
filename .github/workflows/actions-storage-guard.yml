@@ -6,7 +6,7 @@ on:
       - main
       - develop
     paths:
-      - '.github/actions/setup/action.yml'
+      - '.github/actions/**'
       - '.github/workflows/**'
       - build/scripts/run-tauri-build.mjs
       - build/scripts/verify-actions-storage-budget.mjs
@@ -17,7 +17,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
-      - '.github/actions/setup/action.yml'
+      - '.github/actions/**'
       - '.github/workflows/**'
       - build/scripts/run-tauri-build.mjs
       - build/scripts/verify-actions-storage-budget.mjs

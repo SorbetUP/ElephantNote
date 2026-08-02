@@ -1,12 +1,14 @@
 import Muya from '../../../muya/lib'
 import {
   canonicalRustEditorIsReady,
-  packagedNotePathMatches
+  packagedNotePathMatches,
+  resolveCanonicalTauriInvoke
 } from './packagedEditorReadinessContracts.mjs'
 
 const API_PROPERTY = '__ELEPHANT_ACCEPTANCE_TEST__'
 const API_PATCH_FLAG = '__elephantPackagedEditorReadinessPatched'
 const MUYA_PATCH_FLAG = '__elephantRustSelectionReadinessPatched'
+const TAURI_INVOKE_PATCH_FLAG = '__elephantNativeInvokePatched'
 const OPEN_RECOVERY_TIMEOUT_MS = 20_000
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 
@@ -19,6 +21,35 @@ const selectionListenerMap = (instance) => {
     listenerMaps.set(instance, listeners)
   }
   return listeners
+}
+
+const installNativeTauriInvokeBridge = (target = globalThis) => {
+  const ipcRenderer = target?.tauri?.ipcRenderer
+  const resolved = resolveCanonicalTauriInvoke(target)
+  if (!ipcRenderer || resolved.kind !== 'native' || typeof resolved.invoke !== 'function') return false
+  if (ipcRenderer[TAURI_INVOKE_PATCH_FLAG] === true) return true
+
+  const invoke = (command, payload) => resolved.invoke(command, payload)
+  try {
+    Object.defineProperty(ipcRenderer, 'invoke', {
+      configurable: true,
+      enumerable: true,
+      writable: true,
+      value: invoke
+    })
+    Object.defineProperty(ipcRenderer, TAURI_INVOKE_PATCH_FLAG, {
+      configurable: true,
+      value: true
+    })
+  } catch (error) {
+    console.error('[elephantnote:tauri] failed to select native invoke bridge', {
+      message: error?.message || String(error)
+    })
+    return false
+  }
+
+  console.info('[elephantnote:tauri] native invoke bridge selected for Rust editor sessions')
+  return true
 }
 
 const installRustSelectionReadinessGuard = () => {
@@ -153,11 +184,13 @@ const installAutomationApiGuard = (target = globalThis) => {
   return true
 }
 
+installNativeTauriInvokeBridge()
 installRustSelectionReadinessGuard()
 installAutomationApiGuard()
 
 export {
   installAutomationApiGuard,
+  installNativeTauriInvokeBridge,
   installRustSelectionReadinessGuard,
   patchAutomationApi
 }

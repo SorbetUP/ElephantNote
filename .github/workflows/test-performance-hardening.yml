@@ -51,6 +51,13 @@ jobs:
       - name: Enforce test trust policy
         run: pnpm test:trust:guard
 
+      - name: Prove Rust editor canonical session lifecycle
+        shell: bash
+        run: |
+          set -o pipefail
+          node build/scripts/verify-rust-canonical-readiness.mjs \
+            2>&1 | tee rust-canonical-readiness.txt
+
       - name: Test Rust Markdown core and WASM protocol
         shell: bash
         run: |
@@ -81,6 +88,7 @@ jobs:
           name: production-hardening
           path: |
             test-results/trust/**
+            rust-canonical-readiness.txt
             markdown-core-contracts.txt
             markdown-wasm-contracts.txt
             tauri-rust-check.txt

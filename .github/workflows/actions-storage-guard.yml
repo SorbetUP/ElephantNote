@@ -8,10 +8,12 @@ on:
     paths:
       - '.github/actions/**'
       - '.github/workflows/**'
+      - build/scripts/run-packaged-desktop-acceptance.mjs
       - build/scripts/run-tauri-build.mjs
       - build/scripts/verify-actions-storage-budget.mjs
       - build/scripts/verify-actions-node24.mjs
       - build/scripts/verify-ci-reproducibility.mjs
+      - build/scripts/verify-packaged-desktop-acceptance-boundary.mjs
       - build/scripts/verify-tauri-build-runtime-boundary.mjs
       - Elephant/backend/tauri/tauri.conf.json
   pull_request:
@@ -19,10 +21,12 @@ on:
     paths:
       - '.github/actions/**'
       - '.github/workflows/**'
+      - build/scripts/run-packaged-desktop-acceptance.mjs
       - build/scripts/run-tauri-build.mjs
       - build/scripts/verify-actions-storage-budget.mjs
       - build/scripts/verify-actions-node24.mjs
       - build/scripts/verify-ci-reproducibility.mjs
+      - build/scripts/verify-packaged-desktop-acceptance-boundary.mjs
       - build/scripts/verify-tauri-build-runtime-boundary.mjs
       - Elephant/backend/tauri/tauri.conf.json
   workflow_dispatch:
@@ -49,3 +53,5 @@ jobs:
         run: node build/scripts/verify-ci-reproducibility.mjs
       - name: Verify deterministic Tauri packaging boundary
         run: node build/scripts/verify-tauri-build-runtime-boundary.mjs
+      - name: Verify exact distributed desktop acceptance
+        run: node build/scripts/verify-packaged-desktop-acceptance-boundary.mjs

@@ -36,13 +36,14 @@ jobs:
             runner: macos-15
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: feature/physical-addon-packages
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
+          package-manager-cache: false
 
       - name: Build and package desktop native addons
         shell: bash
@@ -61,7 +62,7 @@ jobs:
           done
 
       - name: Upload desktop packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: native-addon-package-${{ matrix.platform }}
           path: build/out/addons/releases/**
@@ -80,19 +81,20 @@ jobs:
           - ios-x86_64
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: feature/physical-addon-packages
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
+          package-manager-cache: false
 
       - name: Package mobile Web Worker runtime
         run: node build/scripts/build-mobile-addon-package.mjs addons/official/code-execution "${{ matrix.platform }}"
 
       - name: Upload mobile package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mobile-addon-package-${{ matrix.platform }}
           path: build/out/addons/releases/**
@@ -104,20 +106,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download all platform packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: '*-addon-package-*'
           path: packages
           merge-multiple: true
 
       - name: Checkout validated application sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: feature/physical-addon-packages
           path: source
 
       - name: Checkout physical addon catalog
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: feature/physical-addon-catalog
           path: catalog

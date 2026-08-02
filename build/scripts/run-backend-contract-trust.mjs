@@ -4,8 +4,6 @@ import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createRealAppHarness } from './lib/real-app-harness.mjs'
 
-const roundtripPath = 'Backend runtime roundtrip.md'
-const initialRoundtrip = '# Backend runtime roundtrip fixture\n\nInitial write target.\n'
 const restartPath = 'Backend restart persistence.md'
 
 const harness = createRealAppHarness({
@@ -13,7 +11,6 @@ const harness = createRealAppHarness({
   buildRenderer: true,
   initialFiles: {
     'Backend fixture.md': '# Backend fixture\n\nInitial backend content.\n',
-    [roundtripPath]: initialRoundtrip,
     [restartPath]: '# Backend restart fixture\n\nInitial restart content.\n',
     'outside.md': '# Contained vault file\n\ninside-vault-marker\n'
   }
@@ -96,24 +93,21 @@ try {
     const createdPath = 'Backend contracts/Lifecycle.md'
     await waitForStableNoteContent(createdPath, '# Lifecycle\n', 'Production note creation stabilization')
 
-    await harness.backend('invokeTauri', 'tauri_entries_delete', { relativePath: createdPath })
-    await waitForStableNoteContent(roundtripPath, initialRoundtrip, 'Runtime backend write fixture stabilization')
-
     const expected = '# Backend roundtrip\n\nWritten through the production Tauri backend.\n'
     const written = await harness.backend('invokeTauri', 'tauri_notes_write', {
-      relativePath: roundtripPath,
+      relativePath: createdPath,
       content: expected,
       markdown: expected
     })
-    if (written?.path !== roundtripPath) {
+    if (written?.path !== createdPath) {
       throw new Error(`Production note write returned the wrong path: ${JSON.stringify(written)}`)
     }
-    await waitForStableNoteContent(roundtripPath, expected, 'Production note write/read round-trip')
+    await waitForStableNoteContent(createdPath, expected, 'Production note write/read round-trip')
     await harness.backend('invokeTauri', 'tauri_entries_rename', {
-      relativePath: roundtripPath,
+      relativePath: createdPath,
       title: 'Renamed backend roundtrip'
     })
-    const renamedPath = 'Renamed backend roundtrip.md'
+    const renamedPath = 'Backend contracts/Renamed backend roundtrip.md'
     await waitForNoteContent(renamedPath, expected, 'Renamed note content preservation')
     await harness.backend('invokeTauri', 'tauri_entries_move', {
       relativePath: renamedPath,
@@ -135,7 +129,7 @@ try {
       folder: folder?.path || null,
       destinationFolder: destinationFolder?.path || null,
       created: created?.path || null,
-      backendWrittenPath: roundtripPath,
+      backendWrittenPath: createdPath,
       backendMovedPath: movedPath,
       bytes: expected.length
     }

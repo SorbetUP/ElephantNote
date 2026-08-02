@@ -6,19 +6,23 @@ on:
       - main
       - develop
     paths:
+      - '.github/actions/setup/action.yml'
       - '.github/workflows/**'
       - build/scripts/run-tauri-build.mjs
       - build/scripts/verify-actions-storage-budget.mjs
       - build/scripts/verify-actions-node24.mjs
+      - build/scripts/verify-ci-reproducibility.mjs
       - build/scripts/verify-tauri-build-runtime-boundary.mjs
       - Elephant/backend/tauri/tauri.conf.json
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
+      - '.github/actions/setup/action.yml'
       - '.github/workflows/**'
       - build/scripts/run-tauri-build.mjs
       - build/scripts/verify-actions-storage-budget.mjs
       - build/scripts/verify-actions-node24.mjs
+      - build/scripts/verify-ci-reproducibility.mjs
       - build/scripts/verify-tauri-build-runtime-boundary.mjs
       - Elephant/backend/tauri/tauri.conf.json
   workflow_dispatch:
@@ -41,5 +45,7 @@ jobs:
         run: node build/scripts/verify-actions-storage-budget.mjs
       - name: Verify Node 24 action runtimes
         run: node build/scripts/verify-actions-node24.mjs
+      - name: Verify frozen dependency setup
+        run: node build/scripts/verify-ci-reproducibility.mjs
       - name: Verify deterministic Tauri packaging boundary
         run: node build/scripts/verify-tauri-build-runtime-boundary.mjs

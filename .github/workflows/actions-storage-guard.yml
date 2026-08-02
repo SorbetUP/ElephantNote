@@ -8,11 +8,13 @@ on:
     paths:
       - '.github/workflows/**'
       - build/scripts/verify-actions-storage-budget.mjs
+      - build/scripts/verify-actions-node24.mjs
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - '.github/workflows/**'
       - build/scripts/verify-actions-storage-budget.mjs
+      - build/scripts/verify-actions-node24.mjs
   workflow_dispatch:
 
 permissions:
@@ -24,10 +26,12 @@ concurrency:
 
 jobs:
   storage-budget:
-    name: Enforce compact Actions artifacts
+    name: Enforce compact and supported Actions
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
       - name: Verify Actions storage budget
         run: node build/scripts/verify-actions-storage-budget.mjs
+      - name: Verify Node 24 action runtimes
+        run: node build/scripts/verify-actions-node24.mjs

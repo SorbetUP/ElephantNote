@@ -251,13 +251,18 @@ const mountRuntime = async (markdown) => {
   destroyRuntime()
   errorMessage.value = ''
   runtimeMarkdown = String(markdown || '')
-  if (!hostElement) {
-    reportError(new Error('Rust Muya runtime host is unavailable.'))
+  if (!hostElement || rootRef.value !== hostElement || !hostElement.isConnected) {
+    if (generation === mountGeneration) reportError(new Error('Rust Muya runtime host is unavailable.'))
     return
   }
+
+  // Muya replaces the element passed to its constructor. Mount it through a
+  // disposable child so Vue retains ownership of one stable connected host
+  // across programmatic document replacements and asynchronous remounts.
   hostElement.replaceChildren()
-  disposeUserMutationBoundary()
-  disposeUserMutationBoundary = () => {}
+  const mountElement = document.createElement('div')
+  mountElement.className = 'muya-rust-runtime-mount'
+  hostElement.append(mountElement)
 
   try {
     let nextRuntime
@@ -267,7 +272,7 @@ const mountRuntime = async (markdown) => {
         { markdown: runtimeMarkdown },
         {
           factory: props.factory,
-          domContainer: hostElement,
+          domContainer: mountElement,
           captureInput: true,
           applyPatches: scheduleMarkdownSync,
           onFileDrop: props.onFileDrop,
@@ -277,7 +282,7 @@ const mountRuntime = async (markdown) => {
         reportError
       )
     } else {
-      const muya = new StableCompleteMuyaWithRustCore(hostElement, {
+      const muya = new StableCompleteMuyaWithRustCore(mountElement, {
         markdown: runtimeMarkdown,
         t: (key) => key,
         onFileDrop: props.onFileDrop,
@@ -317,15 +322,17 @@ const mountRuntime = async (markdown) => {
       })
       muya.on('crashed', () => reportError(new Error('Muya JS/Rust editor crashed.')))
     }
-    const mountedElement = nextRuntime?.domContainer || hostElement
-    if (generation !== mountGeneration || !mountedElement?.isConnected) {
+    const mountedElement = nextRuntime?.domContainer || mountElement
+    if (
+      generation !== mountGeneration ||
+      rootRef.value !== hostElement ||
+      !hostElement.isConnected ||
+      !mountedElement?.isConnected ||
+      !hostElement.contains(mountedElement)
+    ) {
       nextRuntime?.destroy?.()
       return
     }
-    // Muya intentionally replaces the origin container with its own editor
-    // surface. Keep future remounts and all user-mutation listeners attached to
-    // that connected surface rather than the detached Vue placeholder.
-    rootRef.value = mountedElement
     disposeUserMutationBoundary = installUserMutationBoundary(mountedElement)
     runtime = nextRuntime
     if (activeMuya) globalThis.__ELEPHANT_ACTIVE_MUYA__ = activeMuya
@@ -425,6 +432,10 @@ onBeforeUnmount(() => {
   min-height: 100%;
   outline: none;
   white-space: pre-wrap;
+}
+
+.muya-rust-runtime-mount {
+  min-height: 100%;
 }
 
 .muya-rust-runtime-error {

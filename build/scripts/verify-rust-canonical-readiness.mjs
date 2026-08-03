@@ -1,9 +1,52 @@
 #!/usr/bin/env node
 
+import { createRealMuyaRustMirror } from '../../Elephant/frontend/src/renderer/src/muya/realMuyaRustMirrorRuntime.js'
 import { createRustCanonicalReadiness } from '../../Elephant/frontend/src/renderer/src/muya/rustCanonicalReadiness.js'
 
 const assert = (condition, message) => {
   if (!condition) throw new Error(message)
+}
+
+const verifyNativeCreateStartsSynchronously = async() => {
+  const calls = []
+  let releaseCreate
+  const createResult = new Promise((resolve) => { releaseCreate = resolve })
+  const invoke = async(command) => {
+    calls.push(command)
+    if (command === 'tauri_muya_session_create') return createResult
+    if (command === 'tauri_muya_session_query') {
+      return { type: 'muya-json-state', blocks: [{ type: 'paragraph', text: 'seed' }] }
+    }
+    if (command === 'tauri_muya_session_close') return true
+    throw new Error(`Unexpected native command during readiness verification: ${command}`)
+  }
+
+  const target = {}
+  const mirror = createRealMuyaRustMirror({
+    initialMarkdown: 'seed',
+    invoke,
+    target,
+    logger: { info: () => {}, error: () => {} }
+  })
+
+  assert(
+    calls[0] === 'tauri_muya_session_create',
+    `native session creation was deferred past mirror construction: ${JSON.stringify(calls)}`
+  )
+
+  releaseCreate({
+    markdown: 'seed',
+    selection: { anchor: 4, focus: 4 },
+    revision: 0,
+    undoDepth: 0,
+    redoDepth: 0
+  })
+  await mirror.ready
+  assert(
+    calls[1] === 'tauri_muya_session_query',
+    `native document refresh did not follow session creation: ${JSON.stringify(calls)}`
+  )
+  mirror.destroy()
 }
 
 const verifyBootstrapIsInert = async() => {
@@ -82,10 +125,11 @@ const verifyClipboardCannotBlockMount = async() => {
   assert(reported.length === 1 && reported[0] === 'clipboard unavailable', 'clipboard error was not isolated and reported')
 }
 
+await verifyNativeCreateStartsSynchronously()
 await verifyBootstrapIsInert()
 await verifyBarrierOrdering()
 await verifySingleWebKitRetry()
 await verifyPersistentFailureRemainsVisible()
 await verifyClipboardCannotBlockMount()
 
-console.log('[rust-canonical-readiness] bootstrap, session barrier, retry and clipboard isolation contracts pass')
+console.log('[rust-canonical-readiness] synchronous native create, bootstrap, session barrier, retry and clipboard isolation contracts pass')

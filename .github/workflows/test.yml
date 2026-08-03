@@ -42,6 +42,7 @@ jobs:
           test ! -e Elephant/node_modules
           test ! -e node_modules
           node build/scripts/verify-test-trust-mandatory-scenarios.mjs 2>&1 | tee test-trust-mandatory-scenarios.txt
+          node build/scripts/verify-three-layer-proof-status.mjs 2>&1 | tee three-layer-proof-status-self-test.txt
 
       - name: Prove the trust guard rejects invalid fixtures
         shell: bash
@@ -62,6 +63,7 @@ jobs:
           name: test-trust-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             test-trust-mandatory-scenarios.txt
+            three-layer-proof-status-self-test.txt
             test-trust-negative-cases.txt
             test-trust.txt
             test-results/trust/**

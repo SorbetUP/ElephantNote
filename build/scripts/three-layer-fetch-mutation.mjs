@@ -54,7 +54,15 @@ const noteIsActuallyOpen = async(url, init, expectedPath) => {
   const state = await readCommandResult(url, authorization, 'readState')
   const activePath = state?.activeFile?.path || state?.activeFile || state?.notePath || null
   const markdown = String(state?.markdown || '')
-  return activePath === expectedPath && markdown.length > 0
+  const mirror = state?.rustMirror || state?.editorRuntime?.rustMirror || null
+  const runtime = state?.editorRuntime || null
+  return activePath === expectedPath &&
+    markdown.length > 0 &&
+    mirror?.active === true &&
+    mirror?.phase === 'ready' &&
+    !mirror?.error &&
+    runtime?.active === true &&
+    runtime?.contentEditableConnected === true
 }
 
 globalThis.fetch = async(input, init = {}) => {
@@ -98,16 +106,16 @@ globalThis.fetch = async(input, init = {}) => {
   // renderer still hydrates its project tree asynchronously. The mutation
   // verifier launches the exact application repeatedly, which makes the fixture
   // setup openNote command more likely to hit that hydration window. Retry only
-  // the same fixture activation. If the command reports a timeout after the
-  // renderer has demonstrably opened the requested production note, preserve
-  // that observed setup state and let the unchanged scenario assertions prove
-  // the visible editor, canonical Rust state, mutation marker and disk result.
+  // the same fixture activation. A late setup response is accepted exclusively
+  // after the requested note, live contenteditable, and canonical Rust editor
+  // are all demonstrably ready. This prevents a partially opened note from
+  // failing before the deliberate mutation is exercised.
   if (mutation && isCommand && payload?.command === 'openNote' && !(await commandSucceeded(response))) {
     const expectedPath = payload?.args?.[0]
     const deadline = Date.now() + 60_000
     while (Date.now() < deadline) {
       if (await noteIsActuallyOpen(url, init, expectedPath)) {
-        process.stderr.write(`[three-layer-sensitivity] openNote reported late after real renderer state opened ${expectedPath}\n`)
+        process.stderr.write(`[three-layer-sensitivity] openNote reported late after real editor became ready ${expectedPath}\n`)
         return mutationResponse('observed-open-note', { path: expectedPath, observed: true })
       }
       await sleep(500)

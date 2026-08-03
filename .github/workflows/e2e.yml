@@ -252,6 +252,19 @@ jobs:
           done < <(find test-results -type f -name '*native-package-evidence.json' -print 2>/dev/null || true)
           find official-addon-evidence -maxdepth 1 -type f -print -exec cat {} \; || true
 
+      - name: Write explicit structured three-layer proof status
+        if: always()
+        shell: bash
+        env:
+          ELEPHANT_PROOF_EVIDENCE_ROOT: .
+          ELEPHANT_PROOF_STATUS_PATH: test-results/trusted/summary/latest.json
+          ELEPHANT_UPSTREAM_CONCLUSION: ${{ job.status }}
+          ELEPHANT_PROOF_HEAD_SHA: ${{ github.sha }}
+          ELEPHANT_PROOF_STATUS_FAIL_CLOSED: '1'
+        run: |
+          set -o pipefail
+          node build/scripts/write-three-layer-proof-status.mjs 2>&1 | tee three-layer-proof-status.txt
+
       - name: Upload compact Linux proof diagnostics
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
@@ -261,6 +274,7 @@ jobs:
             test-trust.txt
             proof-layer-wiring.txt
             three-layer-sensitivity.txt
+            three-layer-proof-status.txt
             backend-contract.txt
             markdown-trust-sensitivity.txt
             frontend-behavior.txt
@@ -304,6 +318,16 @@ jobs:
           const fs = require('fs')
           const path = require('path')
           const root = 'diagnostics'
+          const summaryFile = path.join(root, 'test-results/trusted/summary/latest.json')
+          if (fs.existsSync(summaryFile)) {
+            const summary = JSON.parse(fs.readFileSync(summaryFile, 'utf8'))
+            console.log(`[concise-proof] overall: ${summary.status}; upstream=${summary.upstreamConclusion}; sha=${summary.headSha || 'unknown'}`)
+            for (const category of summary.categories || []) {
+              console.log(`[concise-proof] ${category.id}: availability=${category.availability}; status=${category.status}; reason=${category.reason || 'none'}; failed=${JSON.stringify(category.failedScenarioIds || [])}`)
+            }
+          } else {
+            console.log('[concise-proof] structured summary: MISSING')
+          }
           const candidates = [
             ['backend-contract', 'test-results/trusted/backend-contract/latest.json'],
             ['frontend-behavior', 'test-results/trusted/frontend-behavior/latest.json'],

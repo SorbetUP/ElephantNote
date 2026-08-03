@@ -10,6 +10,7 @@ const API_PATCH_FLAG = '__elephantPackagedEditorReadinessPatched'
 const MUYA_PATCH_FLAG = '__elephantRustSelectionReadinessPatched'
 const TAURI_INVOKE_PATCH_FLAG = '__elephantNativeInvokePatched'
 const OPEN_RECOVERY_TIMEOUT_MS = 20_000
+const SET_MARKDOWN_READINESS_TIMEOUT_MS = 20_000
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 
 const listenerMaps = new WeakMap()
@@ -107,6 +108,7 @@ const installRustSelectionReadinessGuard = () => {
 const diagnosticState = (state, expectedPath) => ({
   expectedPath,
   activePath: state?.activeFile?.path || state?.notePath || null,
+  markdownLength: String(state?.markdown || '').length,
   editorRuntime: state?.editorRuntime || null,
   rustMirror: state?.rustMirror || null
 })
@@ -133,6 +135,28 @@ const waitForRecoveredOpen = async(api, expectedPath, originalError) => {
   })}`)
 }
 
+const waitForCanonicalMarkdownReplacement = async(api, expectedMarkdown) => {
+  const deadline = Date.now() + SET_MARKDOWN_READINESS_TIMEOUT_MS
+  const expected = String(expectedMarkdown || '')
+  let last = null
+
+  while (Date.now() <= deadline) {
+    last = await api.readState()
+    const activePath = last?.activeFile?.path || last?.notePath || ''
+    if (
+      String(last?.markdown || '') === expected &&
+      canonicalRustEditorIsReady(last, activePath)
+    ) return last
+    if (last?.rustMirror?.phase === 'error') break
+    await wait(25)
+  }
+
+  throw new Error(`Packaged setMarkdown did not reach the exact canonical Rust-ready document: ${JSON.stringify({
+    expectedMarkdownLength: expected.length,
+    ...diagnosticState(last, last?.activeFile?.path || last?.notePath || '')
+  })}`)
+}
+
 const patchAutomationApi = (api) => {
   if (
     !api ||
@@ -155,6 +179,15 @@ const patchAutomationApi = (api) => {
         error: error?.message || String(error)
       })
       return waitForRecoveredOpen(api, String(expectedPath || ''), error)
+    }
+  }
+
+  if (typeof api.setMarkdown === 'function') {
+    const originalSetMarkdown = api.setMarkdown.bind(api)
+    api.setMarkdown = async(markdown, ...args) => {
+      const result = await originalSetMarkdown(markdown, ...args)
+      await waitForCanonicalMarkdownReplacement(api, markdown)
+      return result
     }
   }
 
@@ -192,5 +225,6 @@ export {
   installAutomationApiGuard,
   installNativeTauriInvokeBridge,
   installRustSelectionReadinessGuard,
-  patchAutomationApi
+  patchAutomationApi,
+  waitForCanonicalMarkdownReplacement
 }

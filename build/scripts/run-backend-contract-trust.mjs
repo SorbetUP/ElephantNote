@@ -91,30 +91,38 @@ try {
       title: 'Lifecycle'
     })
     const createdPath = 'Backend contracts/Lifecycle.md'
-    await waitForStableNoteContent(createdPath, '# Lifecycle\n', 'Production note creation stabilization')
+    const createdContent = '# Lifecycle\n'
+    await waitForStableNoteContent(createdPath, createdContent, 'Production note creation stabilization')
 
-    const expected = '# Backend roundtrip\n\nWritten through the production Tauri backend.\n'
-    const written = await harness.backend('invokeTauri', 'tauri_notes_write', {
-      relativePath: createdPath,
-      content: expected,
-      markdown: expected
-    })
-    if (written?.path !== createdPath) {
-      throw new Error(`Production note write returned the wrong path: ${JSON.stringify(written)}`)
-    }
-    await waitForStableNoteContent(createdPath, expected, 'Production note write/read round-trip')
     await harness.backend('invokeTauri', 'tauri_entries_rename', {
       relativePath: createdPath,
-      title: 'Renamed backend roundtrip'
+      title: 'Renamed backend lifecycle'
     })
-    const renamedPath = 'Backend contracts/Renamed backend roundtrip.md'
-    await waitForNoteContent(renamedPath, expected, 'Renamed note content preservation')
+    const renamedPath = 'Backend contracts/Renamed backend lifecycle.md'
+    await waitForNoteContent(renamedPath, createdContent, 'Renamed note content preservation')
     await harness.backend('invokeTauri', 'tauri_entries_move', {
       relativePath: renamedPath,
       targetDirectoryPath: 'Backend archive'
     })
-    const movedPath = 'Backend archive/Renamed backend roundtrip.md'
-    await waitForNoteContent(movedPath, expected, 'Renamed/moved note content preservation')
+    const movedPath = 'Backend archive/Renamed backend lifecycle.md'
+    await waitForNoteContent(movedPath, createdContent, 'Renamed/moved note content preservation')
+
+    const writePath = 'Backend fixture.md'
+    const expected = '# Backend roundtrip\n\nWritten through the production Tauri backend.\n'
+    const written = await harness.backend('invokeTauri', 'tauri_notes_write', {
+      relativePath: writePath,
+      content: expected,
+      markdown: expected
+    })
+    if (written?.path !== writePath) {
+      throw new Error(`Production note write returned the wrong path: ${JSON.stringify(written)}`)
+    }
+    await waitForStableNoteContent(writePath, expected, 'Production note write/read round-trip')
+    const disk = harness.readVaultFile(writePath)
+    if (disk !== expected) {
+      throw new Error(`Production note write did not persist exact disk content: ${JSON.stringify({ expected, disk })}`)
+    }
+
     await harness.backend('invokeTauri', 'tauri_entries_delete', { relativePath: movedPath })
     const folderEntries = await harness.backend('invokeTauri', 'tauri_directory_list', {
       relativePath: 'Backend archive',
@@ -129,7 +137,7 @@ try {
       folder: folder?.path || null,
       destinationFolder: destinationFolder?.path || null,
       created: created?.path || null,
-      backendWrittenPath: createdPath,
+      backendWrittenPath: writePath,
       backendMovedPath: movedPath,
       bytes: expected.length
     }

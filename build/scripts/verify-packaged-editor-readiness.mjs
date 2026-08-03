@@ -11,7 +11,7 @@ import {
 } from '../../Elephant/frontend/src/renderer/src/platform/packagedEditorReadinessContracts.mjs'
 
 const root = resolve(import.meta.dirname, '../..')
-const read = (path) => readFileSync(resolve(root, path), 'utf8')
+const read = (path) => readFileSync(resolve(root, path), 'utf8').replace(/\r\n?/g, '\n')
 
 assert.equal(normalizePackagedNotePath('C:\\vault\\Getting Started\\Welcome.md'), 'C:/vault/Getting Started/Welcome.md')
 assert.equal(packagedNotePathMatches('/tmp/vault/Getting Started/Welcome.md', 'Getting Started/Welcome.md'), true)
@@ -82,7 +82,7 @@ assert.ok(
 )
 assert.match(rustMirrorSource, /const initialize = async\(\) =>/)
 assert.match(rustMirrorSource, /const state = await client\.create\(markdown\)/)
-assert.match(rustMirrorSource, /initializationPromise = Promise\.resolve\(\)/)
+assert.match(rustMirrorSource, /initializationPromise\s*=\s*Promise\s*\.\s*resolve\s*\(\s*\)/)
 assert.match(rustMirrorSource, /await initializationPromise\n {4}if \(draining\)/)
 assert.match(rustMirrorSource, /await initializationPromise\n {8}await flush\(\)/)
 assert.doesNotMatch(rustMirrorSource, /const ready = reset\(initialMarkdown, 'initial'\)/)
@@ -92,8 +92,9 @@ assert.match(rustMirrorSource, /if \(!client\.state\) \{/)
 assert.match(rustMirrorSource, /has no canonical state before \$\{reason\}/)
 assert.match(rustMirrorSource, /\[elephantnote:muya-rust\] command failed/)
 assert.match(rustMirrorSource, /sessionId: client\.sessionId/)
+const initializationBarrierIndex = rustMirrorSource.search(/initializationPromise\s*=\s*Promise\s*\.\s*resolve\s*\(\s*\)/)
 assert.ok(
-  rustMirrorSource.indexOf('initializationPromise = Promise.resolve()') < rustMirrorSource.indexOf('const ready = initializationPromise'),
+  initializationBarrierIndex >= 0 && initializationBarrierIndex < rustMirrorSource.indexOf('const ready = initializationPromise'),
   'the mirror readiness promise must be the explicit native session creation barrier'
 )
 

@@ -68,6 +68,8 @@ assert.equal(canonicalRustEditorIsReady({ ...ready, rustMirror: { ...ready.rustM
 
 const rustEngineSource = read('Elephant/frontend/src/renderer/src/muya/rustEngineRuntime.js')
 const rustMirrorSource = read('Elephant/frontend/src/renderer/src/muya/realMuyaRustMirrorRuntime.js')
+const rustRuntimeEditorSource = read('Elephant/frontend/src/renderer/src/muya/RustMuyaRuntimeEditor.vue')
+const muyaSource = read('Elephant/muya/lib/index.js')
 const guardSource = read('Elephant/frontend/src/renderer/src/platform/packagedEditorReadinessGuards.js')
 const rendererHtml = read('Elephant/frontend/src/renderer/index.html')
 assert.match(rustEngineSource, /import \{ invoke as nativeTauriInvoke \} from '@tauri-apps\/api\/core'/)
@@ -93,6 +95,21 @@ assert.ok(
   rustMirrorSource.indexOf('initializationPromise = Promise.resolve()') < rustMirrorSource.indexOf('const ready = initializationPromise'),
   'the mirror readiness promise must be the explicit native session creation barrier'
 )
+
+// Muya intentionally replaces the Vue placeholder with its own connected
+// container. The runtime must validate, retain and instrument that live node;
+// checking the detached origin container destroys an otherwise ready session.
+assert.match(muyaSource, /originContainer\.replaceWith\(container\)/)
+assert.match(rustRuntimeEditorSource, /const mountedElement = nextRuntime\?\.domContainer \|\| hostElement/)
+assert.match(rustRuntimeEditorSource, /generation !== mountGeneration \|\| !mountedElement\?\.isConnected/)
+assert.match(rustRuntimeEditorSource, /rootRef\.value = mountedElement/)
+assert.match(rustRuntimeEditorSource, /installUserMutationBoundary\(mountedElement\)/)
+assert.doesNotMatch(
+  rustRuntimeEditorSource,
+  /generation !== mountGeneration \|\| !rootRef\.value\?\.isConnected/,
+  'the replaced Vue placeholder must never be used as the post-mount connectivity oracle'
+)
+
 assert.match(guardSource, /eventName !== 'selectionChange'/)
 assert.match(guardSource, /mirror\?\.status\?\.phase !== 'ready'/)
 assert.match(guardSource, /packagedNotePathMatches/)
@@ -100,4 +117,4 @@ assert.match(guardSource, /canonicalRustEditorIsReady/)
 assert.match(rendererHtml, /packagedEditorReadinessGuards\.js/)
 assert.doesNotMatch(rendererHtml, /nativeTauriInvokeBootstrap\.js/)
 
-console.log('[packaged-editor-readiness] canonical state oracle, native session barrier, invoke selection and path guards passed')
+console.log('[packaged-editor-readiness] canonical state oracle, native session barrier, Muya replacement-container lifecycle, invoke selection and path guards passed')

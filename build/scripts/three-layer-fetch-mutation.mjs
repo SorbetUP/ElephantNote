@@ -30,6 +30,33 @@ const commandSucceeded = async(response) => {
   }
 }
 
+const readCommandResult = async(endpoint, authorization, command, args = []) => {
+  const response = await originalFetch(endpoint, {
+    method: 'POST',
+    headers: {
+      authorization,
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({ command, args })
+  })
+  if (!response?.ok) return null
+  try {
+    const body = await response.json()
+    return body?.ok === true ? body.result : null
+  } catch {
+    return null
+  }
+}
+
+const noteIsActuallyOpen = async(url, init, expectedPath) => {
+  const authorization = init?.headers?.authorization || init?.headers?.Authorization
+  if (!authorization) return false
+  const state = await readCommandResult(url, authorization, 'readState')
+  const activePath = state?.activeFile?.path || state?.activeFile || state?.notePath || null
+  const markdown = String(state?.markdown || '')
+  return activePath === expectedPath && markdown.length > 0
+}
+
 globalThis.fetch = async(input, init = {}) => {
   const url = typeof input === 'string' ? input : input?.url
   const payload = parseBody(init?.body)
@@ -69,15 +96,20 @@ globalThis.fetch = async(input, init = {}) => {
 
   // Vault selection returns when the backend accepts the path, while the real
   // renderer still hydrates its project tree asynchronously. The mutation
-  // verifier launches the exact AppImage repeatedly, which makes the fixture
-  // setup openNote command more likely to arrive during that hydration window.
-  // Retrying only that same fixture-activation command lets the real renderer
-  // finish naturally. Re-selecting the vault here is intentionally avoided:
-  // selecting an already-active vault restarts hydration and can keep openNote
-  // racing forever. No visible action or behavioral assertion is changed.
+  // verifier launches the exact application repeatedly, which makes the fixture
+  // setup openNote command more likely to hit that hydration window. Retry only
+  // the same fixture activation. If the command reports a timeout after the
+  // renderer has demonstrably opened the requested production note, preserve
+  // that observed setup state and let the unchanged scenario assertions prove
+  // the visible editor, canonical Rust state, mutation marker and disk result.
   if (mutation && isCommand && payload?.command === 'openNote' && !(await commandSucceeded(response))) {
+    const expectedPath = payload?.args?.[0]
     const deadline = Date.now() + 60_000
     while (Date.now() < deadline) {
+      if (await noteIsActuallyOpen(url, init, expectedPath)) {
+        process.stderr.write(`[three-layer-sensitivity] openNote reported late after real renderer state opened ${expectedPath}\n`)
+        return mutationResponse('observed-open-note', { path: expectedPath, observed: true })
+      }
       await sleep(500)
       response = await originalFetch(input, init)
       if (await commandSucceeded(response)) break

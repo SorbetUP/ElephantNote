@@ -257,7 +257,7 @@ const mountRuntime = async (markdown) => {
   }
   hostElement.replaceChildren()
   disposeUserMutationBoundary()
-  disposeUserMutationBoundary = installUserMutationBoundary(hostElement)
+  disposeUserMutationBoundary = () => {}
 
   try {
     let nextRuntime
@@ -317,10 +317,16 @@ const mountRuntime = async (markdown) => {
       })
       muya.on('crashed', () => reportError(new Error('Muya JS/Rust editor crashed.')))
     }
-    if (generation !== mountGeneration || rootRef.value !== hostElement || !hostElement.isConnected) {
+    const mountedElement = nextRuntime?.domContainer || hostElement
+    if (generation !== mountGeneration || !mountedElement?.isConnected) {
       nextRuntime?.destroy?.()
       return
     }
+    // Muya intentionally replaces the origin container with its own editor
+    // surface. Keep future remounts and all user-mutation listeners attached to
+    // that connected surface rather than the detached Vue placeholder.
+    rootRef.value = mountedElement
+    disposeUserMutationBoundary = installUserMutationBoundary(mountedElement)
     runtime = nextRuntime
     if (activeMuya) globalThis.__ELEPHANT_ACTIVE_MUYA__ = activeMuya
     console.info('[elephantnote:rust-editor] mount:ready', {

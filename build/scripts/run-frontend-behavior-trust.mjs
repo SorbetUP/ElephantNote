@@ -77,15 +77,25 @@ const waitForRustEditorReady = async(timeoutMs = 10_000) => {
   })}`)
 }
 
-const waitForSelectedVault = async(timeoutMs = 15_000) => {
+const waitForSelectedVault = async(logSince, timeoutMs = 15_000) => {
   const deadline = Date.now() + timeoutMs
-  let last = null
+  let last = []
   while (Date.now() <= deadline) {
-    last = await harness.setup('readState')
-    if (last?.project?.root === harness.vaultRoot || last?.project?.root?.path === harness.vaultRoot) return last
+    last = await harness.setup('logs', {
+      since: logSince,
+      contains: 'vault:select',
+      limit: 100
+    })
+    const selected = last.find((entry) => (
+      entry?.event === 'vault:select' && entry?.path === harness.vaultRoot
+    ))
+    if (selected) return selected
     await sleep(100)
   }
-  throw new Error(`Selected vault did not become active before opening the frontend note: ${JSON.stringify(last?.project ?? null)}`)
+  throw new Error(`Selected vault did not publish the expected activation event before opening the frontend note: ${JSON.stringify({
+    expectedPath: harness.vaultRoot,
+    observed: last
+  })}`)
 }
 
 const expectedKeyboardResult = /# Frontend acceptance\s*\n+\s*frontend line one\s*\n+\s*frontend line two\s*$/
@@ -98,8 +108,10 @@ try {
   if (!firstRun.exists || !firstRun.visible) {
     throw new Error(`Clean-start vault UI is not visible before setup: ${JSON.stringify(firstRun)}`)
   }
+  const logsBeforeVaultSelection = await harness.setup('logs', { limit: 1 })
+  const vaultSelectionLogSince = Number(logsBeforeVaultSelection.at(-1)?.index ?? -1) + 1
   await harness.setup('selectVault', harness.vaultRoot)
-  await waitForSelectedVault()
+  await waitForSelectedVault(vaultSelectionLogSince)
   await harness.setup('openNote', 'Frontend acceptance.md')
 
   await harness.runScenario('frontend-editor-keyboard-autosave', layer, async() => {

@@ -39,6 +39,14 @@ const runGuard = () => {
   return { status: 0, output }
 }
 
+const requireAccepted = (name) => {
+  const result = runGuard()
+  if (result.status !== 0) {
+    throw new Error(`${name}: valid trust architecture was rejected\n${result.output}`)
+  }
+  console.log(`[test-trust-negative] ${name}: accepted as required`)
+}
+
 const requireRejected = (name, expectedMessage) => {
   const result = runGuard()
   if (result.status === 0) {
@@ -55,8 +63,13 @@ const resetWorktree = () => {
   git(['clean', '-fd'], { cwd: worktree })
 }
 
+const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'))
+const writeJson = (path, value) => writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
+
 try {
   git(['worktree', 'add', '--detach', worktree, 'HEAD'])
+
+  requireAccepted('unmodified baseline')
 
   const invalidTestPath = join(worktree, 'tests', 'trust', 'fixtures', 'invalid.test.js')
   mkdirSync(resolve(invalidTestPath, '..'), { recursive: true })
@@ -67,12 +80,40 @@ try {
   resetWorktree()
 
   const manifestPath = join(worktree, 'tests', 'trust', 'required-scenarios.json')
-  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
-  manifest.markdownEditor = manifest.markdownEditor.filter((scenario) => scenario.id !== 'plain-return')
-  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
-  requireRejected('mutation manifest missing plain-return', 'missing mandatory scenario(s): plain-return')
+  const missingScenarioManifest = readJson(manifestPath)
+  missingScenarioManifest.markdownEditor = missingScenarioManifest.markdownEditor.filter(
+    (scenario) => scenario.id !== 'plain-return'
+  )
+  writeJson(manifestPath, missingScenarioManifest)
+  requireRejected('manifest missing plain-return', 'missing mandatory scenario(s): plain-return')
 
-  console.log('[test-trust-negative] OK: both mandatory negative fixtures turn the trust gate red')
+  resetWorktree()
+
+  const renamedScenarioManifest = readJson(manifestPath)
+  const plainReturn = renamedScenarioManifest.markdownEditor.find((scenario) => scenario.id === 'plain-return')
+  if (!plainReturn) throw new Error('rename fixture could not locate plain-return')
+  plainReturn.id = 'plain-return-renamed'
+  writeJson(manifestPath, renamedScenarioManifest)
+  requireRejected('manifest renamed plain-return', 'missing mandatory scenario(s): plain-return')
+
+  resetWorktree()
+
+  const backendRunnerPath = join(worktree, 'build', 'scripts', 'run-backend-contract-trust.mjs')
+  const backendRunner = readFileSync(backendRunnerPath, 'utf8')
+  if (!backendRunner.includes("status: 'PROVEN'")) {
+    throw new Error('evidence fixture could not locate the explicit PROVEN write')
+  }
+  writeFileSync(
+    backendRunnerPath,
+    backendRunner.replace("status: 'PROVEN'", "status: 'PASS'"),
+    'utf8'
+  )
+  requireRejected(
+    'backend runner missing explicit PROVEN evidence',
+    'build/scripts/run-backend-contract-trust.mjs: must emit explicit PROVEN and NOT PROVEN evidence'
+  )
+
+  console.log('[test-trust-negative] OK: valid architecture stays green and every mandatory invalid mutation turns the trust gate red for the expected reason')
 } finally {
   try {
     git(['worktree', 'remove', '--force', worktree])

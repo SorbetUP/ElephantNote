@@ -367,8 +367,29 @@ export default class StableCompleteMuyaWithRustCore extends CompleteMuyaWithRust
   }
 
   destroy () {
+    const container = this.container
+    const parent = container?.parentNode || null
+    const nextSibling = container?.nextSibling || null
+    const preserveRuntimeHost = Boolean(
+      container &&
+      parent?.classList?.contains('muya-rust-runtime-shell')
+    )
+
     this.__rustEnterEventTarget?.removeEventListener('keydown', this.__rustEnterKeydownListener, true)
     this.__lastRustEnterMutation = null
-    return super.destroy()
+    const result = super.destroy()
+
+    // RustMuyaRuntimeEditor remounts when an external document replacement is
+    // requested. It captures the current Muya container as the next origin host
+    // before calling destroy(). Muya normally removes that container, which left
+    // the replacement session on a detached subtree and caused it to be destroyed
+    // before Enter/clipboard commands could run. Preserve only the empty host in
+    // the dedicated runtime shell; a real Vue unmount removes the shell itself.
+    if (preserveRuntimeHost && !container.isConnected && parent) {
+      container.replaceChildren()
+      parent.insertBefore(container, nextSibling)
+    }
+
+    return result
   }
 }

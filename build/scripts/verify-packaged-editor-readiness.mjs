@@ -69,6 +69,7 @@ assert.equal(canonicalRustEditorIsReady({ ...ready, rustMirror: { ...ready.rustM
 const rustEngineSource = read('Elephant/frontend/src/renderer/src/muya/rustEngineRuntime.js')
 const rustMirrorSource = read('Elephant/frontend/src/renderer/src/muya/realMuyaRustMirrorRuntime.js')
 const rustRuntimeEditorSource = read('Elephant/frontend/src/renderer/src/muya/RustMuyaRuntimeEditor.vue')
+const rustWrapperSource = read('Elephant/frontend/src/renderer/src/muya/completeMuyaRustAdapter.js.wrapper.js')
 const muyaSource = read('Elephant/frontend/src/muya/lib/index.js')
 const guardSource = read('Elephant/frontend/src/renderer/src/platform/packagedEditorReadinessGuards.js')
 const rendererHtml = read('Elephant/frontend/src/renderer/index.html')
@@ -110,6 +111,18 @@ assert.doesNotMatch(
   'the replaced Vue placeholder must never be used as the post-mount connectivity oracle'
 )
 
+// External document replacement destroys the previous Muya instance before
+// constructing the next one. Preserve its connected container only inside the
+// dedicated runtime shell so the next constructor receives a live origin node.
+assert.match(rustWrapperSource, /parent\?\.classList\?\.contains\('muya-rust-runtime-shell'\)/)
+assert.match(rustWrapperSource, /const result = super\.destroy\(\)/)
+assert.match(rustWrapperSource, /if \(preserveRuntimeHost && !container\.isConnected && parent\)/)
+assert.match(rustWrapperSource, /parent\.insertBefore\(container, nextSibling\)/)
+assert.ok(
+  rustWrapperSource.indexOf('const result = super.destroy()') < rustWrapperSource.indexOf('parent.insertBefore(container, nextSibling)'),
+  'the destroyed Muya surface must be restored as a host before the next remount'
+)
+
 assert.match(guardSource, /eventName !== 'selectionChange'/)
 assert.match(guardSource, /mirror\?\.status\?\.phase !== 'ready'/)
 assert.match(guardSource, /packagedNotePathMatches/)
@@ -117,4 +130,4 @@ assert.match(guardSource, /canonicalRustEditorIsReady/)
 assert.match(rendererHtml, /packagedEditorReadinessGuards\.js/)
 assert.doesNotMatch(rendererHtml, /nativeTauriInvokeBootstrap\.js/)
 
-console.log('[packaged-editor-readiness] canonical state oracle, native session barrier, Muya replacement-container lifecycle, invoke selection and path guards passed')
+console.log('[packaged-editor-readiness] canonical state oracle, native session barrier, Muya replacement/remount lifecycle, invoke selection and path guards passed')

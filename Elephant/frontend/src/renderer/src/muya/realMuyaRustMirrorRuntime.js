@@ -90,6 +90,7 @@ export const createRealMuyaRustMirror = ({
   const client = createRustMuyaEngineClient({ invoke, target, sessionId: createSessionId() })
   let destroyed = false
   let initialized = false
+  let initializationPromise = null
   let pending = null
   let draining = null
   let commandQueue = Promise.resolve()
@@ -146,6 +147,8 @@ export const createRealMuyaRustMirror = ({
 
   const drain = async() => {
     if (destroyed || !pending) return
+    await initializationPromise
+    if (destroyed || !pending) return
     const item = pending
     pending = null
     const sameSelection = lastSelection &&
@@ -193,6 +196,7 @@ export const createRealMuyaRustMirror = ({
   const sync = (markdown, reason = 'change', options = {}) => enqueue('sync', markdown, reason, options)
   const reset = (markdown, reason = 'set-markdown', options = {}) => enqueue('reset', markdown, reason, options)
   const flush = async() => {
+    await initializationPromise
     if (draining) await draining
     else if (pending) await ensureDrain()
     if (draining || pending) return flush()
@@ -203,6 +207,7 @@ export const createRealMuyaRustMirror = ({
     commandQueue = commandQueue
       .catch(() => null)
       .then(async() => {
+        await initializationPromise
         await flush()
         if (status.phase === 'error') throw new Error(status.error)
         if (destroyed || !initialized) throw new Error('Rust Muya session is not initialized.')
@@ -223,7 +228,23 @@ export const createRealMuyaRustMirror = ({
     false
   )
 
-  const ready = reset(initialMarkdown, 'initial')
+  const initialSource = asMarkdown(initialMarkdown)
+  const initialSelection = muyaIndexCursorToSelection(initialSource)
+  // Start native session creation synchronously, before the mirror is returned.
+  // Muya constructors can emit lifecycle callbacks immediately; deferring the
+  // initial reset through ensureDrain() allowed those callbacks to query a
+  // session whose create command had not yet been dispatched to Tauri.
+  initializationPromise = validate({
+    kind: 'reset',
+    markdown: initialSource,
+    selection: initialSelection,
+    reason: 'initial',
+    continueGroup: false
+  }).catch((error) => {
+    fail(error)
+    throw error
+  })
+  const ready = initializationPromise
   target.__ELEPHANT_ACTIVE_EDITOR_ENGINE__ = 'muya-ui-rust-core'
   logger.info?.('[elephantnote:editor] real Muya UI with Rust-owned core active', {
     engine: 'rust',
@@ -300,7 +321,10 @@ export const createRealMuyaRustMirror = ({
     destroy: () => {
       destroyed = true
       pending = null
-      client.close().catch(fail)
+      Promise.resolve(initializationPromise)
+        .catch(() => null)
+        .then(() => client.close())
+        .catch(fail)
       if (target.__ELEPHANT_ACTIVE_EDITOR_ENGINE__ === 'muya-ui-rust-core') {
         delete target.__ELEPHANT_ACTIVE_EDITOR_ENGINE__
       }

@@ -69,7 +69,7 @@ assert.equal(canonicalRustEditorIsReady({ ...ready, rustMirror: { ...ready.rustM
 const rustEngineSource = read('Elephant/frontend/src/renderer/src/muya/rustEngineRuntime.js')
 const rustMirrorSource = read('Elephant/frontend/src/renderer/src/muya/realMuyaRustMirrorRuntime.js')
 const rustRuntimeEditorSource = read('Elephant/frontend/src/renderer/src/muya/RustMuyaRuntimeEditor.vue')
-const muyaSource = read('Elephant/muya/lib/index.js')
+const muyaSource = read('Elephant/frontend/src/muya/lib/index.js')
 const guardSource = read('Elephant/frontend/src/renderer/src/platform/packagedEditorReadinessGuards.js')
 const rendererHtml = read('Elephant/frontend/src/renderer/index.html')
 assert.match(rustEngineSource, /import \{ invoke as nativeTauriInvoke \} from '@tauri-apps\/api\/core'/)

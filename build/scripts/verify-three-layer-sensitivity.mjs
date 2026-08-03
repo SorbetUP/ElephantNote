@@ -1,14 +1,22 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync
+} from 'node:fs'
+import { basename, dirname, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const root = resolve(import.meta.dirname, '../..')
 const mutationModule = pathToFileURL(resolve(root, 'build/scripts/three-layer-fetch-mutation.mjs')).href
 const existingNodeOptions = String(process.env.NODE_OPTIONS || '').trim()
 const nodeOptions = [existingNodeOptions, `--import=${mutationModule}`].filter(Boolean).join(' ')
+const sensitivityArtifactRoot = resolve(root, 'test-results/trusted/sensitivity')
+mkdirSync(sensitivityArtifactRoot, { recursive: true })
 
 const cases = [
   {
@@ -44,6 +52,16 @@ const cases = [
 const mutationTimeoutMs = 30 * 60_000
 const maximumAttempts = 3
 
+const archiveMutationEvidence = (specification, artifactPath, attempt) => {
+  if (!existsSync(artifactPath)) return
+  const stem = `${specification.layer}--${specification.mutation}--attempt-${attempt}`
+  copyFileSync(artifactPath, resolve(sensitivityArtifactRoot, `${stem}.json`))
+  const tauriLogPath = resolve(dirname(artifactPath), 'latest-tauri.log')
+  if (existsSync(tauriLogPath)) {
+    copyFileSync(tauriLogPath, resolve(sensitivityArtifactRoot, `${stem}-tauri.log`))
+  }
+}
+
 for (const specification of cases) {
   let result = null
   let payload = null
@@ -51,6 +69,13 @@ for (const specification of cases) {
   let markerObserved = false
   let artifactExists = false
   let startedAt = 0
+  const artifactPath = resolve(root, specification.artifact)
+
+  // A mutation proof must never inherit evidence from an earlier attempt or
+  // from a previous layer. Normal production layers must likewise start after
+  // the mutation artifact has been archived and removed.
+  rmSync(artifactPath, { force: true })
+  rmSync(resolve(dirname(artifactPath), 'latest-tauri.log'), { force: true })
 
   for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
     console.log(`[three-layer-sensitivity] expecting ${specification.layer} to fail for ${specification.mutation} (attempt ${attempt}/${maximumAttempts})`)
@@ -74,7 +99,6 @@ for (const specification of cases) {
     if (stdout) process.stdout.write(stdout)
     if (stderr) process.stderr.write(stderr)
 
-    const artifactPath = resolve(root, specification.artifact)
     artifactExists = existsSync(artifactPath)
     payload = artifactExists
       ? JSON.parse(readFileSync(artifactPath, 'utf8'))
@@ -103,8 +127,12 @@ for (const specification of cases) {
     }
     console.log(`[three-layer-sensitivity] observation ${JSON.stringify(observation)}`)
 
+    archiveMutationEvidence(specification, artifactPath, attempt)
+    rmSync(artifactPath, { force: true })
+    rmSync(resolve(dirname(artifactPath), 'latest-tauri.log'), { force: true })
+
     if (markerObserved || result.error || attempt === maximumAttempts) break
-    console.warn(`[three-layer-sensitivity] mutation marker not reached; retrying the complete real runner without relaxing any assertion`)
+    console.warn('[three-layer-sensitivity] mutation marker not reached; retrying the complete real runner without relaxing any assertion')
   }
 
   if (result.error) {
@@ -125,7 +153,7 @@ for (const specification of cases) {
   if (!markerObserved) {
     throw new Error(`${specification.mutation} was not observed in runner output`)
   }
-  console.log(`[three-layer-sensitivity] PASS: ${specification.layer} became red under ${specification.mutation} in ${Date.now() - startedAt}ms`)
+  console.log(`[three-layer-sensitivity] PASS: ${specification.layer} became red under ${specification.mutation} in ${Date.now() - startedAt}ms; archived=${basename(specification.artifact)}`)
 }
 
-console.log('[three-layer-sensitivity] PASS: backend, frontend and packaged user proof all detect deliberate regressions')
+console.log('[three-layer-sensitivity] PASS: backend, frontend and packaged user proof all detect deliberate regressions; normal layer artifacts start clean')

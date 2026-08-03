@@ -35,6 +35,18 @@ jobs:
           corepack prepare pnpm@10.33.4 --activate
           pnpm --version
 
+      - name: Verify mandatory real-app scenarios
+        shell: bash
+        run: |
+          set -o pipefail
+          node build/scripts/verify-test-trust-mandatory-scenarios.mjs 2>&1 | tee test-trust-mandatory-scenarios.txt
+
+      - name: Prove the trust guard rejects invalid fixtures
+        shell: bash
+        run: |
+          set -o pipefail
+          node build/scripts/verify-test-trust-negative-cases.mjs 2>&1 | tee test-trust-negative-cases.txt
+
       - name: Verify test trust policy
         shell: bash
         run: |
@@ -47,6 +59,8 @@ jobs:
         with:
           name: test-trust-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
+            test-trust-mandatory-scenarios.txt
+            test-trust-negative-cases.txt
             test-trust.txt
             test-results/trust/**
           if-no-files-found: ignore

@@ -77,6 +77,17 @@ const waitForRustEditorReady = async(timeoutMs = 10_000) => {
   })}`)
 }
 
+const waitForSelectedVault = async(timeoutMs = 15_000) => {
+  const deadline = Date.now() + timeoutMs
+  let last = null
+  while (Date.now() <= deadline) {
+    last = await harness.setup('readState')
+    if (last?.project?.root === harness.vaultRoot || last?.project?.root?.path === harness.vaultRoot) return last
+    await sleep(100)
+  }
+  throw new Error(`Selected vault did not become active before opening the frontend note: ${JSON.stringify(last?.project ?? null)}`)
+}
+
 const expectedKeyboardResult = /# Frontend acceptance\s*\n+\s*frontend line one\s*\n+\s*frontend line two\s*$/
 
 let failure = null
@@ -88,6 +99,7 @@ try {
     throw new Error(`Clean-start vault UI is not visible before setup: ${JSON.stringify(firstRun)}`)
   }
   await harness.setup('selectVault', harness.vaultRoot)
+  await waitForSelectedVault()
   await harness.setup('openNote', 'Frontend acceptance.md')
 
   await harness.runScenario('frontend-editor-keyboard-autosave', layer, async() => {

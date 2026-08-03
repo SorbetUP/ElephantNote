@@ -123,6 +123,15 @@ assert.ok(
   'the destroyed Muya surface must be restored as a host before the next remount'
 )
 
+// The packaged automation boundary must not return from an external Markdown
+// replacement while the renderer still exposes the previous or initializing
+// Muya surface. Require exact parent Markdown and the canonical Rust oracle.
+assert.match(guardSource, /const waitForCanonicalMarkdownReplacement = async\(api, expectedMarkdown\)/)
+assert.match(guardSource, /String\(last\?\.markdown \|\| ''\) === expected/)
+assert.match(guardSource, /canonicalRustEditorIsReady\(last, activePath\)/)
+assert.match(guardSource, /api\.setMarkdown = async\(markdown, \.\.\.args\)/)
+assert.match(guardSource, /await waitForCanonicalMarkdownReplacement\(api, markdown\)/)
+
 assert.match(guardSource, /eventName !== 'selectionChange'/)
 assert.match(guardSource, /mirror\?\.status\?\.phase !== 'ready'/)
 assert.match(guardSource, /packagedNotePathMatches/)
@@ -130,4 +139,4 @@ assert.match(guardSource, /canonicalRustEditorIsReady/)
 assert.match(rendererHtml, /packagedEditorReadinessGuards\.js/)
 assert.doesNotMatch(rendererHtml, /nativeTauriInvokeBootstrap\.js/)
 
-console.log('[packaged-editor-readiness] canonical state oracle, native session barrier, Muya replacement/remount lifecycle, invoke selection and path guards passed')
+console.log('[packaged-editor-readiness] canonical state oracle, native session barrier, Muya replacement/remount lifecycle, setMarkdown readiness, invoke selection and path guards passed')

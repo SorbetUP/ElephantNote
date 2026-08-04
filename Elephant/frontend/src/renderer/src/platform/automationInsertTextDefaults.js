@@ -54,6 +54,35 @@ const textPointAt = (element, requestedOffset) => {
   return { node: element, offset: element.childNodes?.length || 0 }
 }
 
+const restoreSelection = (target, element, savedSelection) => {
+  if (!savedSelection) return false
+  const selection = browserSelectionFor(target, element)
+  if (!selection) throw new Error('Unable to restore the visible Rust selection: Selection API is unavailable')
+
+  const anchor = textPointAt(element, savedSelection.anchor)
+  const focus = textPointAt(element, savedSelection.focus)
+  try {
+    if (typeof selection.setBaseAndExtent === 'function') {
+      selection.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset)
+    } else {
+      const range = element.ownerDocument.createRange()
+      const start = savedSelection.anchor <= savedSelection.focus ? anchor : focus
+      const end = savedSelection.anchor <= savedSelection.focus ? focus : anchor
+      range.setStart(start.node, start.offset)
+      range.setEnd(end.node, end.offset)
+      selection.removeAllRanges()
+      selection.addRange(range)
+      if (savedSelection.anchor > savedSelection.focus && typeof selection.extend === 'function') {
+        selection.collapse(anchor.node, anchor.offset)
+        selection.extend(focus.node, focus.offset)
+      }
+    }
+  } catch (error) {
+    throw new Error(`Unable to restore the visible Rust selection: ${error?.name || 'Error'}: ${error?.message || String(error)}`)
+  }
+  return true
+}
+
 const terminalLineEndingEquivalent = (exported, canonical) => {
   const exportedMatch = String(exported).match(/^(.*?)(\n*)$/s)
   const canonicalMatch = String(canonical).match(/^(.*?)(\n*)$/s)
@@ -75,11 +104,6 @@ const publishedMirrorMatchesCanonical = (published, canonicalState) => {
 }
 
 const canonicalSurfaceIsSynchronized = (activeMuya, canonicalState, published) => {
-  // The Rust mirror publishes this invariant only after its real DOM renderer has
-  // consumed the canonical revision. Prefer that direct signal after Enter, where
-  // Muya's serializer may temporarily throw while an empty paragraph is visible.
-  // This does not bypass input: the command below still dispatches a cancellable
-  // beforeinput event to the live contenteditable and waits for a newer Rust revision.
   if (publishedMirrorMatchesCanonical(published, canonicalState)) return true
   if (!canonicalState || typeof activeMuya?.getMarkdown !== 'function') return false
   try {

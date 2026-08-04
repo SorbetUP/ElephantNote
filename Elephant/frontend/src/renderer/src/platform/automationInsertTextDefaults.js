@@ -54,35 +54,14 @@ const textPointAt = (element, requestedOffset) => {
   return { node: element, offset: element.childNodes?.length || 0 }
 }
 
-const restoreSelection = (target, element, saved) => {
-  if (!saved) return
-  const liveLength = String(element.textContent || '').length
-  const selectedInterimEnd = saved.anchor === saved.focus && saved.focus === saved.textLength
-  const anchorOffset = selectedInterimEnd ? liveLength : Math.min(saved.anchor, liveLength)
-  const focusOffset = selectedInterimEnd ? liveLength : Math.min(saved.focus, liveLength)
-  const anchor = textPointAt(element, anchorOffset)
-  const focus = textPointAt(element, focusOffset)
-  const selection = browserSelectionFor(target, element)
-  if (!selection) throw new Error('The live Rust editor has no Selection API')
-
-  if (typeof selection.setBaseAndExtent === 'function') {
-    selection.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset)
-    return
-  }
-
-  const range = element.ownerDocument.createRange()
-  const start = anchorOffset <= focusOffset ? anchor : focus
-  const end = anchorOffset <= focusOffset ? focus : anchor
-  range.setStart(start.node, start.offset)
-  range.setEnd(end.node, end.offset)
-  selection.removeAllRanges()
-  selection.addRange(range)
-}
-
 const terminalLineEndingEquivalent = (exported, canonical) => {
-  if (Math.abs(exported.length - canonical.length) !== 1) return false
-  if (!exported.endsWith('\n') && !canonical.endsWith('\n')) return false
-  return exported.replace(/\n$/, '') === canonical.replace(/\n$/, '')
+  const exportedMatch = String(exported).match(/^(.*?)(\n*)$/s)
+  const canonicalMatch = String(canonical).match(/^(.*?)(\n*)$/s)
+  if (!exportedMatch || !canonicalMatch) return false
+  const [, exportedBody, exportedTerminalLineEndings] = exportedMatch
+  const [, canonicalBody, canonicalTerminalLineEndings] = canonicalMatch
+  if (exportedBody !== canonicalBody) return false
+  return exportedTerminalLineEndings.length > 0 || canonicalTerminalLineEndings.length > 0
 }
 
 const publishedMirrorMatchesCanonical = (published, canonicalState) => {

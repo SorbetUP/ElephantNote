@@ -80,26 +80,34 @@ const restoreSelection = (target, element, saved) => {
 }
 
 const terminalLineEndingEquivalent = (exported, canonical) => {
-  // Muya omits exactly one final empty paragraph that Rust retains as a terminal
-  // LF. The position of the caret does not change that serialization fact. Keep
-  // the comparison strict: only one terminal LF may differ and every preceding
-  // character must remain identical.
   if (Math.abs(exported.length - canonical.length) !== 1) return false
   if (!exported.endsWith('\n') && !canonical.endsWith('\n')) return false
   return exported.replace(/\n$/, '') === canonical.replace(/\n$/, '')
 }
 
-const canonicalSurfaceIsSynchronized = (activeMuya, canonicalState) => {
+const publishedMirrorMatchesCanonical = (published, canonicalState) => {
+  if (!published || !canonicalState || published.phase !== 'ready') return false
+  if (published.renderedMatchesCanonical !== true) return false
+  const canonicalRevision = Number(canonicalState.revision || 0)
+  const publishedRevision = Number(published.canonicalRevision ?? published.revision ?? 0)
+  const canonicalLength = String(canonicalState.markdown || '').length
+  const publishedLength = Number(published.canonicalMarkdownLength ?? published.markdownLength ?? -1)
+  return publishedRevision === canonicalRevision && publishedLength === canonicalLength
+}
+
+const canonicalSurfaceIsSynchronized = (activeMuya, canonicalState, published) => {
+  // The Rust mirror publishes this invariant only after its real DOM renderer has
+  // consumed the canonical revision. Prefer that direct signal after Enter, where
+  // Muya's serializer may temporarily throw while an empty paragraph is visible.
+  // This does not bypass input: the command below still dispatches a cancellable
+  // beforeinput event to the live contenteditable and waits for a newer Rust revision.
+  if (publishedMirrorMatchesCanonical(published, canonicalState)) return true
   if (!canonicalState || typeof activeMuya?.getMarkdown !== 'function') return false
   try {
     const exported = String(activeMuya.getMarkdown() ?? '')
     const canonical = String(canonicalState.markdown ?? '')
     return exported === canonical || terminalLineEndingEquivalent(exported, canonical)
   } catch {
-    // Muya can briefly expose a half-rendered ContentState while the queued Rust
-    // transaction is repainting the contenteditable. That transient serializer
-    // exception is not a failed user mutation; the ready/idle loop below must
-    // wait for the same real surface to settle and then evaluate it again.
     return false
   }
 }
@@ -114,7 +122,7 @@ const waitForLiveRustEditor = async(target, selector, timeoutMs = 10_000) => {
     const published = target.__ELEPHANT_MUYA_RUST_MIRROR__
     const canonical = activeMuya?.__rustMirror?.state
     const sameSurface = Boolean(element && activeMuya?.container === element)
-    const synchronized = canonicalSurfaceIsSynchronized(activeMuya, canonical)
+    const synchronized = canonicalSurfaceIsSynchronized(activeMuya, canonical, published)
     const idle = Number(activeMuya?.__rustMutationGate?.pending || 0) === 0
 
     last = {
@@ -124,7 +132,8 @@ const waitForLiveRustEditor = async(target, selector, timeoutMs = 10_000) => {
       phase: published?.phase || null,
       revision: Number(published?.revision || 0),
       canonicalRevision: Number(canonical?.revision || 0),
-      synchronized: Boolean(synchronized),
+      renderedMatchesCanonical: published?.renderedMatchesCanonical === true,
+      synchronized,
       idle
     }
 
@@ -144,9 +153,7 @@ const dispatchVisibleCharacter = async(target, selector, character) => {
   const beforeRevision = Number(before?.revision || 0)
   const beforeMarkdown = String(before?.markdown || '')
   const InputEventConstructor = target.InputEvent || target.window?.InputEvent
-  if (typeof InputEventConstructor !== 'function') {
-    throw new Error('Visible Rust text input requires InputEvent support')
-  }
+  if (typeof InputEventConstructor !== 'function') throw new Error('Visible Rust text input requires InputEvent support')
 
   element.focus?.()
   const event = new InputEventConstructor('beforeinput', {
@@ -156,25 +163,11 @@ const dispatchVisibleCharacter = async(target, selector, character) => {
     cancelable: true,
     composed: true
   })
-  if (event.inputType !== 'insertText') {
-    Object.defineProperty(event, 'inputType', {
-      configurable: true,
-      enumerable: true,
-      value: 'insertText'
-    })
-  }
-  if (event.data !== character) {
-    Object.defineProperty(event, 'data', {
-      configurable: true,
-      enumerable: true,
-      value: character
-    })
-  }
+  if (event.inputType !== 'insertText') Object.defineProperty(event, 'inputType', { configurable: true, enumerable: true, value: 'insertText' })
+  if (event.data !== character) Object.defineProperty(event, 'data', { configurable: true, enumerable: true, value: character })
 
   element.dispatchEvent(event)
-  if (!event.defaultPrevented) {
-    throw new Error('The visible Rust editor did not claim the insertText beforeinput event')
-  }
+  if (!event.defaultPrevented) throw new Error('The visible Rust editor did not claim the insertText beforeinput event')
 
   const deadline = Date.now() + 10_000
   let last = null
@@ -183,17 +176,16 @@ const dispatchVisibleCharacter = async(target, selector, character) => {
     const state = live?.__rustMirror?.state
     const published = target.__ELEPHANT_MUYA_RUST_MIRROR__
     const idle = Number(live?.__rustMutationGate?.pending || 0) === 0
-    const synchronized = canonicalSurfaceIsSynchronized(live, state)
+    const synchronized = canonicalSurfaceIsSynchronized(live, state, published)
     last = {
       revision: Number(state?.revision || 0),
       markdownLength: String(state?.markdown || '').length,
       phase: published?.phase || null,
+      renderedMatchesCanonical: published?.renderedMatchesCanonical === true,
       idle,
       synchronized
     }
-    if (published?.phase === 'error') {
-      throw new Error(`Rust editor failed while applying visible text: ${published.error || published.reason || 'unknown error'}`)
-    }
+    if (published?.phase === 'error') throw new Error(`Rust editor failed while applying visible text: ${published.error || published.reason || 'unknown error'}`)
     if (
       Number(state?.revision || 0) > beforeRevision &&
       String(state?.markdown || '') !== beforeMarkdown &&
@@ -235,16 +227,10 @@ const install = (target = globalThis) => {
       try {
         await dispatchVisibleCharacter(target, selector, character)
       } catch (error) {
-        // Some WebKit builds expose a stack containing only a source location.
-        // Keep a real Error for lint and runtime semantics, but normalize its
-        // stack so the external automation transport always retains the exact
-        // failed character and invariant message.
         const message = `Visible Rust insertText failed at character ${characterIndex}/${value.length} ${JSON.stringify(character)}: ${error?.message || String(error)}; stack=${error?.stack || 'none'}`
         const wrappedError = new Error(message)
         const stack = String(wrappedError.stack || '')
-        if (!stack.includes(message)) {
-          wrappedError.stack = `${wrappedError.name}: ${message}${stack ? `\n${stack}` : ''}`
-        }
+        if (!stack.includes(message)) wrappedError.stack = `${wrappedError.name}: ${message}${stack ? `\n${stack}` : ''}`
         throw wrappedError
       }
     }

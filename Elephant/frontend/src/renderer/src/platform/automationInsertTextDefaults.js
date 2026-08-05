@@ -150,15 +150,31 @@ const waitForLiveRustEditor = async(target, selector, timeoutMs = 10_000) => {
   throw new Error(`The visible Rust editor did not become ready before text input: ${JSON.stringify(last)}`)
 }
 
+const liveBeforeInputTarget = (target, root) => {
+  const selection = browserSelectionFor(target, root)
+  const anchorNode = selection?.anchorNode
+  const anchorElement = anchorNode?.nodeType === 1 ? anchorNode : anchorNode?.parentElement
+  const editable = anchorElement?.closest?.('[contenteditable="true"]')
+  if (editable && (editable === root || root.contains?.(editable))) return editable
+
+  const active = root.ownerDocument?.activeElement
+  if (active && (active === root || root.contains?.(active)) && active.isContentEditable) return active
+  if (root.isContentEditable || root.getAttribute?.('contenteditable') === 'true') return root
+
+  throw new Error('The visible Rust selection is not inside a live contenteditable surface')
+}
+
 const dispatchVisibleCharacter = async(target, selector, character) => {
   const { element, activeMuya } = await waitForLiveRustEditor(target, selector)
   const before = activeMuya?.__rustMirror?.state
   const beforeRevision = Number(before?.revision || 0)
   const beforeMarkdown = String(before?.markdown || '')
-  const InputEventConstructor = target.InputEvent || target.window?.InputEvent
-  if (typeof InputEventConstructor !== 'function') throw new Error('Visible Rust text input requires InputEvent support')
 
   element.focus?.()
+  const eventTarget = liveBeforeInputTarget(target, element)
+  const InputEventConstructor = eventTarget.ownerDocument?.defaultView?.InputEvent || target.InputEvent || target.window?.InputEvent
+  if (typeof InputEventConstructor !== 'function') throw new Error('Visible Rust text input requires InputEvent support')
+
   const event = new InputEventConstructor('beforeinput', {
     inputType: 'insertText',
     data: character,
@@ -169,7 +185,7 @@ const dispatchVisibleCharacter = async(target, selector, character) => {
   if (event.inputType !== 'insertText') Object.defineProperty(event, 'inputType', { configurable: true, enumerable: true, value: 'insertText' })
   if (event.data !== character) Object.defineProperty(event, 'data', { configurable: true, enumerable: true, value: character })
 
-  element.dispatchEvent(event)
+  eventTarget.dispatchEvent(event)
   if (!event.defaultPrevented) throw new Error('The visible Rust editor did not claim the insertText beforeinput event')
 
   const deadline = Date.now() + 10_000

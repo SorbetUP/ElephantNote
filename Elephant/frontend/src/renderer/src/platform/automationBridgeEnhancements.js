@@ -117,6 +117,14 @@ const navigationOffset = (key, selection, text) => {
   return null
 }
 
+const serializedAutomationError = (error) => {
+  const message = error?.message || String(error)
+  const stack = String(error?.stack || '')
+  if (!stack) return message
+  if (stack.includes(message)) return stack
+  return `${message}\nOriginal stack:\n${stack}`
+}
+
 export const enhanceAutomationApi = ({ target = globalThis, api } = {}) => {
   if (!api || typeof api !== 'object') throw new TypeError('enhanceAutomationApi requires an API object')
   if (api.__elephantAutomationEnhanced === true) return api
@@ -262,7 +270,7 @@ const answerAutomationCommand = async(target, api, payload) => {
     await target.__TAURI__?.core?.invoke('tauri_acceptance_result', {
       requestId,
       result: null,
-      error: error?.stack || error?.message || String(error)
+      error: serializedAutomationError(error)
     })
   }
 }

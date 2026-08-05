@@ -11,15 +11,19 @@ class EventCenter {
    * this ID
    */
   attachDOMEvent(target, event, listener, capture) {
-    if (this.checkHasBind(target, event, listener, capture)) return false
+    // beforeinput is the ownership boundary for the Rust-backed editor. Listen
+    // during capture so nested contenteditable handlers cannot consume the event
+    // before the editor can claim it and prevent the browser's DOM mutation.
+    const effectiveCapture = event === 'beforeinput' ? true : capture
+    if (this.checkHasBind(target, event, listener, effectiveCapture)) return false
     const eventId = getUniqueId()
-    target.addEventListener(event, listener, capture)
+    target.addEventListener(event, listener, effectiveCapture)
     this.events.push({
       eventId,
       target,
       event,
       listener,
-      capture
+      capture: effectiveCapture
     })
     return eventId
   }

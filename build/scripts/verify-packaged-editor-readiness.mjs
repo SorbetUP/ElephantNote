@@ -98,14 +98,21 @@ assert.ok(
   'the mirror readiness promise must be the explicit native session creation barrier'
 )
 
-// Muya intentionally replaces the Vue placeholder with its own connected
-// container. The runtime must validate, retain and instrument that live node;
-// checking the detached origin container destroys an otherwise ready session.
+// Muya intentionally replaces the disposable mount child with its own connected
+// container. Vue must retain the stable runtime shell as root ownership, while
+// readiness and input instrumentation are bound to the live replacement node.
 assert.match(muyaSource, /originContainer\.replaceWith\(container\)/)
-assert.match(rustRuntimeEditorSource, /const mountedElement = nextRuntime\?\.domContainer \|\| hostElement/)
-assert.match(rustRuntimeEditorSource, /generation !== mountGeneration \|\| !mountedElement\?\.isConnected/)
-assert.match(rustRuntimeEditorSource, /rootRef\.value = mountedElement/)
+assert.match(rustRuntimeEditorSource, /const hostElement = rootRef\.value/)
+assert.match(rustRuntimeEditorSource, /const mountedElement = nextRuntime\?\.domContainer \|\| mountElement/)
+assert.match(rustRuntimeEditorSource, /rootRef\.value !== hostElement/)
+assert.match(rustRuntimeEditorSource, /!hostElement\.contains\(mountedElement\)/)
+assert.match(rustRuntimeEditorSource, /!mountedElement\?\.isConnected/)
 assert.match(rustRuntimeEditorSource, /installUserMutationBoundary\(mountedElement\)/)
+assert.doesNotMatch(
+  rustRuntimeEditorSource,
+  /rootRef\.value\s*=\s*mountedElement/,
+  'Vue root ownership must remain on the stable shell rather than the Muya replacement node'
+)
 assert.doesNotMatch(
   rustRuntimeEditorSource,
   /generation !== mountGeneration \|\| !rootRef\.value\?\.isConnected/,
@@ -140,4 +147,4 @@ assert.match(guardSource, /canonicalRustEditorIsReady/)
 assert.match(rendererHtml, /packagedEditorReadinessGuards\.js/)
 assert.doesNotMatch(rendererHtml, /nativeTauriInvokeBootstrap\.js/)
 
-console.log('[packaged-editor-readiness] canonical state oracle, native session barrier, Muya replacement/remount lifecycle, setMarkdown readiness, invoke selection and path guards passed')
+console.log('[packaged-editor-readiness] canonical state oracle, native session barrier, stable Vue host/Muya replacement lifecycle, setMarkdown readiness, invoke selection and path guards passed')

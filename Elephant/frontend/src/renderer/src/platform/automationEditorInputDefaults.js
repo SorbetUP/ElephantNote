@@ -160,8 +160,16 @@ const createBeforeInput = (target, element, inputType, data) => {
     }
   }
 
-  if (!beforeInput || !defineEventField(beforeInput, 'inputType', inputType) ||
-    (data !== null && !defineEventField(beforeInput, 'data', data))) {
+  const nativeEventIsUsable = beforeInput?.cancelable === true &&
+    defineEventField(beforeInput, 'inputType', inputType) &&
+    (data === null || defineEventField(beforeInput, 'data', data))
+
+  if (!nativeEventIsUsable) {
+    if (beforeInput && beforeInput.cancelable !== true) {
+      console.warn('[automation-api] native InputEvent is not cancelable; using a realm-local beforeinput event', {
+        inputType
+      })
+    }
     const EventConstructor = genericEventConstructorFor(target, element)
     if (typeof EventConstructor !== 'function') {
       throw new Error(`${inputType} requires Event support at the visible editor boundary`)
@@ -171,9 +179,10 @@ const createBeforeInput = (target, element, inputType, data) => {
       cancelable: true,
       composed: true
     })
-    if (!defineEventField(beforeInput, 'inputType', inputType) ||
+    if (beforeInput.cancelable !== true ||
+      !defineEventField(beforeInput, 'inputType', inputType) ||
       (data !== null && !defineEventField(beforeInput, 'data', data))) {
-      throw new Error(`Unable to expose ${inputType} metadata on the visible beforeinput event`)
+      throw new Error(`Unable to construct a cancelable ${inputType} beforeinput event with the required metadata`)
     }
   }
 

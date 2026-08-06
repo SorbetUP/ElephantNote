@@ -7,20 +7,14 @@ on:
       - '.github/workflows/packaged-feature-matrix.yml'
       - 'build/scripts/run-packaged-feature-matrix.mjs'
       - 'build/scripts/verify-packaged-feature-matrix.mjs'
+      - 'build/scripts/lib/real-app-harness.mjs'
       - 'tests/trust/packaged-feature-matrix.json'
       - 'Elephant/frontend/src/renderer/src/platform/automationAcceptancePhysicalSurface.js'
       - 'Elephant/frontend/src/renderer/src/Main.vue'
       - 'Elephant/frontend/src/**'
+      - 'Elephant/frontend/app/**'
       - 'Elephant/backend/tauri/src/**'
-  push:
-    branches: [agent/addon-runtime-stabilization]
-    paths:
-      - '.github/workflows/packaged-feature-matrix.yml'
-      - 'build/scripts/run-packaged-feature-matrix.mjs'
-      - 'build/scripts/verify-packaged-feature-matrix.mjs'
-      - 'tests/trust/packaged-feature-matrix.json'
-      - 'Elephant/frontend/src/renderer/src/platform/automationAcceptancePhysicalSurface.js'
-      - 'Elephant/frontend/src/renderer/src/Main.vue'
+  workflow_dispatch:
 
 concurrency:
   group: packaged-feature-matrix-${{ github.ref }}

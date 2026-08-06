@@ -128,9 +128,10 @@ const drawingSlug = (value = '') => {
 const markdownText = (value = '') => String(value || '').replace(/[\\\]]/g, '\\$&')
 
 const relativeAssetLink = (notePath, assetPath) => {
+  const normalizedAssetPath = String(assetPath || '').replace(/\\/g, '/')
   const noteParent = window.path.dirname(notePath)
-  const from = noteParent === '.' ? '' : noteParent
-  return window.path.relative(from, assetPath).replace(/\\/g, '/')
+  if (!noteParent || noteParent === '.') return normalizedAssetPath
+  return window.path.relative(noteParent, assetPath).replace(/\\/g, '/')
 }
 
 const handleExcalidrawSave = async (payload) => {

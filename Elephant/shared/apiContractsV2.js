@@ -13,6 +13,8 @@ export const ELEPHANTNOTE_API_CONTRACT_REVISION = 2
 export const ELEPHANTNOTE_API_CONTRACT_ID = `${BASE_VERSION}.${ELEPHANTNOTE_API_CONTRACT_REVISION}`
 
 const action = (key, name, payload = schema.empty) => ({ key, name, payload })
+const requiredObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value)
+const requiredNumber = (value) => Number.isFinite(Number(value))
 
 const optionalProviderPayload = schema.object({
   provider: schema.optionalString
@@ -85,6 +87,14 @@ const atomicWorkspacePayload = schema.object({
   arguments: schema.optionalObject
 })
 
+const markdownPayload = schema.object({ markdown: schema.textString })
+const markdownSelectionPayload = schema.object({
+  markdown: schema.textString,
+  selection: schema.optionalObject
+})
+const editStatePayload = schema.object({ state: requiredObject })
+const compositionStatePayload = schema.object({ state: requiredObject })
+
 const providerContracts = Object.freeze([
   action('CALENDAR_PROVIDERS_LIST', 'calendar.providers.list'),
   action(
@@ -149,31 +159,104 @@ const atomicContracts = Object.freeze([
   action('ATOMIC_MODELS_PULL', 'atomic.models.pull', atomicWorkspacePayload)
 ])
 
+const markdownContracts = Object.freeze([
+  action('MARKDOWN_PARSE', 'markdown.parse', markdownPayload),
+  action('MARKDOWN_RENDER_HTML', 'markdown.renderHtml', markdownPayload),
+  action('MARKDOWN_TO_TEXT', 'markdown.toText', markdownPayload),
+  action('MARKDOWN_EXTRACT_FRONTMATTER', 'markdown.extractFrontmatter', markdownPayload),
+  action('MARKDOWN_EXTRACT_LINKS', 'markdown.extractLinks', markdownPayload)
+])
+
+const editorEngineContracts = Object.freeze([
+  action('MUYA_PARSE', 'muya.parse', markdownPayload),
+  action('MUYA_RENDER_HTML', 'muya.renderHtml', markdownPayload),
+  action('MUYA_TOKENS', 'muya.tokens', markdownPayload),
+  action('MUYA_EXTRAS', 'muya.extras', markdownPayload),
+  action('MUYA_CONTRACT', 'muya.contract', markdownPayload),
+  action('MUYA_CLIPBOARD', 'muya.clipboard', markdownSelectionPayload),
+  action('MUYA_COPY_MARKDOWN', 'muya.copyMarkdown', markdownSelectionPayload),
+  action('MUYA_COPY_HTML', 'muya.copyHtml', markdownSelectionPayload),
+  action(
+    'MUYA_PASTE',
+    'muya.paste',
+    schema.object({ state: requiredObject, text: schema.textString })
+  ),
+  action('MUYA_BACKSPACE', 'muya.backspace', editStatePayload),
+  action('MUYA_REMOVE_NEXT', 'muya.removeNext', editStatePayload),
+  action('MUYA_UNDO', 'muya.undo', editStatePayload),
+  action('MUYA_REDO', 'muya.redo', editStatePayload),
+  action(
+    'MUYA_MOVE_CURSOR',
+    'muya.moveCursor',
+    schema.object({
+      markdown: schema.textString,
+      cursor: requiredNumber,
+      direction: schema.requiredString,
+      extend: schema.optionalBoolean,
+      anchor: schema.optionalNumber
+    })
+  ),
+  action(
+    'MUYA_INPUT_RULE',
+    'muya.inputRule',
+    schema.object({ lineBeforeCursor: schema.textString })
+  ),
+  action(
+    'MUYA_TABLE_INSERT_ROW',
+    'muya.tableInsertRow',
+    schema.object({ markdown: schema.textString, rowIndex: requiredNumber })
+  ),
+  action(
+    'MUYA_TABLE_INSERT_COLUMN',
+    'muya.tableInsertColumn',
+    schema.object({ markdown: schema.textString, columnIndex: requiredNumber })
+  ),
+  action('MUYA_TABLE_CONTRACT', 'muya.tableContract', markdownPayload),
+  action(
+    'MUYA_IMAGE_SELECTION',
+    'muya.imageSelection',
+    schema.object({ markdown: schema.textString, cursor: requiredNumber })
+  ),
+  action('MUYA_START_COMPOSITION', 'muya.startComposition', compositionStatePayload),
+  action(
+    'MUYA_UPDATE_COMPOSITION',
+    'muya.updateComposition',
+    schema.object({ state: requiredObject, text: schema.textString })
+  ),
+  action('MUYA_COMMIT_COMPOSITION', 'muya.commitComposition', compositionStatePayload),
+  action('MUYA_CANCEL_COMPOSITION', 'muya.cancelComposition', compositionStatePayload),
+  action('MUYA_EDITOR_SNAPSHOT', 'muya.editorSnapshot', editStatePayload)
+])
+
+const extendedContracts = Object.freeze([
+  ...providerContracts,
+  ...modelContracts,
+  ...atomicContracts,
+  ...markdownContracts,
+  ...editorEngineContracts
+])
+
 export const ELEPHANTNOTE_API_DOMAINS = Object.freeze({
   ...BASE_DOMAINS,
   providers: providerContracts,
   modelLibrary: modelContracts,
-  atomicFeatures: atomicContracts
+  atomicFeatures: atomicContracts,
+  markdownEngine: markdownContracts,
+  editorEngine: editorEngineContracts
 })
 
 export const listApiContracts = () => [
   ...listBaseApiContracts(),
-  ...providerContracts,
-  ...modelContracts,
-  ...atomicContracts
+  ...extendedContracts
 ]
 
 export const ELEPHANTNOTE_API_ACTIONS = Object.freeze({
   ...BASE_ACTIONS,
-  ...Object.fromEntries(
-    [...providerContracts, ...modelContracts, ...atomicContracts].map(({ key, name }) => [key, name])
-  )
+  ...Object.fromEntries(extendedContracts.map(({ key, name }) => [key, name]))
 })
 
 const EXTENDED_PAYLOAD_SCHEMAS = Object.freeze(
-  Object.fromEntries(
-    [...providerContracts, ...modelContracts, ...atomicContracts].map(({ name, payload }) => [name, payload])
-  )
+  Object.fromEntries(extendedContracts.map(({ name, payload }) => [name, payload]))
 )
 
 export const API_PAYLOAD_SCHEMAS = Object.freeze({

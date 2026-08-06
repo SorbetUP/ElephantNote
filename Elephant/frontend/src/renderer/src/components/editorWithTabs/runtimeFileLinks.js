@@ -25,7 +25,7 @@ const encodeMarkdownPath = (value) => encodeURI(String(value || '').replace(/\\/
   .replace(/\)/g, '%29')
 
 const safeName = (value) => {
-  const normalized = String(value || 'file').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').trim()
+  const normalized = String(value || 'file').replace(/[\\/:*?"<>|]/g, '-').trim()
   return normalized || 'file'
 }
 
@@ -109,7 +109,7 @@ const invokePdfViewer = async (viewer, path, context) => {
 const resolveLocalPath = ({ href, currentFile, projectRoot, target }) => {
   const pathApi = target.path
   if (!pathApi || !currentFile?.pathname || !projectRoot?.pathname) return null
-  let source = decodeURI(String(href || '').trim()).replace(FILE_SCHEME, '')
+  const source = decodeURI(String(href || '').trim()).replace(FILE_SCHEME, '')
   if (!source || source.startsWith('#')) return null
   const absolutePath = pathApi.isAbsolute(source)
     ? pathApi.normalize(source)

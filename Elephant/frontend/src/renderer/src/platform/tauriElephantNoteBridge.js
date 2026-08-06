@@ -123,6 +123,7 @@ const createBridge = (target) => {
   const bridge = {
     getVaults: () => invoke(target, 'tauri_vaults_get'),
     selectVault: () => openVaultDirectory(target),
+    createLocalVault: () => invoke(target, 'tauri_vaults_create_local'),
     setActiveVault: (vaultId) => invoke(target, 'tauri_vaults_set_active', { vaultId }),
     setVaultIcon: (payload = {}) => invoke(target, 'tauri_vaults_set_icon', normalizePayload(payload)),
     setVaultName: (payload = {}) => invoke(target, 'tauri_vaults_set_name', normalizePayload(payload)),

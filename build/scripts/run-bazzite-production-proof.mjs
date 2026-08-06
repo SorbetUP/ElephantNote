@@ -115,6 +115,10 @@ try {
   preflight.desktopPortal = portal
   requireCondition(portal.ok && portal.stdout === 'active', `xdg-desktop-portal.service must be active: ${JSON.stringify(portal)}`)
 
+  const atSpi = commandText('python3', ['-c', "import gi; gi.require_version('Atspi', '2.0'); from gi.repository import Atspi; Atspi.init(); print('AT-SPI ready')"])
+  preflight.atSpi = atSpi
+  requireCondition(atSpi.ok && atSpi.stdout.includes('AT-SPI ready'), `Python AT-SPI is required for the native Wayland folder picker proof: ${JSON.stringify(atSpi)}`)
+
   preflight.kernel = commandText('uname', ['-a'])
   preflight.session = process.env.XDG_SESSION_ID
     ? commandText('loginctl', ['show-session', process.env.XDG_SESSION_ID, '-p', 'Type', '-p', 'Desktop', '-p', 'Remote'])

@@ -35,9 +35,14 @@ export const installTauriApiContractFacade = (target = globalThis) => {
   const contractActions = listApiContracts().map(({ name }) => name)
 
   const describe = async() => {
-    const backend = typeof originalApi.describe === 'function'
-      ? await originalApi.describe().catch(() => ({}))
-      : {}
+    let backend = {}
+    if (typeof originalApi.describe === 'function') {
+      try {
+        backend = await originalApi.describe()
+      } catch {
+        backend = {}
+      }
+    }
     return {
       ...backend,
       runtime: backend.runtime || 'tauri',

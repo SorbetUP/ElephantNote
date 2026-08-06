@@ -96,6 +96,23 @@ function externalFile(h, name, content) {
   return path
 }
 
+function walkVaultFiles(root, relative = '') {
+  const directory = join(root, relative)
+  const entries = []
+  for (const name of readdirSync(directory, { withFileTypes: true })) {
+    const relativePath = relative ? join(relative, name.name) : name.name
+    if (name.isDirectory()) entries.push(...walkVaultFiles(root, relativePath))
+    else entries.push({
+      relativePath,
+      absolutePath: join(root, relativePath),
+      bytes: statSync(join(root, relativePath)).size
+    })
+  }
+  return entries
+}
+
+const escapeCssAttribute = (value) => String(value).replaceAll('\\', '\\\\').replaceAll('"', '\\"')
+
 const F = {
   'app-launch': async (h) => {
     const firstScreen = await act(h, 'readDom', '.en-empty-card')
@@ -174,13 +191,59 @@ const F = {
   },
   'excalidraw-open-close': async (h) => {
     await prepareVault(h)
+    const before = new Set(walkVaultFiles(h.vaultRoot).map((entry) => entry.relativePath))
     await act(h, 'click', '.en-create-excalidraw-button')
     const opened = await dom(h, '[data-testid="excalidraw-dialog"]', (value) => value.visible, 'visible Excalidraw open')
-    const canvas = await dom(h, '.en-excalidraw-canvas', (value) => value.visible, 'Excalidraw canvas')
+    const canvas = await dom(h, '.en-excalidraw-canvas canvas', (value) => value.visible, 'Excalidraw canvas')
     ok(!opened.text.includes('failed') && canvas.visible, 'Excalidraw opened with an error')
+    await act(h, 'fill', '[data-testid="excalidraw-name"]', 'Acceptance drawing')
+    await act(h, 'pointerDrag', '.en-excalidraw-canvas canvas', [
+      { x: 0.24, y: 0.34 },
+      { x: 0.40, y: 0.58 },
+      { x: 0.57, y: 0.43 },
+      { x: 0.74, y: 0.62 }
+    ])
+    await act(h, 'click', '.en-excalidraw-button.primary')
+    await absent(h, '[data-testid="excalidraw-dialog"]', 'visible Excalidraw save close')
+
+    let added = []
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      added = walkVaultFiles(h.vaultRoot).filter((entry) => !before.has(entry.relativePath))
+      if (added.some((entry) => /[.]png$/i.test(entry.relativePath)) && added.some((entry) => !/[.]png$/i.test(entry.relativePath))) break
+      await z(50)
+    }
+    const preview = added.find((entry) => /[.]excalidraw[.]png$/i.test(entry.relativePath)) || added.find((entry) => /[.]png$/i.test(entry.relativePath))
+    let scene = null
+    let sceneFile = null
+    for (const entry of added.filter((candidate) => !/[.]png$/i.test(candidate.relativePath))) {
+      try {
+        const parsed = JSON.parse(readFileSync(entry.absolutePath, 'utf8'))
+        if (Array.isArray(parsed?.elements)) {
+          scene = parsed
+          sceneFile = entry
+          break
+        }
+      } catch {}
+    }
+    ok(preview?.bytes > 0, `Excalidraw PNG preview missing or empty: ${JSON.stringify(added)}`)
+    ok(sceneFile?.bytes > 0 && scene?.elements?.length > 0, `Excalidraw scene missing drawn elements: ${JSON.stringify(added)}`)
+
+    const cardSelector = `[data-entry-path="${escapeCssAttribute(preview.relativePath)}"]`
+    await act(h, 'waitFor', cardSelector, 20_000)
+    await act(h, 'click', cardSelector)
+    const reopened = await dom(h, '[data-testid="excalidraw-dialog"]', (value) => value.visible, 'saved Excalidraw reopen')
+    const reopenedCanvas = await dom(h, '.en-excalidraw-canvas canvas', (value) => value.visible, 'reopened Excalidraw canvas')
+    ok(!reopened.text.includes('failed') && reopenedCanvas.visible, 'saved Excalidraw could not be reopened')
     await act(h, 'click', '[data-testid="excalidraw-close"]')
     await absent(h, '[data-testid="excalidraw-dialog"]', 'visible Excalidraw close')
-    return { opened: true, canvas: true, closed: true }
+    return {
+      opened: true,
+      drawnElements: scene.elements.length,
+      preview: preview.relativePath,
+      scene: sceneFile.relativePath,
+      reopened: true,
+      closed: true
+    }
   },
   'text-basic-editing': async (h) => {
     await open(h)
@@ -231,16 +294,16 @@ const F = {
     await open(h)
     const before = await act(h, 'readDom', '.en-body')
     const hidden = before.attributes.class?.includes('en-sidebar-hidden')
-    await set(h, 'pressShortcut', I, 'j', { ctrlKey: true, code: 'KeyJ' })
+    await act(h, 'pressShortcut', I, 'j', { ctrlKey: true, code: 'KeyJ' })
     await dom(h, '.en-body', (value) => (value.attributes.class?.includes('en-sidebar-hidden')) !== hidden, 'shortcut hide')
-    await set(h, 'pressShortcut', I, 'j', { ctrlKey: true, code: 'KeyJ' })
+    await act(h, 'pressShortcut', I, 'j', { ctrlKey: true, code: 'KeyJ' })
     return dom(h, '.en-body', (value) => (value.attributes.class?.includes('en-sidebar-hidden')) === hidden, 'shortcut show')
   },
   'drop-file-into-vault-folder': async (h) => {
     await prepareVault(h)
     await set(h, 'createFolder', 'Drop target')
     const sourcePath = externalFile(h, 'drop.txt', 'drop-marker')
-    await set(h, 'dropFiles', '.folder-name[title="Drop target"], .en-sidebar', [{ name: 'drop.txt', type: 'text/plain', path: sourcePath }])
+    await act(h, 'dropFiles', '.folder-name[title="Drop target"], .en-sidebar', [{ name: 'drop.txt', type: 'text/plain', path: sourcePath }])
     const path = join(h.vaultRoot, 'Drop target/drop.txt')
     for (let attempt = 0; attempt < 200 && !existsSync(path); attempt += 1) await z(100)
     ok(existsSync(path), 'drop folder failed')
@@ -251,7 +314,7 @@ const F = {
     await open(h)
     await editEnd(h, '')
     const sourcePath = externalFile(h, 'drop.png', Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFElEQVR42mNk+M/wn4GBgYGJAQoAHgQCAZoeV+QAAAAASUVORK5CYII=', 'base64'))
-    await set(h, 'dropFiles', I, [{ name: 'drop.png', type: 'image/png', path: sourcePath }])
+    await act(h, 'dropFiles', I, [{ name: 'drop.png', type: 'image/png', path: sourcePath }])
     const current = await state(h, (value) => /drop\.png|!\[/.test(value.markdown), 'image drop')
     ok(existsSync(join(h.vaultRoot, '.assets')), 'asset dir absent')
     await dom(h, `${E} img`, (value) => value.visible, 'image visible')
@@ -261,7 +324,7 @@ const F = {
     await open(h)
     await set(h, 'clearFileOpenHistory')
     const sourcePath = externalFile(h, 'linked.txt', 'linked')
-    await set(h, 'dropFiles', I, [{ name: 'linked.txt', type: 'text/plain', path: sourcePath }])
+    await act(h, 'dropFiles', I, [{ name: 'linked.txt', type: 'text/plain', path: sourcePath }])
     const saved = await state(h, (value) => /\[linked\.txt\]\([^)]+\)/i.test(value.markdown), 'linked file markdown')
     const assetPath = join(h.vaultRoot, '.assets', 'linked.txt')
     for (let attempt = 0; attempt < 200 && !existsSync(assetPath); attempt += 1) await z(50)
@@ -275,7 +338,7 @@ const F = {
     await set(h, 'installPdfViewerProbe')
     const sourcePath = externalFile(h, 'addon-route.pdf', '%PDF-1.4\naddon-route\n%%EOF\n')
     try {
-      await set(h, 'dropFiles', I, [{ name: 'addon-route.pdf', type: 'application/pdf', path: sourcePath }])
+      await act(h, 'dropFiles', I, [{ name: 'addon-route.pdf', type: 'application/pdf', path: sourcePath }])
       await state(h, (value) => /\[addon-route\.pdf\]\([^)]+\)/i.test(value.markdown), 'PDF addon markdown')
       await dom(h, `${E} a`, (value) => value.exists && /addon-route\.pdf/i.test(value.text + (value.attributes.href || '')), 'PDF addon visible link')
       await act(h, 'click', `${E} a`)
@@ -291,7 +354,7 @@ const F = {
     await set(h, 'clearFileOpenHistory')
     await set(h, 'removePdfViewerProbe')
     const sourcePath = externalFile(h, 'system-route.pdf', '%PDF-1.4\nsystem-route\n%%EOF\n')
-    await set(h, 'dropFiles', I, [{ name: 'system-route.pdf', type: 'application/pdf', path: sourcePath }])
+    await act(h, 'dropFiles', I, [{ name: 'system-route.pdf', type: 'application/pdf', path: sourcePath }])
     await state(h, (value) => /\[system-route\.pdf\]\([^)]+\)/i.test(value.markdown), 'PDF system markdown')
     await dom(h, `${E} a`, (value) => value.exists && /system-route\.pdf/i.test(value.text + (value.attributes.href || '')), 'PDF system visible link')
     await act(h, 'click', `${E} a`)

@@ -211,6 +211,44 @@ export const installAcceptancePhysicalSurface = async (target = globalThis) => {
         return api.readDom(selector)
       }
 
+      api.pointerDrag = async (selector, points = []) => {
+        const element = requireElement(target, selector)
+        const rect = element.getBoundingClientRect()
+        if (!(rect.width > 0 && rect.height > 0)) throw new Error(`pointerDrag target has no visible bounds: ${selector}`)
+        const path = Array.isArray(points) && points.length >= 2
+          ? points
+          : [{ x: 0.28, y: 0.36 }, { x: 0.45, y: 0.58 }, { x: 0.72, y: 0.38 }]
+        const coordinates = path.map((point) => ({
+          clientX: rect.left + (Math.abs(Number(point.x)) <= 1 ? Number(point.x) * rect.width : Number(point.x)),
+          clientY: rect.top + (Math.abs(Number(point.y)) <= 1 ? Number(point.y) * rect.height : Number(point.y))
+        }))
+        const dispatch = (name, point, buttons) => {
+          const init = {
+            ...point,
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+            button: 0,
+            buttons,
+            pointerId: 1,
+            pointerType: 'mouse',
+            isPrimary: true,
+            pressure: buttons ? 0.5 : 0
+          }
+          const PointerEventConstructor = target.PointerEvent || target.MouseEvent
+          element.dispatchEvent(new PointerEventConstructor(name, init))
+        }
+        element.focus?.()
+        dispatch('pointerdown', coordinates[0], 1)
+        for (const point of coordinates.slice(1)) {
+          dispatch('pointermove', point, 1)
+          await wait(16)
+        }
+        dispatch('pointerup', coordinates.at(-1), 0)
+        await wait(100)
+        return api.readDom(selector)
+      }
+
       api.pasteText = (selector, text) => {
         const element = requireElement(target, selector)
         element.focus?.()

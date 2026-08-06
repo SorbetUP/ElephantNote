@@ -20,9 +20,12 @@ const sleep = (ms) => new Promise((resolvePromise) => setTimeout(resolvePromise,
 const FRONTEND_ACTIONS = new Set([
   'click',
   'contextClick',
+  'dropFiles',
   'fill',
   'insertText',
+  'pointerDrag',
   'press',
+  'pressShortcut',
   'selectText',
   'waitFor',
   'waitUntilGone'

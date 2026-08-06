@@ -66,6 +66,15 @@ const EDITOR_ENGINE_ACTIONS = Object.freeze(new Set([
   API.MUYA_EDITOR_SNAPSHOT
 ]))
 
+const ASSET_ACTIONS = Object.freeze(new Set([
+  API.ATTACHMENTS_LIST,
+  API.ATTACHMENTS_WRITE_TEXT,
+  API.DRAWINGS_LIST,
+  API.DRAWINGS_CREATE,
+  API.DRAWINGS_READ,
+  API.DRAWINGS_WRITE
+]))
+
 export const COMPATIBILITY_ACTIONS = Object.freeze(new Set([
   API.CALENDAR_PROVIDERS_LIST,
   API.CALENDAR_IMPORT,
@@ -97,7 +106,8 @@ export const COMPATIBILITY_ACTIONS = Object.freeze(new Set([
   API.ATOMIC_MODELS_LIST_LOCAL,
   API.ATOMIC_MODELS_PULL,
   ...MARKDOWN_ACTIONS,
-  ...EDITOR_ENGINE_ACTIONS
+  ...EDITOR_ENGINE_ACTIONS,
+  ...ASSET_ACTIONS
 ]))
 
 export const createPlatformCompatibilityAdapter = (target = globalThis) => {
@@ -232,6 +242,25 @@ export const createPlatformCompatibilityAdapter = (target = globalThis) => {
     return requireMethod(method, `muya.${name || action}`)(toPlainObject(payload))
   }
 
+  const callAssets = (action, payload = {}) => {
+    const attachments = bridge()?.attachments || {}
+    const drawings = bridge()?.drawings || {}
+    if (action === API.ATTACHMENTS_LIST) {
+      return requireMethod(attachments.list, 'attachments.list')()
+    }
+    if (action === API.ATTACHMENTS_WRITE_TEXT) {
+      return requireMethod(attachments.writeText, 'attachments.writeText')(toPlainObject(payload))
+    }
+    if (action === API.DRAWINGS_LIST) return requireMethod(drawings.list, 'drawings.list')()
+    if (action === API.DRAWINGS_CREATE) {
+      return requireMethod(drawings.create, 'drawings.create')(toPlainObject(payload))
+    }
+    if (action === API.DRAWINGS_READ) {
+      return requireMethod(drawings.read, 'drawings.read')(toPlainObject(payload))
+    }
+    return requireMethod(drawings.write, 'drawings.write')(toPlainObject(payload))
+  }
+
   return {
     canHandle: (action) => COMPATIBILITY_ACTIONS.has(action),
     async call(action, payload = {}) {
@@ -244,6 +273,7 @@ export const createPlatformCompatibilityAdapter = (target = globalThis) => {
       if (action.startsWith('models.')) return callModels(action, payload)
       if (MARKDOWN_ACTIONS.has(action)) return callMarkdown(action, payload)
       if (EDITOR_ENGINE_ACTIONS.has(action)) return callEditorEngine(action, payload)
+      if (ASSET_ACTIONS.has(action)) return callAssets(action, payload)
       if (action === API.SEARCH_CONCEPTS) {
         return requireMethod(bridge()?.search?.concepts, 'search.concepts')(toPlainObject(payload))
       }

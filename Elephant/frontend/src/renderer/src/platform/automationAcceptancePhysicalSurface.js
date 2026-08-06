@@ -1,5 +1,6 @@
 const INSTALL_FLAG = '__ELEPHANT_ACCEPTANCE_PHYSICAL_SURFACE__'
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+let disposePdfViewerProbe = null
 
 const requireElement = (target, selector) => {
   if (!selector || typeof selector !== 'string') throw new TypeError('A CSS selector is required')
@@ -121,6 +122,28 @@ export const installAcceptancePhysicalSurface = async(target = globalThis) => {
       api.openSystemPath = async(path) => {
         if (!path || typeof path !== 'string') throw new TypeError('openSystemPath requires a path')
         return target.__TAURI__?.core?.invoke('plugin:opener|open_path', { path })
+      }
+
+      api.installPdfViewerProbe = () => {
+        disposePdfViewerProbe?.()
+        const host = target.__ELEPHANT_ADDON_HOST__
+        if (typeof host?.provide !== 'function') throw new Error('Addon host is unavailable')
+        disposePdfViewerProbe = host.provide('pdf.viewer', {
+          open: async(path) => ({ handled: true, path, provider: 'acceptance-pdf-viewer' })
+        })
+        return { installed: true, resource: 'pdf.viewer' }
+      }
+
+      api.removePdfViewerProbe = () => {
+        disposePdfViewerProbe?.()
+        disposePdfViewerProbe = null
+        return { installed: false, resource: 'pdf.viewer' }
+      }
+
+      api.readFileOpenHistory = () => [...(target.__ELEPHANT_FILE_OPEN_HISTORY__ || [])]
+      api.clearFileOpenHistory = () => {
+        target.__ELEPHANT_FILE_OPEN_HISTORY__ = []
+        return []
       }
 
       target[INSTALL_FLAG] = api

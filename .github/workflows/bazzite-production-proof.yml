@@ -6,15 +6,21 @@ on:
       - '.github/workflows/bazzite-production-proof.yml'
       - 'build/scripts/run-bazzite-packaged-user-journey.mjs'
       - 'build/scripts/run-bazzite-production-proof.mjs'
+      - 'build/scripts/run-packaged-feature-matrix.mjs'
       - 'build/scripts/verify-bazzite-proof.mjs'
       - 'tests/trust/bazzite-proof.json'
+      - 'tests/trust/packaged-feature-matrix.json'
+      - 'Elephant/frontend/src/renderer/src/platform/automationAcceptancePhysicalSurface.js'
   pull_request:
     paths:
       - '.github/workflows/bazzite-production-proof.yml'
       - 'build/scripts/run-bazzite-packaged-user-journey.mjs'
       - 'build/scripts/run-bazzite-production-proof.mjs'
+      - 'build/scripts/run-packaged-feature-matrix.mjs'
       - 'build/scripts/verify-bazzite-proof.mjs'
       - 'tests/trust/bazzite-proof.json'
+      - 'tests/trust/packaged-feature-matrix.json'
+      - 'Elephant/frontend/src/renderer/src/platform/automationAcceptancePhysicalSurface.js'
   workflow_dispatch:
     inputs:
       appimage_path:
@@ -50,7 +56,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'push' && vars.ELEPHANT_BAZZITE_PROOF_ENABLED == '1')
     runs-on: [self-hosted, linux, x64, bazzite, gnome, wayland]
-    timeout-minutes: 180
+    timeout-minutes: 240
     env:
       ELEPHANT_ACCEPTANCE_APP_PATH: ${{ inputs.appimage_path || vars.ELEPHANT_BAZZITE_APPIMAGE_PATH }}
       ELEPHANT_EXPECTED_APPIMAGE_SHA256: ${{ inputs.expected_sha256 || vars.ELEPHANT_BAZZITE_APPIMAGE_SHA256 }}
@@ -65,6 +71,15 @@ jobs:
           test -f "$ELEPHANT_ACCEPTANCE_APP_PATH"
           test "${#ELEPHANT_EXPECTED_APPIMAGE_SHA256}" -eq 64
           node build/scripts/run-bazzite-production-proof.mjs "$ELEPHANT_ACCEPTANCE_APP_PATH"
+      - name: Run twenty isolated features on the same Bazzite AppImage
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
+          ELEPHANT_PACKAGED_APP="$ELEPHANT_ACCEPTANCE_APP_PATH" \
+          ELEPHANT_PACKAGED_FORMAT=linux-appimage \
+          APPIMAGE_EXTRACT_AND_RUN=1 \
+            node build/scripts/run-packaged-feature-matrix.mjs
       - name: Upload compact Bazzite proof evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -75,6 +90,8 @@ jobs:
             test-results/trusted/bazzite-production/**/*.log
             test-results/trusted/bazzite-packaged-user-journey/**/*.json
             test-results/trusted/bazzite-packaged-user-journey/**/*.log
+            test-results/trusted/packaged-feature-matrix/latest.json
+            test-results/trusted/packaged-feature-*/**
             test-results/trusted/backend-contract/**/*.json
             test-results/trusted/frontend-behavior/**/*.json
             test-results/acceptance/latest.json

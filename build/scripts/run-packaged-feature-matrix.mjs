@@ -224,7 +224,13 @@ const F = {
     const wrapperMarkdown = wrapper ? readFileSync(wrapper.absolutePath, 'utf8') : ''
     ok(preview?.bytes > 0, `Excalidraw PNG preview missing or empty: ${JSON.stringify(added)}`)
     ok(sceneFile?.bytes > 0 && scene?.elements?.length > 0, `Excalidraw scene missing drawn elements: ${JSON.stringify(added)}`)
-    ok(wrapper?.bytes > 0 && wrapperMarkdown.includes(preview.relativePath), `Excalidraw wrapper note is missing the preview link: ${wrapperMarkdown}`)
+    const expectedPreviewLink = `](${preview.relativePath})`
+    ok(
+      wrapper?.bytes > 0 &&
+      wrapperMarkdown.includes(expectedPreviewLink) &&
+      !wrapperMarkdown.includes('../.assets/'),
+      `Excalidraw wrapper note has an invalid preview link: ${wrapperMarkdown}`
+    )
 
     await act(h, 'waitFor', editorInputSelector, 20_000)
     const renderedImage = await dom(h, `${editorSelector} img`, (value) => value.visible, 'saved Excalidraw preview in wrapper note')

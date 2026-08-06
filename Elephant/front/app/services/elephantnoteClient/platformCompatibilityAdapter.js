@@ -26,7 +26,8 @@ const modelPayload = (payload = {}) => {
 const flattenOptions = (payload = {}) => {
   const normalized = toPlainObject(payload)
   const options = toPlainObject(normalized.options || {})
-  const { options: _options, ...base } = normalized
+  const base = { ...normalized }
+  delete base.options
   return { ...base, ...options }
 }
 

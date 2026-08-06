@@ -90,7 +90,7 @@ jobs:
     env:
       CONTRACT_RESULT: ${{ needs.contract.result }}
       PRODUCTION_RESULT: ${{ needs.production-proof.result }}
-      PROOF_HEAD_SHA: ${{ github.sha }}
+      PROOF_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Write explicit Bazzite proof availability
         shell: bash

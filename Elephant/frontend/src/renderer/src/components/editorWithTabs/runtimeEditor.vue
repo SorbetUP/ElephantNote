@@ -6,7 +6,6 @@
     :on-file-drop="fileHandlers.dropped"
     :on-uri-drop="imageHandlers.uriDropped"
     :on-image-click="imageToolbar.open"
-    :on-link-click="fileHandlers.openLink"
     mode="rust"
     class="rust-editor-runtime"
     @ready="handleRustRuntimeReady"
@@ -76,6 +75,7 @@ const tableDialogVisible = ref(false)
 let editorRuntimeBinding = null
 let disposeEditorRuntimeResource = null
 let disposeNativeInputDurability = () => {}
+let disposeFileInteractions = () => {}
 
 const editorModelValue = computed(() => {
   const converted = String(props.toEditorMarkdown(props.markdown) || '')
@@ -126,12 +126,69 @@ const persistRecoveredFile = async(fileId) => {
   }
 }
 
+const positionDropSelection = async (runtime, event) => {
+  const container = runtime?.domContainer
+  const ownerDocument = container?.ownerDocument
+  if (!container || !ownerDocument) return false
+  let range = ownerDocument.caretRangeFromPoint?.(event.clientX, event.clientY) || null
+  if (!range) {
+    const position = ownerDocument.caretPositionFromPoint?.(event.clientX, event.clientY)
+    if (position?.offsetNode) {
+      range = ownerDocument.createRange()
+      range.setStart(position.offsetNode, position.offset)
+      range.collapse(true)
+    }
+  }
+  if (!range || !container.contains(range.startContainer)) return false
+
+  const selection = ownerDocument.getSelection?.()
+  selection?.removeAllRanges?.()
+  selection?.addRange?.(range)
+  await Promise.resolve()
+  const logical = runtime.muya?.__selection?.()?.selection
+  if (Number.isInteger(logical?.anchor) && Number.isInteger(logical?.focus)) {
+    await runtime.muya?.__rustMirror?.setSelection?.(logical.anchor, logical.focus)
+  }
+  return true
+}
+
+const installFileInteractions = (runtime) => {
+  const container = runtime?.domContainer
+  if (!container?.addEventListener) return () => {}
+
+  const drop = (event) => {
+    const files = Array.from(event.dataTransfer?.files || [])
+    if (!files.length) return
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    void (async () => {
+      await positionDropSelection(runtime, event)
+      await fileHandlers.dropped(files)
+    })().catch((error) => console.error('[elephantnote:file-drop] failed', error))
+  }
+  const click = (event) => {
+    if (!event.target?.closest?.('a[href]')) return
+    void fileHandlers.openLink(event).catch((error) => {
+      console.error('[elephantnote:file-open] failed', error)
+    })
+  }
+
+  container.addEventListener('drop', drop, true)
+  container.addEventListener('click', click, true)
+  return () => {
+    container.removeEventListener('drop', drop, true)
+    container.removeEventListener('click', click, true)
+  }
+}
+
 const handleRustRuntimeReady = (runtime) => {
   unpublishEditorRuntime()
   disposeNativeInputDurability()
+  disposeFileInteractions()
   rustRuntime.value = runtime
   lastEditorMarkdown.value = String(runtime?.muya?.getMarkdown?.() ?? editorModelValue.value)
   disposeNativeInputDurability = installNativeInputDurability(runtime)
+  disposeFileInteractions = installFileInteractions(runtime)
   editorRuntimeBinding = createRustEditorRuntimeBinding({
     runtime,
     getMarkdown: () => currentFile.value?.markdown ?? props.markdown
@@ -246,6 +303,8 @@ onBeforeUnmount(() => {
   globalThis.removeEventListener?.('elephantnote:addons-ready', publishEditorRuntime)
   disposeNativeInputDurability()
   disposeNativeInputDurability = () => {}
+  disposeFileInteractions()
+  disposeFileInteractions = () => {}
   unpublishEditorRuntime()
   rustRuntime.value = null
   lastEditorMarkdown.value = null

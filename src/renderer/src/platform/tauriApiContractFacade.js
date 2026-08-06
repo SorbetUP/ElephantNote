@@ -42,7 +42,8 @@ export const installTauriApiContractFacade = (target = globalThis) => {
       ...backend,
       runtime: backend.runtime || 'tauri',
       backend: backend.backend || 'rust',
-      version: backend.version || ELEPHANTNOTE_API_VERSION,
+      version: ELEPHANTNOTE_API_VERSION,
+      backendVersion: backend.version || '',
       contractId: ELEPHANTNOTE_API_CONTRACT_ID,
       contractRevision: ELEPHANTNOTE_API_CONTRACT_REVISION,
       actions: [...new Set([...(backend.actions || []), ...contractActions])].sort()

@@ -14,7 +14,8 @@ export const ELEPHANTNOTE_API_CONTRACT_ID = `${BASE_VERSION}.${ELEPHANTNOTE_API_
 
 const action = (key, name, payload = schema.empty) => ({ key, name, payload })
 const requiredObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value)
-const requiredNumber = (value) => Number.isFinite(Number(value))
+const requiredIndex = (value) => Number.isInteger(value) && value >= 0
+const optionalIndex = (value) => value === undefined || requiredIndex(value)
 
 const optionalProviderPayload = schema.object({
   provider: schema.optionalString
@@ -190,10 +191,10 @@ const editorEngineContracts = Object.freeze([
     'muya.moveCursor',
     schema.object({
       markdown: schema.textString,
-      cursor: requiredNumber,
+      cursor: requiredIndex,
       direction: schema.requiredString,
       extend: schema.optionalBoolean,
-      anchor: schema.optionalNumber
+      anchor: optionalIndex
     })
   ),
   action(
@@ -204,18 +205,18 @@ const editorEngineContracts = Object.freeze([
   action(
     'MUYA_TABLE_INSERT_ROW',
     'muya.tableInsertRow',
-    schema.object({ markdown: schema.textString, rowIndex: requiredNumber })
+    schema.object({ markdown: schema.textString, rowIndex: requiredIndex })
   ),
   action(
     'MUYA_TABLE_INSERT_COLUMN',
     'muya.tableInsertColumn',
-    schema.object({ markdown: schema.textString, columnIndex: requiredNumber })
+    schema.object({ markdown: schema.textString, columnIndex: requiredIndex })
   ),
   action('MUYA_TABLE_CONTRACT', 'muya.tableContract', markdownPayload),
   action(
     'MUYA_IMAGE_SELECTION',
     'muya.imageSelection',
-    schema.object({ markdown: schema.textString, cursor: requiredNumber })
+    schema.object({ markdown: schema.textString, cursor: requiredIndex })
   ),
   action('MUYA_START_COMPOSITION', 'muya.startComposition', compositionStatePayload),
   action(

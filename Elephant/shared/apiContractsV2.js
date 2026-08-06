@@ -21,23 +21,48 @@ const optionalProviderPayload = schema.object({
 const modelPayload = schema.object({
   provider: schema.optionalString,
   id: schema.optionalString,
+  modelId: schema.optionalString,
+  modelRef: schema.optionalString,
   repoId: schema.optionalString,
+  originalRepoId: schema.optionalString,
   uri: schema.optionalString,
   pull: schema.optionalString,
   model: schema.optionalString,
+  name: schema.optionalString,
+  path: schema.optionalString,
+  modelPath: schema.optionalString,
   filename: schema.optionalString,
+  fileName: schema.optionalString,
   revision: schema.optionalString,
+  source: schema.optionalString,
   libraryName: schema.optionalString,
   library: schema.optionalString,
   query: schema.optionalString,
+  sort: schema.optionalString,
+  direction: schema.optionalNumber,
   limit: schema.optionalNumber,
+  sizeBytes: schema.optionalNumber,
   force: schema.optionalBoolean,
   options: schema.optionalObject
 })
 
+const modelIdentifier = (payload = {}) =>
+  payload.id ||
+  payload.modelId ||
+  payload.modelRef ||
+  payload.repoId ||
+  payload.originalRepoId ||
+  payload.uri ||
+  payload.pull ||
+  payload.model ||
+  payload.path ||
+  payload.modelPath ||
+  payload.libraryName ||
+  payload.library
+
 const modelAcquirePayload = (payload, actionName) => {
   modelPayload(payload, actionName)
-  const identifier = payload.id || payload.repoId || payload.uri || payload.pull || payload.model
+  const identifier = modelIdentifier(payload)
   if (typeof identifier !== 'string' || !identifier.trim()) {
     const error = new Error(
       `Invalid payload for ${actionName}: one model identifier is required.`

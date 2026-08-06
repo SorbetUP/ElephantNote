@@ -154,6 +154,15 @@ export const ELEPHANTNOTE_API_DOMAINS = Object.freeze({
       'entries.move',
       schema.object({ relativePath: requiredString, targetDirectoryPath: optionalString })
     ),
+    action(
+      'ENTRIES_IMPORT_EXTERNAL_FILE',
+      'entries.importExternalFile',
+      schema.object({
+        sourcePath: requiredString,
+        targetDirectoryPath: optionalString,
+        filename: optionalSafeFilename
+      })
+    ),
     action('ENTRIES_DELETE', 'entries.delete', schema.object({ relativePath: requiredString }))
   ]),
   search: Object.freeze([

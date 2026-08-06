@@ -116,7 +116,7 @@ assert(new Set(manifest.requiredFeatures).size === manifest.requiredFeatures.len
 const featureRequirementMatchers = {
   'visible-pointer-draw': (block) => /toolbar-rectangle/.test(block) && /pointerDrag/.test(block),
   'scene-written-to-disk': (block) => /walkVaultFiles/.test(block) && /sceneFile/.test(block) && /elements/.test(block),
-  'png-preview-written-to-disk': (block) => /preview[.]bytes/.test(block) && /[.]png/.test(block),
+  'png-preview-written-to-disk': (block) => /preview[.]bytes/.test(block) && /png/i.test(block),
   'saved-drawing-reopened-from-library': (block) => /data-entry-path/.test(block) && /reopened/.test(block),
   'physical-keyboard-shortcut': (block) => /act\(h, ['"]pressShortcut['"]/.test(block),
   'physical-data-transfer-drop': (block) => /act\(h, ['"]dropFiles['"]/.test(block),

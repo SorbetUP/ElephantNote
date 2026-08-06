@@ -1,6 +1,7 @@
 const INSTALL_FLAG = '__ELEPHANT_ACCEPTANCE_PHYSICAL_SURFACE__'
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 let disposePdfViewerProbe = null
+let droppedFileSequence = 0
 
 const requireElement = (target, selector) => {
   if (!selector || typeof selector !== 'string') throw new TypeError('A CSS selector is required')
@@ -15,6 +16,22 @@ const bytesFromDescriptor = (descriptor) => {
     return Uint8Array.from(binary, (character) => character.charCodeAt(0))
   }
   return new TextEncoder().encode(String(descriptor.content || ''))
+}
+
+const materializeDescriptor = async (target, descriptor) => {
+  if (descriptor.path && descriptor.path !== descriptor.name) return descriptor
+  if (!target.fileUtils?.writeFile || !target.path?.join) {
+    throw new Error(`Unable to materialize dropped file ${descriptor.name}.`)
+  }
+  droppedFileSequence += 1
+  const safeName = String(descriptor.name || 'file').replace(/[^A-Za-z0-9._-]/g, '-')
+  const tempRoot = target.os?.tmpdir?.() || '/tmp'
+  const path = target.path.join(
+    tempRoot,
+    `elephant-acceptance-drop-${Date.now()}-${droppedFileSequence}-${safeName}`
+  )
+  await target.fileUtils.writeFile(path, bytesFromDescriptor(descriptor), 'binary')
+  return { ...descriptor, path }
 }
 
 const createDroppedFile = (target, descriptor) => {
@@ -98,10 +115,14 @@ export const installAcceptancePhysicalSurface = async (target = globalThis) => {
         return api.readDom(selector)
       }
 
-      api.dropFiles = (selector, descriptors, options = {}) => {
+      api.dropFiles = async (selector, descriptors, options = {}) => {
         const element = requireElement(target, selector)
         if (!Array.isArray(descriptors) || descriptors.length === 0) throw new TypeError('dropFiles requires file descriptors')
-        const transfer = createTransfer(target, descriptors)
+        const materialized = []
+        for (const descriptor of descriptors) {
+          materialized.push(await materializeDescriptor(target, descriptor))
+        }
+        const transfer = createTransfer(target, materialized)
         const init = {
           dataTransfer: transfer,
           bubbles: true,
@@ -111,7 +132,10 @@ export const installAcceptancePhysicalSurface = async (target = globalThis) => {
           clientY: Number(options.clientY || 20)
         }
         for (const name of ['dragenter', 'dragover', 'drop']) element.dispatchEvent(new target.DragEvent(name, init))
-        return { selector, files: descriptors.map(({ name, type, path, relativePath }) => ({ name, type, path, relativePath })) }
+        return {
+          selector,
+          files: materialized.map(({ name, type, path, relativePath }) => ({ name, type, path, relativePath }))
+        }
       }
 
       api.createFolder = async (relativePath) => {

@@ -1,7 +1,9 @@
 import ContentState from '../../../muya/lib/contentState'
 import { CURSOR_ANCHOR_DNA, CURSOR_FOCUS_DNA } from '../../../muya/lib/config'
+import StableCompleteMuyaWithRustCore from './completeMuyaRustAdapter.js.wrapper.js'
 
 const PATCH_FLAG = '__elephantRustCursorImportPatched'
+const EMPTY_LIST_EXIT_PATCH_FLAG = '__elephantRustEmptyListExitPatched'
 const EMPTY_BLOCK_SENTINEL = '\u2060'
 const EMPTY_LIST_ITEM = /^(?: {0,3}(?:[-+*]|\d{1,9}[.)])(?:[ \t]+\[[ xX]\])?)[ \t]*$/
 
@@ -65,4 +67,41 @@ export const installRustCursorImportPatch = () => {
   return true
 }
 
+export const installRustEmptyListExitPatch = () => {
+  const prototype = StableCompleteMuyaWithRustCore?.prototype
+  if (!prototype || prototype[EMPTY_LIST_EXIT_PATCH_FLAG] === true) return false
+
+  const originalEnter = prototype.__enter
+  if (typeof originalEnter !== 'function') throw new Error('Muya Enter contract is unavailable')
+
+  prototype.__enter = function(event) {
+    if (!event?.shiftKey) {
+      const current = this.__selection?.()
+      const markdown = String(current?.markdown || '')
+      const anchor = current?.selection?.anchor
+      const focus = current?.selection?.focus
+      if (Number.isInteger(anchor) && anchor === focus) {
+        const lineStart = markdown.lastIndexOf('\n', Math.max(0, anchor - 1)) + 1
+        const nextBreak = markdown.indexOf('\n', anchor)
+        const lineEnd = nextBreak < 0 ? markdown.length : nextBreak
+        if (anchor === lineEnd && EMPTY_LIST_ITEM.test(markdown.slice(lineStart, lineEnd))) {
+          event?.preventDefault?.()
+          event?.stopImmediatePropagation?.()
+          return this.__applyRust('empty-list-exit', (engine) => (
+            engine.replaceRange(lineStart, lineEnd, '')
+          ))
+        }
+      }
+    }
+    return originalEnter.call(this, event)
+  }
+
+  Object.defineProperty(prototype, EMPTY_LIST_EXIT_PATCH_FLAG, {
+    configurable: true,
+    value: true
+  })
+  return true
+}
+
 installRustCursorImportPatch()
+installRustEmptyListExitPatch()

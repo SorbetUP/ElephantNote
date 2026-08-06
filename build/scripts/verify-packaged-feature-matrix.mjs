@@ -14,6 +14,20 @@ const errors = []
 const assert = (condition, message) => { if (!condition) errors.push(message) }
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
+const featureBlock = (source, id) => {
+  const marker = new RegExp(`["']${escapeRegExp(id)}["']\\s*:`)
+  const match = marker.exec(source)
+  if (!match) return ''
+  const starts = manifest.requiredFeatures
+    .map((other) => {
+      const found = new RegExp(`["']${escapeRegExp(other)}["']\\s*:`).exec(source)
+      return found?.index ?? -1
+    })
+    .filter((index) => index > match.index)
+  const end = starts.length ? Math.min(...starts) : source.search(/\n}\s*\n\s*(?:async function run|const runFeature)/)
+  return source.slice(match.index, end > match.index ? end : source.length)
+}
+
 function runnerContractErrors(source) {
   const failures = []
   const requireMatch = (pattern, message) => {
@@ -21,10 +35,7 @@ function runnerContractErrors(source) {
   }
 
   for (const id of manifest.requiredFeatures) {
-    requireMatch(
-      new RegExp(`["']${escapeRegExp(id)}["']\\s*:`),
-      `Runner is missing an independent handler for ${id}.`
-    )
+    requireMatch(new RegExp(`["']${escapeRegExp(id)}["']\\s*:`), `Runner is missing an independent handler for ${id}.`)
   }
 
   const runPattern = /(?:async\s+function\s+run\s*\(\s*id\s*\)|const\s+runFeature\s*=\s*async\s*\(\s*id\s*\)\s*=>)\s*\{/
@@ -48,9 +59,44 @@ function runnerContractErrors(source) {
     [/status\s*:\s*(?:e|error)\s*\?\s*["']NOT PROVEN["']\s*:\s*["']PROVEN["']/, 'Per-feature verdict must fail closed to NOT PROVEN on error.'],
     [/artifact\s*:\s*`test-results\/trusted\/packaged-feature-\$\{id\}\/latest\.json`/, 'Every feature must expose its own evidence artifact path.'],
     [/missing\s*=\s*(?:M|manifest)\.requiredFeatures\.filter/, 'Aggregate verdict must check every required feature.'],
-    [/if\s*\(\s*missing\.length\s*\)\s*\{?[\s\S]{0,180}?process\.exit\s*\(\s*1\s*\)/, 'Aggregate runner must exit non-zero when any feature is not proven.']
+    [/if\s*\(\s*missing\.length\s*\)\s*\{?[\s\S]{0,180}?process\.exit\s*\(\s*1\s*\)/, 'Aggregate runner must exit non-zero when any feature is not proven.'],
+    [/(?:createHash\s*\(|appSha256|appImageSha256)/, 'Every independent verdict must be bound to the exact AppImage SHA-256.']
   ]
   for (const [pattern, message] of contracts) requireMatch(pattern, message)
+
+  const visibleRequirements = {
+    'vault-selection': { required: [/click/, /\.en-primary/], forbidden: [/selectVault/] },
+    'create-note': { required: [/click/, /en-create-button-primary/], forbidden: [/(?:set|setup)\s*\([^\n]*createNote/] },
+    'create-folder': { required: [/click/, /en-create-button/], forbidden: [/(?:set|setup)\s*\([^\n]*createFolder/] },
+    'excalidraw-open-close': {
+      required: [/click/],
+      forbidden: [/tauri_drawings_create/, /openExcalidraw/, /readExcalidraw/, /closeExcalidraw/]
+    }
+  }
+  for (const [id, contract] of Object.entries(visibleRequirements)) {
+    const block = featureBlock(source, id)
+    for (const required of contract.required) {
+      if (!required.test(block)) failures.push(`${id} must exercise its visible production control, not an internal fixture command.`)
+    }
+    for (const forbidden of contract.forbidden) {
+      if (forbidden.test(block)) failures.push(`${id} contains a forbidden internal shortcut and cannot be marked PROVEN.`)
+    }
+  }
+
+  const pdfAddon = featureBlock(source, 'pdf-addon-open-route')
+  if (!/click/.test(pdfAddon) || !/pdf-addon/.test(pdfAddon) || !/readFileOpenHistory/.test(source)) {
+    failures.push('pdf-addon-open-route must click a real PDF link and prove the pdf-addon route.')
+  }
+  const pdfFallback = featureBlock(source, 'pdf-system-open-fallback')
+  if (!/click/.test(pdfFallback) || !/system-path/.test(pdfFallback) || !/(?:!routed\.error|routed\.error\s*===\s*null)/.test(pdfFallback)) {
+    failures.push('pdf-system-open-fallback must click a real PDF link and prove a successful system-path route.')
+  }
+  if (!/waitForVaultFile/.test(featureBlock(source, 'note-realtime-autosave'))) {
+    failures.push('note-realtime-autosave must verify the real vault file, not only renderer state.')
+  }
+  for (const id of ['drop-file-into-vault-folder', 'drop-image-into-note', 'drop-file-link-into-note']) {
+    if (!/dropFiles/.test(featureBlock(source, id))) failures.push(`${id} must dispatch an actual renderer drop sequence.`)
+  }
   return failures
 }
 
@@ -59,13 +105,14 @@ assert(manifest.requiredFeatures.length >= 20, 'Feature matrix must contain at l
 assert(new Set(manifest.requiredFeatures).size === manifest.requiredFeatures.length, 'Feature ids must be unique.')
 errors.push(...runnerContractErrors(runner))
 
-for (const token of ['pressShortcut', 'pasteText', 'dropFiles', 'createFolder', 'openSystemPath', 'DataTransfer', 'DragEvent']) {
+for (const token of ['pressShortcut', 'pasteText', 'dropFiles', 'DataTransfer', 'DragEvent', 'installPdfViewerProbe', 'readFileOpenHistory']) {
   assert(surface.includes(token), `Physical automation surface is missing ${token}.`)
 }
 assert(main.includes('automationAcceptancePhysicalSurface.js'), 'Main renderer must install the extended acceptance surface.')
 assert(workflow.includes('pnpm build:linux'), 'Feature workflow must build the Linux package.')
 assert(workflow.includes('ELEPHANT_PACKAGED_FORMAT=linux-appimage'), 'Feature workflow must identify the exact AppImage format.')
 assert(workflow.includes('run-packaged-feature-matrix.mjs'), 'Feature workflow must run the independent matrix.')
+assert(workflow.includes('sha256sum'), 'Feature workflow must record the exact AppImage SHA-256.')
 assert(workflow.includes('test-results/trusted/packaged-feature-*/**'), 'Feature workflow must upload every independent artifact.')
 assert(workflow.includes('if-no-files-found: error'), 'Feature evidence must fail closed when absent.')
 

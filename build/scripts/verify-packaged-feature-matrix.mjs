@@ -69,7 +69,7 @@ function runnerContractErrors(source) {
     'create-note': { required: [/click/, /en-create-button-primary/], forbidden: [/(?:set|setup)\s*\([^\n]*createNote/] },
     'create-folder': { required: [/click/, /en-create-button/], forbidden: [/(?:set|setup)\s*\([^\n]*createFolder/] },
     'excalidraw-open-close': {
-      required: [/click/],
+      required: [/click/, /toolbar-rectangle/, /pointerDrag/, /walkVaultFiles/, /elements/, /data-entry-path/],
       forbidden: [/tauri_drawings_create/, /openExcalidraw/, /readExcalidraw/, /closeExcalidraw/]
     }
   }
@@ -95,7 +95,16 @@ function runnerContractErrors(source) {
     failures.push('note-realtime-autosave must verify the real vault file, not only renderer state.')
   }
   for (const id of ['drop-file-into-vault-folder', 'drop-image-into-note', 'drop-file-link-into-note']) {
-    if (!/dropFiles/.test(featureBlock(source, id))) failures.push(`${id} must dispatch an actual renderer drop sequence.`)
+    const block = featureBlock(source, id)
+    if (!/act\(h, ['"]dropFiles['"]/.test(block)) failures.push(`${id} must dispatch a claimed visible renderer drop sequence.`)
+    if (/(?:set|setup)\s*\([^\n]*dropFiles/.test(block)) failures.push(`${id} must not hide the drop inside fixture setup.`)
+  }
+  const folderDrop = featureBlock(source, 'drop-file-into-vault-folder')
+  if (!/en-create-button/.test(folderDrop) || /(?:set|setup)\s*\([^\n]*createFolder/.test(folderDrop)) {
+    failures.push('drop-file-into-vault-folder must create its target through the visible folder button.')
+  }
+  if (!/en-sidebar-tree-label/.test(folderDrop) || /, \.en-sidebar/.test(folderDrop)) {
+    failures.push('drop-file-into-vault-folder must target the exact visible folder row without a sidebar fallback.')
   }
   return failures
 }
@@ -103,9 +112,32 @@ function runnerContractErrors(source) {
 assert(Array.isArray(manifest.requiredFeatures), 'requiredFeatures must be an array.')
 assert(manifest.requiredFeatures.length >= 20, 'Feature matrix must contain at least twenty independent features.')
 assert(new Set(manifest.requiredFeatures).size === manifest.requiredFeatures.length, 'Feature ids must be unique.')
+
+const featureRequirementMatchers = {
+  'visible-pointer-draw': (block) => /toolbar-rectangle/.test(block) && /pointerDrag/.test(block),
+  'scene-written-to-disk': (block) => /walkVaultFiles/.test(block) && /sceneFile/.test(block) && /elements/.test(block),
+  'png-preview-written-to-disk': (block) => /preview[.]bytes/.test(block) && /[.]png/.test(block),
+  'saved-drawing-reopened-from-library': (block) => /data-entry-path/.test(block) && /reopened/.test(block),
+  'physical-keyboard-shortcut': (block) => /act\(h, ['"]pressShortcut['"]/.test(block),
+  'physical-data-transfer-drop': (block) => /act\(h, ['"]dropFiles['"]/.test(block),
+  'byte-identical-disk-copy': (block) => /readFileSync/.test(block) && /drop-marker/.test(block),
+  'visible-image-render': (block) => /readDom|dom/.test(block) && /img/.test(block),
+  'asset-written-to-disk': (block) => /[.]assets/.test(block) && /existsSync/.test(block),
+  'visible-clickable-link': (block) => /readDom|dom/.test(block) && /a`| a['"]| a\)/.test(block),
+  'attachment-written-to-disk': (block) => /assetPath/.test(block) && /existsSync/.test(block)
+}
+for (const [id, requirements] of Object.entries(manifest.featureRequirements || {})) {
+  assert(manifest.requiredFeatures.includes(id), `featureRequirements references unknown feature ${id}.`)
+  const block = featureBlock(runner, id)
+  for (const requirement of requirements) {
+    const matcher = featureRequirementMatchers[requirement]
+    assert(typeof matcher === 'function', `Unknown feature requirement ${requirement} for ${id}.`)
+    if (matcher) assert(matcher(block), `${id} does not satisfy declared requirement ${requirement}.`)
+  }
+}
 errors.push(...runnerContractErrors(runner))
 
-for (const token of ['pressShortcut', 'pasteText', 'dropFiles', 'DataTransfer', 'DragEvent', 'installPdfViewerProbe', 'readFileOpenHistory']) {
+for (const token of ['pressShortcut', 'pasteText', 'dropFiles', 'pointerDrag', 'DataTransfer', 'DragEvent', 'installPdfViewerProbe', 'readFileOpenHistory']) {
   assert(surface.includes(token), `Physical automation surface is missing ${token}.`)
 }
 assert(main.includes('automationAcceptancePhysicalSurface.js'), 'Main renderer must install the extended acceptance surface.')

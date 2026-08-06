@@ -197,6 +197,7 @@ const F = {
     const canvas = await dom(h, '.en-excalidraw-canvas canvas', (value) => value.visible, 'Excalidraw canvas')
     ok(!opened.text.includes('failed') && canvas.visible, 'Excalidraw opened with an error')
     await act(h, 'fill', '[data-testid="excalidraw-name"]', 'Acceptance drawing')
+    await act(h, 'click', '[data-testid="toolbar-rectangle"]')
     await act(h, 'pointerDrag', '.en-excalidraw-canvas canvas', [
       { x: 0.24, y: 0.34 },
       { x: 0.40, y: 0.58 },
@@ -301,20 +302,29 @@ const F = {
   },
   'drop-file-into-vault-folder': async (h) => {
     await prepareVault(h)
-    await set(h, 'createFolder', 'Drop target')
+    const previous = new Set(readdirSync(h.vaultRoot))
+    await act(h, 'click', '.en-create-button:not(.en-create-button-primary):not(.en-create-excalidraw-button)')
+    const folderName = await waitForNewEntry(
+      h.vaultRoot,
+      previous,
+      (entry) => statSync(join(h.vaultRoot, entry)).isDirectory(),
+      'visible drop target folder creation'
+    )
+    const folderSelector = `.en-sidebar-tree-label[title="${escapeCssAttribute(folderName)}"]`
+    await act(h, 'waitFor', folderSelector, 20_000)
     const sourcePath = externalFile(h, 'drop.txt', 'drop-marker')
-    await act(h, 'dropFiles', '.folder-name[title="Drop target"], .en-sidebar', [{ name: 'drop.txt', type: 'text/plain', path: sourcePath }])
-    const path = join(h.vaultRoot, 'Drop target/drop.txt')
+    await act(h, 'dropFiles', folderSelector, [{ name: 'drop.txt', type: 'text/plain', path: sourcePath }])
+    const path = join(h.vaultRoot, folderName, 'drop.txt')
     for (let attempt = 0; attempt < 200 && !existsSync(path); attempt += 1) await z(100)
-    ok(existsSync(path), 'drop folder failed')
+    ok(existsSync(path), `drop folder failed for ${folderName}`)
     ok(readFileSync(path, 'utf8') === 'drop-marker', 'drop folder bytes differ')
-    return { sourcePath, path }
+    return { sourcePath, folderName, path, visibleTarget: folderSelector }
   },
   'drop-image-into-note': async (h) => {
     await open(h)
     await editEnd(h, '')
     const sourcePath = externalFile(h, 'drop.png', Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFElEQVR42mNk+M/wn4GBgYGJAQoAHgQCAZoeV+QAAAAASUVORK5CYII=', 'base64'))
-    await act(h, 'dropFiles', I, [{ name: 'drop.png', type: 'image/png', path: sourcePath }])
+    await act(h, 'dropFiles', I, [{ name: 'drop.png', type: 'image/png', path: sourcePath }}], {{ clientX: 0.55, clientY: 0.65 }})
     const current = await state(h, (value) => /drop\.png|!\[/.test(value.markdown), 'image drop')
     ok(existsSync(join(h.vaultRoot, '.assets')), 'asset dir absent')
     await dom(h, `${E} img`, (value) => value.visible, 'image visible')
@@ -324,7 +334,7 @@ const F = {
     await open(h)
     await set(h, 'clearFileOpenHistory')
     const sourcePath = externalFile(h, 'linked.txt', 'linked')
-    await act(h, 'dropFiles', I, [{ name: 'linked.txt', type: 'text/plain', path: sourcePath }])
+    await act(h, 'dropFiles', I, [{ name: 'linked.txt', type: 'text/plain', path: sourcePath }}], {{ clientX: 0.55, clientY: 0.65 }})
     const saved = await state(h, (value) => /\[linked\.txt\]\([^)]+\)/i.test(value.markdown), 'linked file markdown')
     const assetPath = join(h.vaultRoot, '.assets', 'linked.txt')
     for (let attempt = 0; attempt < 200 && !existsSync(assetPath); attempt += 1) await z(50)
@@ -338,7 +348,7 @@ const F = {
     await set(h, 'installPdfViewerProbe')
     const sourcePath = externalFile(h, 'addon-route.pdf', '%PDF-1.4\naddon-route\n%%EOF\n')
     try {
-      await act(h, 'dropFiles', I, [{ name: 'addon-route.pdf', type: 'application/pdf', path: sourcePath }])
+      await act(h, 'dropFiles', I, [{ name: 'addon-route.pdf', type: 'application/pdf', path: sourcePath }}], {{ clientX: 0.55, clientY: 0.65 }})
       await state(h, (value) => /\[addon-route\.pdf\]\([^)]+\)/i.test(value.markdown), 'PDF addon markdown')
       await dom(h, `${E} a`, (value) => value.exists && /addon-route\.pdf/i.test(value.text + (value.attributes.href || '')), 'PDF addon visible link')
       await act(h, 'click', `${E} a`)
@@ -354,7 +364,7 @@ const F = {
     await set(h, 'clearFileOpenHistory')
     await set(h, 'removePdfViewerProbe')
     const sourcePath = externalFile(h, 'system-route.pdf', '%PDF-1.4\nsystem-route\n%%EOF\n')
-    await act(h, 'dropFiles', I, [{ name: 'system-route.pdf', type: 'application/pdf', path: sourcePath }])
+    await act(h, 'dropFiles', I, [{ name: 'system-route.pdf', type: 'application/pdf', path: sourcePath }}], {{ clientX: 0.55, clientY: 0.65 }})
     await state(h, (value) => /\[system-route\.pdf\]\([^)]+\)/i.test(value.markdown), 'PDF system markdown')
     await dom(h, `${E} a`, (value) => value.exists && /system-route\.pdf/i.test(value.text + (value.attributes.href || '')), 'PDF system visible link')
     await act(h, 'click', `${E} a`)

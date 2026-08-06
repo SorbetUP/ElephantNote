@@ -268,8 +268,19 @@ export const installAcceptancePhysicalSurface = async (target = globalThis) => {
           materialized.push(await materializeDescriptor(target, descriptor))
         }
         const transfer = createTransfer(target, materialized)
+        const rect = element.getBoundingClientRect()
+        const coordinate = (value, start, size) => {
+          const parsed = Number(value)
+          if (!Number.isFinite(parsed)) return start + size / 2
+          return Math.abs(parsed) <= 1 ? start + parsed * size : parsed
+        }
+        const dragOptions = {
+          ...options,
+          clientX: coordinate(options.clientX, rect.left, rect.width),
+          clientY: coordinate(options.clientY, rect.top, rect.height)
+        }
         for (const name of ['dragenter', 'dragover', 'drop']) {
-          element.dispatchEvent(createDragEvent(target, name, transfer, options))
+          element.dispatchEvent(createDragEvent(target, name, transfer, dragOptions))
         }
         return {
           selector,

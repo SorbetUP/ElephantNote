@@ -38,11 +38,34 @@ const createTransfer = (target, descriptors) => {
   return transfer
 }
 
+const alignDomTextWithSelectionOffsets = (target, api) => {
+  const originalReadDom = typeof api.readDom === 'function' ? api.readDom.bind(api) : null
+  if (!originalReadDom || api.__elephantSelectionAlignedReadDom === true) return
+
+  api.readDom = (selector) => {
+    const result = originalReadDom(selector)
+    const element = target.document?.querySelector?.(selector)
+    const contentEditable = element?.isContentEditable || element?.getAttribute?.('contenteditable') === 'true'
+    if (contentEditable) {
+      result.renderedText = result.text
+      result.text = String(element.textContent || '')
+      result.selectionTextLength = result.text.length
+    }
+    return result
+  }
+  Object.defineProperty(api, '__elephantSelectionAlignedReadDom', {
+    value: true,
+    enumerable: false
+  })
+}
+
 export const installAcceptancePhysicalSurface = async(target = globalThis) => {
   if (target[INSTALL_FLAG]) return target[INSTALL_FLAG]
   for (let attempt = 0; attempt < 2400; attempt += 1) {
     const api = target.__ELEPHANT_ACCEPTANCE_TEST__
     if (api) {
+      alignDomTextWithSelectionOffsets(target, api)
+
       api.pressShortcut = (selector, key, modifiers = {}) => {
         const element = requireElement(target, selector)
         element.focus?.()

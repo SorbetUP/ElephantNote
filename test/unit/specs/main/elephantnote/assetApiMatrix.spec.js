@@ -35,10 +35,14 @@ const resolveMethod = (client, path) =>
 
 describe('attachment and drawing API matrix', () => {
   it.each(CLIENT_CASES)('%s dispatches its canonical action', async(path, args, action, payload) => {
-    const call = vi.fn(async() => ({}))
+    const calls = []
+    const call = vi.fn(async(receivedAction, receivedPayload = {}) => {
+      calls.push([receivedAction, receivedPayload])
+      return {}
+    })
     const client = createAssetClients(call)
     await resolveMethod(client, path)(...args)
-    expect(call).toHaveBeenCalledWith(action, payload)
+    expect(calls.at(-1)).toEqual([action, payload])
     expect(validateApiPayload(action, payload)).toEqual(payload)
   })
 

@@ -1,0 +1,92 @@
+name: Independent packaged addon acceptance
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/workflows/independent-addon-acceptance.yml'
+      - 'build/scripts/run-independent-addon-acceptance.mjs'
+      - 'addons/**'
+      - 'Elephant/frontend/src/renderer/src/platform/automationAcceptancePhysicalSurface.js'
+      - 'Elephant/frontend/src/**'
+      - 'Elephant/backend/tauri/src/**'
+  push:
+    branches:
+      - assistant/addon-independent-validation
+    paths:
+      - '.github/workflows/independent-addon-acceptance.yml'
+      - 'build/scripts/run-independent-addon-acceptance.mjs'
+
+concurrency:
+  group: independent-addon-acceptance-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  exact-appimage:
+    name: Four isolated addon journeys on exact AppImage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      CARGO_TERM_COLOR: always
+      FORCE_COLOR: '1'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: ./.github/actions/setup-tauri-cli
+      - name: Install Linux runtime dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            libx11-dev libxkbfile-dev libsecret-1-dev libfontconfig-dev \
+            xvfb libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
+            libdrm2 libgtk-3-0 libgbm1 libasound2t64 unzip \
+            libayatana-appindicator3-dev librsvg2-dev libwebkit2gtk-4.1-dev \
+            patchelf xdg-utils
+      - uses: ./.github/actions/setup
+      - name: Install workspace dependencies
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          npm_config_user_agent: pnpm
+          USE_ELECTRON_CLANG: '0'
+        run: node build/scripts/postinstall.js
+      - name: Build exact AppImage once
+        shell: bash
+        run: |
+          set -euxo pipefail
+          pnpm build:linux 2>&1 | tee addon-independent-build.log
+          APPIMAGE_PATH="$(find Elephant/backend/tauri/target/release/bundle/appimage -maxdepth 1 -type f -name '*.AppImage' -print -quit)"
+          test -f "$APPIMAGE_PATH"
+          chmod +x "$APPIMAGE_PATH"
+          APPIMAGE_PATH="$(realpath "$APPIMAGE_PATH")"
+          echo "ELEPHANT_ACCEPTANCE_APP_PATH=$APPIMAGE_PATH" >> "$GITHUB_ENV"
+          echo 'APPIMAGE_EXTRACT_AND_RUN=1' >> "$GITHUB_ENV"
+          sha256sum "$APPIMAGE_PATH" | tee addon-independent-appimage.sha256
+      - name: Execute each addon in a fresh process and vault
+        shell: bash
+        run: |
+          set -o pipefail
+          xvfb-run --auto-servernum env \
+            ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
+            node build/scripts/run-independent-addon-acceptance.mjs \
+            2>&1 | tee addon-independent-acceptance.log
+      - name: Publish compact independent evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: independent-addon-acceptance
+          path: |
+            addon-independent-appimage.sha256
+            addon-independent-acceptance.log
+            test-results/addon-independent/*.json
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 9

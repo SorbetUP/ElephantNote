@@ -10,6 +10,17 @@ const requireElement = (target, selector) => {
   return element
 }
 
+const resolveDropElement = (target, selector) => {
+  const folderTitle = String(selector || '').match(/\.folder-name\[title="([^"]+)"\]/)?.[1]
+  if (folderTitle) {
+    const escapedTitle = target.CSS?.escape?.(folderTitle) || folderTitle.replace(/"/g, '\\"')
+    const label = target.document?.querySelector?.(`.en-sidebar-tree-label[title="${escapedTitle}"]`)
+    const row = label?.closest?.('.en-sidebar-tree-row')
+    if (row) return row
+  }
+  return requireElement(target, selector)
+}
+
 const bytesFromDescriptor = (descriptor) => {
   if (descriptor.contentBase64) {
     const binary = atob(descriptor.contentBase64)
@@ -116,7 +127,7 @@ export const installAcceptancePhysicalSurface = async (target = globalThis) => {
       }
 
       api.dropFiles = async (selector, descriptors, options = {}) => {
-        const element = requireElement(target, selector)
+        const element = resolveDropElement(target, selector)
         if (!Array.isArray(descriptors) || descriptors.length === 0) throw new TypeError('dropFiles requires file descriptors')
         const materialized = []
         for (const descriptor of descriptors) {
@@ -134,6 +145,7 @@ export const installAcceptancePhysicalSurface = async (target = globalThis) => {
         for (const name of ['dragenter', 'dragover', 'drop']) element.dispatchEvent(new target.DragEvent(name, init))
         return {
           selector,
+          resolvedTarget: element.className || element.tagName,
           files: materialized.map(({ name, type, path, relativePath }) => ({ name, type, path, relativePath }))
         }
       }

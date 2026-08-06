@@ -1,6 +1,13 @@
 name: Bazzite Wayland production proof
 
 on:
+  push:
+    paths:
+      - '.github/workflows/bazzite-production-proof.yml'
+      - 'build/scripts/run-bazzite-packaged-user-journey.mjs'
+      - 'build/scripts/run-bazzite-production-proof.mjs'
+      - 'build/scripts/verify-bazzite-proof.mjs'
+      - 'tests/trust/bazzite-proof.json'
   pull_request:
     paths:
       - '.github/workflows/bazzite-production-proof.yml'
@@ -39,13 +46,15 @@ jobs:
   production-proof:
     needs: contract
     name: Exact AppImage on real Bazzite Wayland
-    if: github.event_name == 'workflow_dispatch'
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && vars.ELEPHANT_BAZZITE_PROOF_ENABLED == '1')
     runs-on: [self-hosted, linux, x64, bazzite, gnome, wayland]
     timeout-minutes: 180
     env:
-      ELEPHANT_ACCEPTANCE_APP_PATH: ${{ inputs.appimage_path }}
-      ELEPHANT_EXPECTED_APPIMAGE_SHA256: ${{ inputs.expected_sha256 }}
-      ELEPHANT_BAZZITE_QUICK: ${{ inputs.quick && '1' || '0' }}
+      ELEPHANT_ACCEPTANCE_APP_PATH: ${{ inputs.appimage_path || vars.ELEPHANT_BAZZITE_APPIMAGE_PATH }}
+      ELEPHANT_EXPECTED_APPIMAGE_SHA256: ${{ inputs.expected_sha256 || vars.ELEPHANT_BAZZITE_APPIMAGE_SHA256 }}
+      ELEPHANT_BAZZITE_QUICK: ${{ inputs.quick && '1' || vars.ELEPHANT_BAZZITE_QUICK || '0' }}
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup
@@ -54,6 +63,7 @@ jobs:
         run: |
           set -euxo pipefail
           test -f "$ELEPHANT_ACCEPTANCE_APP_PATH"
+          test "${#ELEPHANT_EXPECTED_APPIMAGE_SHA256}" -eq 64
           node build/scripts/run-bazzite-production-proof.mjs "$ELEPHANT_ACCEPTANCE_APP_PATH"
       - name: Upload compact Bazzite proof evidence
         if: always()

@@ -21,6 +21,13 @@ node build/scripts/run-bazzite-production-proof.mjs /absolute/path/Elephant.AppI
 
 Use `--quick` only while iterating. A publishable result requires the exhaustive addon suite.
 
-## GitHub workflow
+## Pre-merge execution on the active branch
 
-Register the real machine as a self-hosted runner with the labels `bazzite`, `gnome` and `wayland`, then manually dispatch **Bazzite Wayland production proof** with the absolute AppImage path and expected SHA-256.
+Register the real machine as a self-hosted runner with the labels `bazzite`, `gnome` and `wayland`. Configure these repository variables:
+
+- `ELEPHANT_BAZZITE_PROOF_ENABLED=1`
+- `ELEPHANT_BAZZITE_APPIMAGE_PATH=/absolute/path/Elephant.AppImage`
+- `ELEPHANT_BAZZITE_APPIMAGE_SHA256=<64-character-sha256>`
+- optionally `ELEPHANT_BAZZITE_QUICK=1` during iteration only
+
+A push touching the Bazzite proof files can then execute the real-machine job before the PR is merged. The manual dispatch remains available after the workflow is present on the default branch.

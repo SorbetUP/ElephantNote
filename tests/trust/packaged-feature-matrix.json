@@ -1,5 +1,6 @@
 {
   "schemaVersion": 1,
+  "contractRevision": 2,
   "id": "packaged-feature-matrix",
   "runner": "build/scripts/run-packaged-feature-matrix.mjs",
   "artifact": "test-results/trusted/packaged-feature-matrix/latest.json",

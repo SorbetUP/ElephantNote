@@ -1,0 +1,107 @@
+name: Standalone exact AppImage proof 22
+
+on:
+  push:
+    branches:
+      - agent/standalone-final-five-proof-22
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: standalone-appimage-22-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  exact-appimage:
+    name: Build and run twenty isolated features on Ubuntu 22
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    env:
+      CARGO_TERM_COLOR: always
+      FORCE_COLOR: '1'
+    steps:
+      - name: Clone exact commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          git clone --filter=blob:none --no-checkout \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" repo
+          cd repo
+          git fetch --depth 1 origin "$GITHUB_SHA"
+          git checkout --detach "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: Install toolchain and dependencies
+        working-directory: repo
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          npm_config_user_agent: pnpm
+          USE_ELECTRON_CLANG: '0'
+        run: |
+          set -euxo pipefail
+          node build/scripts/verify-packaged-feature-matrix.mjs
+          sudo apt-get update
+          sudo apt-get install -y \
+            libx11-dev libxkbfile-dev libsecret-1-dev libfontconfig-dev \
+            xvfb libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
+            libdrm2 libgtk-3-0 libgbm1 libasound2 unzip \
+            libayatana-appindicator3-dev librsvg2-dev libwebkit2gtk-4.1-dev \
+            patchelf xdg-utils
+          rustup toolchain install 1.91.0 --profile minimal --target wasm32-unknown-unknown
+          rustup default 1.91.0
+          if ! cargo tauri --version 2>/dev/null | grep -Fq '2.11.2'; then
+            cargo install tauri-cli --version 2.11.2 --locked
+          fi
+          cargo tauri --version | grep -F '2.11.2'
+          node --version
+          corepack enable
+          corepack prepare pnpm@10.33.4 --activate
+          pnpm --version
+          node build/scripts/install-wasm-bindgen-cli.mjs
+          pnpm install --frozen-lockfile --ignore-scripts
+          git diff --exit-code -- package.json pnpm-lock.yaml
+          node build/scripts/sync-elephant-addons.mjs
+          node build/scripts/postinstall.js
+
+      - name: Build exact AppImage
+        working-directory: repo
+        shell: bash
+        run: |
+          set -euxo pipefail
+          pnpm build:linux 2>&1 | tee packaged-feature-build.log
+          APPIMAGE_PATH="$(find Elephant/backend/tauri/target/release/bundle/appimage -maxdepth 1 -type f -name '*.AppImage' -print -quit)"
+          test -f "$APPIMAGE_PATH"
+          chmod +x "$APPIMAGE_PATH"
+          APPIMAGE_PATH="$(realpath "$APPIMAGE_PATH")"
+          echo "$APPIMAGE_PATH" > packaged-feature-appimage.path
+          sha256sum "$APPIMAGE_PATH" | tee packaged-feature-appimage.sha256
+
+      - name: Run and print all independent verdicts
+        working-directory: repo
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          APPIMAGE_PATH="$(cat packaged-feature-appimage.path)"
+          xvfb-run --auto-servernum env \
+            APPIMAGE_EXTRACT_AND_RUN=1 \
+            ELEPHANT_PACKAGED_FORMAT=linux-appimage \
+            ELEPHANT_ACCEPTANCE_APP_PATH="$APPIMAGE_PATH" \
+            ELEPHANT_PACKAGED_APP="$APPIMAGE_PATH" \
+            ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
+            node build/scripts/run-packaged-feature-matrix.mjs \
+            2>&1 | tee packaged-feature-matrix.log
+          MATRIX_EXIT=${PIPESTATUS[0]}
+          set -e
+          echo '=== APPIMAGE SHA256 ==='
+          cat packaged-feature-appimage.sha256
+          echo '=== AGGREGATE VERDICT ==='
+          cat test-results/trusted/packaged-feature-matrix/latest.json 2>/dev/null || true
+          echo '=== INDIVIDUAL VERDICTS ==='
+          find test-results/trusted -mindepth 2 -maxdepth 3 -name latest.json -print -exec cat {} \; 2>/dev/null || true
+          exit "$MATRIX_EXIT"

@@ -1,4 +1,4 @@
-name: Independent packaged addon acceptance
+name: Packaged app and addon API acceptance
 
 on:
   workflow_dispatch:
@@ -6,7 +6,11 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - '.github/workflows/independent-addon-acceptance.yml'
-      - 'build/scripts/run-independent-addon-acceptance.mjs'
+      - 'build/scripts/addon-acceptance-harness.mjs'
+      - 'build/scripts/run-focused-addon-scenario.mjs'
+      - 'build/scripts/run-addon-interaction-scenario.mjs'
+      - 'build/scripts/run-desktop-acceptance.mjs'
+      - 'build/scripts/sync-elephant-addons.mjs'
       - 'addons/**'
       - 'Elephant/frontend/src/renderer/src/platform/automationAcceptancePhysicalSurface.js'
       - 'Elephant/frontend/src/**'
@@ -16,10 +20,14 @@ on:
       - assistant/addon-independent-validation
     paths:
       - '.github/workflows/independent-addon-acceptance.yml'
-      - 'build/scripts/run-independent-addon-acceptance.mjs'
+      - 'build/scripts/addon-acceptance-harness.mjs'
+      - 'build/scripts/run-focused-addon-scenario.mjs'
+      - 'build/scripts/run-addon-interaction-scenario.mjs'
+      - 'build/scripts/run-desktop-acceptance.mjs'
+      - 'build/scripts/sync-elephant-addons.mjs'
 
 concurrency:
-  group: independent-addon-acceptance-${{ github.ref }}
+  group: packaged-app-addon-api-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -27,9 +35,9 @@ permissions:
 
 jobs:
   exact-appimage:
-    name: Four isolated addon journeys on exact AppImage
+    name: Base API, eight addons and cross-addon interactions
     runs-on: ubuntu-24.04
-    timeout-minutes: 180
+    timeout-minutes: 240
     env:
       CARGO_TERM_COLOR: always
       FORCE_COLOR: '1'
@@ -52,40 +60,45 @@ jobs:
             libayatana-appindicator3-dev librsvg2-dev libwebkit2gtk-4.1-dev \
             patchelf xdg-utils
       - uses: ./.github/actions/setup
-      - name: Install workspace dependencies
+      - name: Install workspace dependencies and pinned addons
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           npm_config_user_agent: pnpm
           USE_ELECTRON_CLANG: '0'
-        run: node build/scripts/postinstall.js
+        run: |
+          set -euxo pipefail
+          node build/scripts/postinstall.js
+          pnpm addons:sync
+          node --check build/scripts/addon-acceptance-harness.mjs
+          node --check build/scripts/run-focused-addon-scenario.mjs
+          node --check build/scripts/run-addon-interaction-scenario.mjs
       - name: Build exact AppImage once
         shell: bash
         run: |
           set -euxo pipefail
-          pnpm build:linux 2>&1 | tee addon-independent-build.log
+          pnpm build:linux 2>&1 | tee packaged-api-build.log
           APPIMAGE_PATH="$(find Elephant/backend/tauri/target/release/bundle/appimage -maxdepth 1 -type f -name '*.AppImage' -print -quit)"
           test -f "$APPIMAGE_PATH"
           chmod +x "$APPIMAGE_PATH"
           APPIMAGE_PATH="$(realpath "$APPIMAGE_PATH")"
           echo "ELEPHANT_ACCEPTANCE_APP_PATH=$APPIMAGE_PATH" >> "$GITHUB_ENV"
           echo 'APPIMAGE_EXTRACT_AND_RUN=1' >> "$GITHUB_ENV"
-          sha256sum "$APPIMAGE_PATH" | tee addon-independent-appimage.sha256
-      - name: Execute each addon in a fresh process, XDG profile and vault
+          sha256sum "$APPIMAGE_PATH" | tee packaged-api-appimage.sha256
+      - name: Execute base API, focused addons and interaction scenarios
         shell: bash
         run: |
           set +e
-          : > addon-independent-acceptance.log
+          : > packaged-api-acceptance.log
           overall=0
-          for addon_id in \
-            elephant.dashboard \
-            elephant.recently-edited \
-            elephant.calendar \
-            elephant.google-keep-import
-          do
+
+          run_isolated() {
+            label="$1"
+            shift
             run_root="$(mktemp -d)"
-            mkdir -p "$run_root/config" "$run_root/data" "$run_root/cache" "$run_root/state" "$run_root/runtime"
-            echo "===== $addon_id =====" | tee -a addon-independent-acceptance.log
+            mkdir -p "$run_root/home" "$run_root/config" "$run_root/data" "$run_root/cache" "$run_root/state" "$run_root/runtime"
+            chmod 700 "$run_root/runtime"
+            echo "===== $label =====" | tee -a packaged-api-acceptance.log
             xvfb-run --auto-servernum env \
               HOME="$run_root/home" \
               XDG_CONFIG_HOME="$run_root/config" \
@@ -93,42 +106,84 @@ jobs:
               XDG_CACHE_HOME="$run_root/cache" \
               XDG_STATE_HOME="$run_root/state" \
               XDG_RUNTIME_DIR="$run_root/runtime" \
-              ELEPHANT_ADDON_MATRIX="$addon_id" \
               ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
-              node build/scripts/run-independent-addon-acceptance.mjs \
-              2>&1 | tee -a addon-independent-acceptance.log
-            test_rc=${PIPESTATUS[0]}
-            if [ "$test_rc" -ne 0 ]; then overall=1; fi
+              "$@" 2>&1 | tee -a packaged-api-acceptance.log
+            rc=${PIPESTATUS[0]}
+            if [ "$rc" -ne 0 ]; then overall=1; fi
             rm -rf "$run_root"
+          }
+
+          run_isolated full-desktop-base-and-addon-api \
+            node build/scripts/run-desktop-acceptance.mjs
+
+          for scenario in \
+            dashboard \
+            recently-edited \
+            calendar \
+            google-keep \
+            wiki \
+            graph \
+            knowledge \
+            open-models
+          do
+            run_isolated "focused:$scenario" env \
+              ELEPHANT_FOCUSED_ADDON="$scenario" \
+              node build/scripts/run-focused-addon-scenario.mjs
           done
+
+          for scenario in \
+            base-addon-api \
+            wiki-knowledge-graph \
+            ui-contributions
+          do
+            run_isolated "interaction:$scenario" env \
+              ELEPHANT_INTERACTION_SCENARIO="$scenario" \
+              node build/scripts/run-addon-interaction-scenario.mjs
+          done
+
           node --input-type=module <<'NODE'
-          import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
+          import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
           import { join } from 'node:path'
-          const directory = 'test-results/addon-independent'
-          const results = readdirSync(directory)
-            .filter((name) => name.startsWith('elephant.') && name.endsWith('.json'))
-            .sort()
-            .map((name) => JSON.parse(readFileSync(join(directory, name), 'utf8')))
+          const focusedDirectory = 'test-results/focused-addon-acceptance'
+          mkdirSync(focusedDirectory, { recursive: true })
+          const scenarios = existsSync(focusedDirectory)
+            ? readdirSync(focusedDirectory)
+              .filter((name) => name.endsWith('.json') && name !== 'summary.json')
+              .sort()
+              .map((name) => JSON.parse(readFileSync(join(focusedDirectory, name), 'utf8')))
+            : []
+          const desktopPath = 'test-results/acceptance/latest.json'
+          const desktop = existsSync(desktopPath) ? JSON.parse(readFileSync(desktopPath, 'utf8')) : null
+          const desktopPass = Boolean(desktop?.result) && desktop?.ok !== false
           const summary = {
-            status: results.every((entry) => entry.status === 'PASS') ? 'PASS' : 'FAIL',
-            evidenceLevel: 'packaged-functional-independent',
+            status: desktopPass && scenarios.length === 11 && scenarios.every((entry) => entry.status === 'PASS') ? 'PASS' : 'FAIL',
+            evidenceLevel: 'packaged-base-api-addon-api-cross-addon-functional',
             generatedAt: new Date().toISOString(),
             commit: process.env.ELEPHANT_TEST_COMMIT || process.env.GITHUB_SHA || null,
-            addons: results.map(({ addonId, status, error = null }) => ({ addonId, status, error }))
+            appImageSha256: readFileSync('packaged-api-appimage.sha256', 'utf8').trim().split(/\s+/)[0],
+            desktop: {
+              status: desktopPass ? 'PASS' : 'FAIL',
+              error: desktop?.error || null,
+              packagedRun: desktop?.result?.packagedRun ?? null,
+              catalogSource: desktop?.result?.catalogSource ?? null
+            },
+            scenarios: scenarios.map(({ scenarioId, status, error = null, evidenceLevel }) => ({ scenarioId, status, error, evidenceLevel }))
           }
-          writeFileSync(join(directory, 'summary.json'), JSON.stringify(summary, null, 2))
+          writeFileSync(join(focusedDirectory, 'summary.json'), JSON.stringify(summary, null, 2))
           console.log(JSON.stringify(summary))
           NODE
           exit "$overall"
-      - name: Publish compact independent evidence
+      - name: Publish compact packaged evidence
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
-          name: independent-addon-acceptance
+          name: packaged-app-addon-api-acceptance
           path: |
-            addon-independent-appimage.sha256
-            addon-independent-acceptance.log
-            test-results/addon-independent/*.json
+            packaged-api-appimage.sha256
+            packaged-api-acceptance.log
+            test-results/acceptance/latest.json
+            test-results/acceptance/latest-tauri.log
+            test-results/focused-addon-acceptance/*.json
           if-no-files-found: error
           retention-days: 3
           compression-level: 9

@@ -19,7 +19,7 @@ jobs:
         with:
           ref: agent/addon-runtime-stabilization
           fetch-depth: 0
-      - name: Apply proof hardening
+      - name: Apply proof hardening after CI workflow split
         run: python build/scripts/agent_fix_bazzite_drop_proofs.py
       - name: Commit final patch
         shell: bash

@@ -3,9 +3,10 @@
     v-if="!sourceCode"
     :model-value="editorModelValue"
     :factory="rustRuntimeFactory"
-    :on-file-drop="imageHandlers.dropped"
+    :on-file-drop="fileHandlers.dropped"
     :on-uri-drop="imageHandlers.uriDropped"
     :on-image-click="imageToolbar.open"
+    :on-link-click="fileHandlers.openLink"
     mode="rust"
     class="rust-editor-runtime"
     @ready="handleRustRuntimeReady"
@@ -45,6 +46,10 @@ import RuntimeImageToolbar from './runtimeImageToolbar.vue'
 import RuntimeTableDialog from './runtimeTableDialog.vue'
 import { rustBusCommand } from './runtimeEditorCommands'
 import { createRuntimeImageHandlers } from './runtimeEditorImages'
+import {
+  createRuntimeFileHandlers,
+  createRuntimeLinkHandler
+} from './runtimeFileLinks'
 import { useRuntimeImageToolbar } from './runtimeImageToolbarState'
 import { applyRustEditorMarkdown } from './runtimeEditorState'
 
@@ -76,11 +81,6 @@ const editorModelValue = computed(() => {
   const converted = String(props.toEditorMarkdown(props.markdown) || '')
   const canonical = lastEditorMarkdown.value
 
-  // Prefer the exact active Rust document whenever the parent value is the
-  // adapter's round-trip of that document. This recognizes transformed echoes
-  // (front matter extraction, trailing paragraph normalization, and similar
-  // document-adapter changes) without treating an unrelated external document
-  // replacement as an internal echo.
   if (
     typeof canonical === 'string' &&
     String(props.fromEditorMarkdown(canonical) || '') === String(props.markdown || '')
@@ -164,6 +164,15 @@ const imageHandlers = createRuntimeImageHandlers({
   editorStore,
   dispatch: dispatchRustBusCommand
 })
+const fileHandlers = {
+  ...createRuntimeFileHandlers({
+    currentFile,
+    projectTree,
+    dispatch: dispatchRustBusCommand,
+    dropImage: imageHandlers.dropped
+  }),
+  openLink: createRuntimeLinkHandler({ currentFile, projectTree })
+}
 const imageToolbar = useRuntimeImageToolbar(imageHandlers)
 
 const handleParagraphCommand = (type) => {
@@ -203,9 +212,6 @@ const handleRustMarkdownChange = (editorMarkdown) => {
   if (changed) {
     const checkpoint = persistEditorRecoveryCheckpoint()
     if (file?.id && file.pathname) {
-      // Start the disk autosave timer only after the recovery journal has either
-      // accepted or explicitly rejected this revision. A process killed during
-      // the following window can therefore restore the exact unsaved Markdown.
       checkpoint.finally(() => {
         if (file.isSaved === false) {
           editorStore.HANDLE_AUTO_SAVE({

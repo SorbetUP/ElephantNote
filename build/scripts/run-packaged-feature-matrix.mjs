@@ -1,14 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto'
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  statSync,
-  writeFileSync
-} from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { createRealAppHarness } from './lib/real-app-harness.mjs'
 
@@ -19,14 +12,12 @@ const L = 'user-journey'
 const E = '[data-testid="muya-rust-runtime-editor"]'
 const I = `${E}[contenteditable="true"], ${E} [contenteditable="true"]`
 const APP_PATH = resolve(process.env.ELEPHANT_ACCEPTANCE_APP_PATH || '')
-const appSha256 = process.env.ELEPHANT_ACCEPTANCE_APP_SHA256 || createHash('sha256')
-  .update(readFileSync(APP_PATH))
-  .digest('hex')
+const appSha256 = process.env.ELEPHANT_ACCEPTANCE_APP_SHA256 || createHash('sha256').update(readFileSync(APP_PATH)).digest('hex')
 const out = []
 
 mkdirSync(O, { recursive: true })
-const z = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds))
-const ok = (condition, message) => { if (!condition) throw new Error(message) }
+const z = (ms) => new Promise((done) => setTimeout(done, ms))
+const ok = (value, message) => { if (!value) throw new Error(message) }
 const act = (h, name, ...args) => h.action(L, name, ...args)
 const set = (h, name, ...args) => h.setup(name, ...args)
 
@@ -48,9 +39,7 @@ async function dom(h, selector, predicate, name) {
   throw new Error(`${name}: DOM timeout`)
 }
 
-async function absent(h, selector, name) {
-  return dom(h, selector, (value) => !value.exists, name)
-}
+const absent = (h, selector, name) => dom(h, selector, (value) => !value.exists, name)
 
 async function prepareVault(h) {
   await set(h, 'selectVault', h.vaultRoot)
@@ -92,12 +81,19 @@ async function openHistory(h, predicate, name) {
 
 async function waitForNewEntry(root, previous, predicate, name) {
   for (let attempt = 0; attempt < 200; attempt += 1) {
-    const entries = readdirSync(root)
-    const added = entries.find((entry) => !previous.has(entry) && predicate(entry))
+    const added = readdirSync(root).find((entry) => !previous.has(entry) && predicate(entry))
     if (added) return added
     await z(50)
   }
   throw new Error(`${name}: no new disk entry appeared`)
+}
+
+function externalFile(h, name, content) {
+  const directory = join(h.fixtureRoot, 'external-files')
+  mkdirSync(directory, { recursive: true })
+  const path = join(directory, name)
+  writeFileSync(path, content)
+  return path
 }
 
 const F = {
@@ -106,7 +102,6 @@ const F = {
     ok(firstScreen.visible && firstScreen.text.includes('Choose your first vault'), 'first screen')
     return firstScreen
   },
-
   'vault-selection': async (h) => {
     const firstScreen = await act(h, 'readDom', '.en-empty-card')
     ok(firstScreen.visible, 'vault onboarding is not visible')
@@ -116,33 +111,25 @@ const F = {
     await act(h, 'waitFor', '.en-library-toolbar', 20_000)
     return { activeVault: current.activeVault, visibleControl: '.en-primary-button' }
   },
-
   'create-note': async (h) => {
     await prepareVault(h)
     const previous = new Set(readdirSync(h.vaultRoot))
     await act(h, 'click', '.en-create-button-primary')
     const filename = await waitForNewEntry(h.vaultRoot, previous, (entry) => entry.endsWith('.md'), 'visible note creation')
     await act(h, 'waitFor', E, 20_000)
-    const current = await state(h, (value) => String(value.pathname || '').endsWith(filename), 'created note opened')
+    const current = await state(h, (value) => value.notePath === filename || String(value.currentFilePath || '').endsWith(filename), 'created note opened')
     ok(existsSync(join(h.vaultRoot, filename)), 'created note absent on disk')
-    return { filename, pathname: current.pathname, visibleControl: '.en-create-button-primary' }
+    return { filename, notePath: current.notePath, visibleControl: '.en-create-button-primary' }
   },
-
   'create-folder': async (h) => {
     await prepareVault(h)
     const previous = new Set(readdirSync(h.vaultRoot))
     await act(h, 'click', '.en-create-button:not(.en-create-button-primary):not(.en-create-excalidraw-button)')
-    const filename = await waitForNewEntry(
-      h.vaultRoot,
-      previous,
-      (entry) => statSync(join(h.vaultRoot, entry)).isDirectory(),
-      'visible folder creation'
-    )
+    const filename = await waitForNewEntry(h.vaultRoot, previous, (entry) => statSync(join(h.vaultRoot, entry)).isDirectory(), 'visible folder creation')
     const path = join(h.vaultRoot, filename)
     ok(existsSync(path) && statSync(path).isDirectory(), 'folder absent')
     return { filename, path, visibleControl: '.en-create-button' }
   },
-
   'external-note-refresh': async (h) => {
     await prepareVault(h)
     writeFileSync(join(h.vaultRoot, 'External.md'), '# External\n\nexternal-marker\n')
@@ -151,7 +138,6 @@ const F = {
     ok((await act(h, 'readState')).markdown.includes('external-marker'), 'external note unreadable')
     return result
   },
-
   'external-folder-refresh': async (h) => {
     await prepareVault(h)
     mkdirSync(join(h.vaultRoot, 'External folder'))
@@ -160,7 +146,6 @@ const F = {
     await set(h, 'openNote', 'External folder/Nested.md')
     return result
   },
-
   'note-visible-edit': async (h) => {
     await open(h)
     await editEnd(h, ' visible-marker')
@@ -168,7 +153,6 @@ const F = {
     ok((await act(h, 'readDom', E)).text.includes('visible-marker'), 'not visible')
     return current
   },
-
   'note-realtime-autosave': async (h) => {
     await open(h)
     await editEnd(h, ' autosave-marker')
@@ -179,7 +163,6 @@ const F = {
     ok(beforeDisk.includes('autosave-marker') || canonical.isSaved === false, 'saved lied')
     return { bytes: disk.length, saved: saved.isSaved }
   },
-
   'note-read-stability': async (h) => {
     await open(h, 'Long.md')
     for (let index = 0; index < 30; index += 1) {
@@ -189,7 +172,6 @@ const F = {
     }
     return { reads: 30 }
   },
-
   'excalidraw-open-close': async (h) => {
     await prepareVault(h)
     await act(h, 'click', '.en-create-excalidraw-button')
@@ -200,7 +182,6 @@ const F = {
     await absent(h, '[data-testid="excalidraw-dialog"]', 'visible Excalidraw close')
     return { opened: true, canvas: true, closed: true }
   },
-
   'text-basic-editing': async (h) => {
     await open(h)
     const paragraph = `${E} .ag-paragraph-content`
@@ -211,18 +192,17 @@ const F = {
     await act(h, 'insertText', I, 'Second line')
     return state(h, (value) => value.markdown.includes('Simple line') && value.markdown.includes('Second line'), 'text')
   },
-
   'markdown-live-formatting': async (h) => {
     await open(h, 'Formatting.md')
-    const paragraph = `${E} .ag-paragraph-content`
-    const content = await act(h, 'readDom', paragraph)
-    await act(h, 'selectText', paragraph, 0, content.text.length)
-    await act(h, 'insertText', I, '**bold** and *italic* and `code`')
-    const current = await state(h, (value) => value.markdown.includes('**bold**'), 'markdown')
-    const visible = await dom(h, E, (value) => value.html.includes('<strong') && value.html.includes('<em'), 'render')
-    return { current, htmlLength: visible.html.length }
+    const before = await dom(h, E, (value) => value.html.includes('<strong') && value.html.includes('<em') && value.html.includes('<code'), 'initial markdown render')
+    const strong = await act(h, 'readDom', `${E} strong`)
+    await act(h, 'selectText', `${E} strong`, 0, strong.text.length)
+    await act(h, 'insertText', I, 'BOLD')
+    const current = await state(h, (value) => value.markdown.includes('**BOLD**') && value.isSaved === false, 'live markdown update')
+    const visible = await dom(h, E, (value) => value.html.includes('<strong>BOLD</strong>') && value.html.includes('<em') && value.html.includes('<code'), 'live markdown render')
+    await h.waitForVaultFile('Formatting.md', (value) => value.includes('**BOLD**'), 20_000)
+    return { beforeHtmlLength: before.html.length, current, htmlLength: visible.html.length }
   },
-
   'settings-roundtrip': async (h) => {
     await open(h)
     await act(h, 'click', '[aria-label="Settings"]')
@@ -238,7 +218,6 @@ const F = {
     const changed = await dom(h, '.en-shell', (value) => (value.attributes.class?.includes('en-theme-dark')) !== dark, 'theme')
     return { search: searchResult.text, dark, changed: changed.attributes.class }
   },
-
   'sidebar-hide-full-button': async (h) => {
     await open(h)
     const before = await act(h, 'readDom', '.en-body')
@@ -248,7 +227,6 @@ const F = {
     await act(h, 'click', '.en-rail-sidebar-toggle')
     return dom(h, '.en-body', (value) => (value.attributes.class?.includes('en-sidebar-hidden')) === hidden, 'show')
   },
-
   'sidebar-hide-full-shortcut': async (h) => {
     await open(h)
     const before = await act(h, 'readDom', '.en-body')
@@ -258,82 +236,68 @@ const F = {
     await set(h, 'pressShortcut', I, 'j', { ctrlKey: true, code: 'KeyJ' })
     return dom(h, '.en-body', (value) => (value.attributes.class?.includes('en-sidebar-hidden')) === hidden, 'shortcut show')
   },
-
   'drop-file-into-vault-folder': async (h) => {
     await prepareVault(h)
     await set(h, 'createFolder', 'Drop target')
-    await set(h, 'dropFiles', '.folder-name[title="Drop target"], .en-sidebar', [
-      { name: 'drop.txt', type: 'text/plain', content: 'drop-marker' }
-    ])
+    const sourcePath = externalFile(h, 'drop.txt', 'drop-marker')
+    await set(h, 'dropFiles', '.folder-name[title="Drop target"], .en-sidebar', [{ name: 'drop.txt', type: 'text/plain', path: sourcePath }])
     const path = join(h.vaultRoot, 'Drop target/drop.txt')
     for (let attempt = 0; attempt < 200 && !existsSync(path); attempt += 1) await z(100)
     ok(existsSync(path), 'drop folder failed')
     ok(readFileSync(path, 'utf8') === 'drop-marker', 'drop folder bytes differ')
-    return { path }
+    return { sourcePath, path }
   },
-
   'drop-image-into-note': async (h) => {
     await open(h)
     await editEnd(h, '')
-    await set(h, 'dropFiles', I, [{
-      name: 'drop.png',
-      type: 'image/png',
-      contentBase64: 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFElEQVR42mNk+M/wn4GBgYGJAQoAHgQCAZoeV+QAAAAASUVORK5CYII='
-    }])
+    const sourcePath = externalFile(h, 'drop.png', Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFElEQVR42mNk+M/wn4GBgYGJAQoAHgQCAZoeV+QAAAAASUVORK5CYII=', 'base64'))
+    await set(h, 'dropFiles', I, [{ name: 'drop.png', type: 'image/png', path: sourcePath }])
     const current = await state(h, (value) => /drop\.png|!\[/.test(value.markdown), 'image drop')
     ok(existsSync(join(h.vaultRoot, '.assets')), 'asset dir absent')
     await dom(h, `${E} img`, (value) => value.visible, 'image visible')
-    return current
+    return { current, sourcePath }
   },
-
   'drop-file-link-into-note': async (h) => {
     await open(h)
     await set(h, 'clearFileOpenHistory')
-    await set(h, 'dropFiles', I, [{ name: 'linked.txt', type: 'text/plain', content: 'linked' }])
+    const sourcePath = externalFile(h, 'linked.txt', 'linked')
+    await set(h, 'dropFiles', I, [{ name: 'linked.txt', type: 'text/plain', path: sourcePath }])
     const saved = await state(h, (value) => /\[linked\.txt\]\([^)]+\)/i.test(value.markdown), 'linked file markdown')
     const assetPath = join(h.vaultRoot, '.assets', 'linked.txt')
     for (let attempt = 0; attempt < 200 && !existsSync(assetPath); attempt += 1) await z(50)
     ok(existsSync(assetPath) && readFileSync(assetPath, 'utf8') === 'linked', 'linked attachment bytes differ')
     const link = await dom(h, `${E} a`, (value) => value.exists && /linked\.txt/i.test(value.text + (value.attributes.href || '')), 'linked file visible link')
-    return { saved, link, assetPath }
+    return { saved, link, sourcePath, assetPath }
   },
-
   'pdf-addon-open-route': async (h) => {
     await open(h)
     await set(h, 'clearFileOpenHistory')
     await set(h, 'installPdfViewerProbe')
+    const sourcePath = externalFile(h, 'addon-route.pdf', '%PDF-1.4\naddon-route\n%%EOF\n')
     try {
-      await set(h, 'dropFiles', I, [{
-        name: 'addon-route.pdf',
-        type: 'application/pdf',
-        content: '%PDF-1.4\naddon-route\n%%EOF\n'
-      }])
+      await set(h, 'dropFiles', I, [{ name: 'addon-route.pdf', type: 'application/pdf', path: sourcePath }])
       await state(h, (value) => /\[addon-route\.pdf\]\([^)]+\)/i.test(value.markdown), 'PDF addon markdown')
       await dom(h, `${E} a`, (value) => value.exists && /addon-route\.pdf/i.test(value.text + (value.attributes.href || '')), 'PDF addon visible link')
       await act(h, 'click', `${E} a`)
       const routed = await openHistory(h, (entry) => entry.route === 'pdf-addon', 'PDF addon route')
       ok(routed.handled === true && !routed.error, `wrong PDF addon route: ${JSON.stringify(routed)}`)
-      return { routed }
+      return { sourcePath, routed }
     } finally {
       await set(h, 'removePdfViewerProbe')
     }
   },
-
   'pdf-system-open-fallback': async (h) => {
     await open(h)
     await set(h, 'clearFileOpenHistory')
     await set(h, 'removePdfViewerProbe')
-    await set(h, 'dropFiles', I, [{
-      name: 'system-route.pdf',
-      type: 'application/pdf',
-      content: '%PDF-1.4\nsystem-route\n%%EOF\n'
-    }])
+    const sourcePath = externalFile(h, 'system-route.pdf', '%PDF-1.4\nsystem-route\n%%EOF\n')
+    await set(h, 'dropFiles', I, [{ name: 'system-route.pdf', type: 'application/pdf', path: sourcePath }])
     await state(h, (value) => /\[system-route\.pdf\]\([^)]+\)/i.test(value.markdown), 'PDF system markdown')
     await dom(h, `${E} a`, (value) => value.exists && /system-route\.pdf/i.test(value.text + (value.attributes.href || '')), 'PDF system visible link')
     await act(h, 'click', `${E} a`)
     const routed = await openHistory(h, (entry) => entry.route === 'system-path', 'PDF system route')
     ok(routed.handled === true && !routed.error, `system PDF opener failed: ${routed.error}`)
-    return { routed }
+    return { sourcePath, routed }
   }
 }
 
@@ -343,7 +307,7 @@ async function run(id) {
     requirePackagedApp: true,
     initialFiles: {
       'Feature.md': '# Feature\n\nInitial text.\n',
-      'Formatting.md': '# Formatting\n\nplain\n',
+      'Formatting.md': '# Formatting\n\n**bold** and *italic* and `code`\n',
       'Long.md': `# Long\n\n${Array.from({ length: 200 }, (_, index) => `line-${index}`).join('\n')}`
     }
   })
@@ -360,7 +324,6 @@ async function run(id) {
   } finally {
     await h.cleanup()
   }
-
   out.push({
     id,
     ok: !e,

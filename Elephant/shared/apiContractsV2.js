@@ -1,11 +1,12 @@
+import { ELEPHANTNOTE_API_DOMAINS as BASE_DOMAINS } from './apiContracts'
 import {
   API_PAYLOAD_SCHEMAS as BASE_PAYLOAD_SCHEMAS,
   ELEPHANTNOTE_API_ACTIONS as BASE_ACTIONS,
-  ELEPHANTNOTE_API_DOMAINS as BASE_DOMAINS,
   ELEPHANTNOTE_API_VERSION as BASE_VERSION,
   listApiContracts as listBaseApiContracts,
-  schema
-} from './apiContracts'
+  schema,
+  validateApiPayload as validateBaseApiPayload
+} from './apiContractsRuntime'
 
 export const ELEPHANTNOTE_API_VERSION = BASE_VERSION
 export const ELEPHANTNOTE_API_CONTRACT_REVISION = 2
@@ -144,21 +145,24 @@ export const ELEPHANTNOTE_API_ACTIONS = Object.freeze({
   )
 })
 
-export const API_PAYLOAD_SCHEMAS = Object.freeze({
-  ...BASE_PAYLOAD_SCHEMAS,
-  ...Object.fromEntries(
+const EXTENDED_PAYLOAD_SCHEMAS = Object.freeze(
+  Object.fromEntries(
     [...providerContracts, ...modelContracts, ...atomicContracts].map(({ name, payload }) => [name, payload])
   )
+)
+
+export const API_PAYLOAD_SCHEMAS = Object.freeze({
+  ...BASE_PAYLOAD_SCHEMAS,
+  ...EXTENDED_PAYLOAD_SCHEMAS
 })
 
 export const validateApiPayload = (actionName, payload = {}) => {
-  const validator = API_PAYLOAD_SCHEMAS[actionName]
-  if (!validator) {
-    const error = new Error(`Unknown ElephantNote API action: ${actionName || '(empty)'}.`)
-    error.code = 'ELEPHANTNOTE_UNKNOWN_API_ACTION'
-    throw error
-  }
-  return validator(payload, actionName)
+  const extendedValidator = EXTENDED_PAYLOAD_SCHEMAS[actionName]
+  if (extendedValidator) return extendedValidator(payload, actionName)
+  if (BASE_PAYLOAD_SCHEMAS[actionName]) return validateBaseApiPayload(actionName, payload)
+  const error = new Error(`Unknown ElephantNote API action: ${actionName || '(empty)'}.`)
+  error.code = 'ELEPHANTNOTE_UNKNOWN_API_ACTION'
+  throw error
 }
 
 export const ELEPHANTNOTE_API_EVENT_TOPICS = Object.freeze({

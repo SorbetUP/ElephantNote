@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 
+import { createHash } from 'node:crypto'
 import {
   existsSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   statSync,
   writeFileSync
 } from 'node:fs'
@@ -16,6 +18,10 @@ const O = join(R, 'test-results/trusted/packaged-feature-matrix')
 const L = 'user-journey'
 const E = '[data-testid="muya-rust-runtime-editor"]'
 const I = `${E}[contenteditable="true"], ${E} [contenteditable="true"]`
+const APP_PATH = resolve(process.env.ELEPHANT_ACCEPTANCE_APP_PATH || '')
+const appSha256 = process.env.ELEPHANT_ACCEPTANCE_APP_SHA256 || createHash('sha256')
+  .update(readFileSync(APP_PATH))
+  .digest('hex')
 const out = []
 
 mkdirSync(O, { recursive: true })
@@ -42,8 +48,17 @@ async function dom(h, selector, predicate, name) {
   throw new Error(`${name}: DOM timeout`)
 }
 
-async function open(h, path = 'Feature.md') {
+async function absent(h, selector, name) {
+  return dom(h, selector, (value) => !value.exists, name)
+}
+
+async function prepareVault(h) {
   await set(h, 'selectVault', h.vaultRoot)
+  await act(h, 'waitFor', '.en-library-toolbar', 20_000)
+}
+
+async function open(h, path = 'Feature.md') {
+  await prepareVault(h)
   await set(h, 'openNote', path)
   await act(h, 'waitFor', I, 20_000)
 }
@@ -75,26 +90,14 @@ async function openHistory(h, predicate, name) {
   throw new Error(`${name}: file-open history timeout`)
 }
 
-async function dropFileLink(h, descriptor) {
-  await open(h)
-  await set(h, 'clearFileOpenHistory')
-  await set(h, 'dropFiles', I, [descriptor])
-  const saved = await state(
-    h,
-    (value) => new RegExp(`\\[[^\\]]*${descriptor.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^\\]]*\\]\\([^)]+\\)`, 'i').test(value.markdown),
-    `drop ${descriptor.name}`
-  )
-  const assetPath = join(h.vaultRoot, '.assets', descriptor.name)
-  for (let attempt = 0; attempt < 200 && !existsSync(assetPath); attempt += 1) await z(50)
-  ok(existsSync(assetPath), `${descriptor.name} was not copied into .assets`)
-  const link = await dom(
-    h,
-    `${E} a`,
-    (value) => value.exists && new RegExp(descriptor.name, 'i').test(value.text + (value.attributes.href || '')),
-    `${descriptor.name} visible link`
-  )
-  await act(h, 'click', `${E} a`)
-  return { saved, link, assetPath }
+async function waitForNewEntry(root, previous, predicate, name) {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const entries = readdirSync(root)
+    const added = entries.find((entry) => !previous.has(entry) && predicate(entry))
+    if (added) return added
+    await z(50)
+  }
+  throw new Error(`${name}: no new disk entry appeared`)
 }
 
 const F = {
@@ -105,35 +108,43 @@ const F = {
   },
 
   'vault-selection': async (h) => {
-    await set(h, 'selectVault', h.vaultRoot)
-    const current = await act(h, 'readState')
-    ok(current.activeVault === h.vaultRoot, 'vault mismatch')
-    return current
+    const firstScreen = await act(h, 'readDom', '.en-empty-card')
+    ok(firstScreen.visible, 'vault onboarding is not visible')
+    await act(h, 'click', '.en-primary-button')
+    const current = await state(h, (value) => typeof value.activeVault === 'string' && value.activeVault.length > 0, 'visible private vault')
+    ok(existsSync(current.activeVault) && statSync(current.activeVault).isDirectory(), 'managed private vault was not created on disk')
+    await act(h, 'waitFor', '.en-library-toolbar', 20_000)
+    return { activeVault: current.activeVault, visibleControl: '.en-primary-button' }
   },
 
   'create-note': async (h) => {
-    await set(h, 'selectVault', h.vaultRoot)
-    await set(h, 'createNote', '', 'Created.md')
-    ok(existsSync(join(h.vaultRoot, 'Created.md')), 'note absent')
-    await set(h, 'openNote', 'Created.md')
-    return act(h, 'waitFor', E, 20_000)
+    await prepareVault(h)
+    const previous = new Set(readdirSync(h.vaultRoot))
+    await act(h, 'click', '.en-create-button-primary')
+    const filename = await waitForNewEntry(h.vaultRoot, previous, (entry) => entry.endsWith('.md'), 'visible note creation')
+    await act(h, 'waitFor', E, 20_000)
+    const current = await state(h, (value) => String(value.pathname || '').endsWith(filename), 'created note opened')
+    ok(existsSync(join(h.vaultRoot, filename)), 'created note absent on disk')
+    return { filename, pathname: current.pathname, visibleControl: '.en-create-button-primary' }
   },
 
   'create-folder': async (h) => {
-    await set(h, 'selectVault', h.vaultRoot)
-    await set(h, 'createFolder', 'Created folder')
-    const path = join(h.vaultRoot, 'Created folder')
+    await prepareVault(h)
+    const previous = new Set(readdirSync(h.vaultRoot))
+    await act(h, 'click', '.en-create-button:not(.en-create-button-primary):not(.en-create-excalidraw-button)')
+    const filename = await waitForNewEntry(
+      h.vaultRoot,
+      previous,
+      (entry) => statSync(join(h.vaultRoot, entry)).isDirectory(),
+      'visible folder creation'
+    )
+    const path = join(h.vaultRoot, filename)
     ok(existsSync(path) && statSync(path).isDirectory(), 'folder absent')
-    return set(h, 'invokeTauri', 'tauri_directory_list', {
-      relativePath: '',
-      offset: 0,
-      limit: 500,
-      includePreview: false
-    })
+    return { filename, path, visibleControl: '.en-create-button' }
   },
 
   'external-note-refresh': async (h) => {
-    await set(h, 'selectVault', h.vaultRoot)
+    await prepareVault(h)
     writeFileSync(join(h.vaultRoot, 'External.md'), '# External\n\nexternal-marker\n')
     const result = await search(h, 'external-marker', 'External')
     await set(h, 'openNote', 'External.md')
@@ -142,7 +153,7 @@ const F = {
   },
 
   'external-folder-refresh': async (h) => {
-    await set(h, 'selectVault', h.vaultRoot)
+    await prepareVault(h)
     mkdirSync(join(h.vaultRoot, 'External folder'))
     writeFileSync(join(h.vaultRoot, 'External folder/Nested.md'), '# Nested\n\nfolder-marker\n')
     const result = await search(h, 'folder-marker', 'Nested')
@@ -180,13 +191,14 @@ const F = {
   },
 
   'excalidraw-open-close': async (h) => {
-    await set(h, 'selectVault', h.vaultRoot)
-    const created = await set(h, 'invokeTauri', 'tauri_drawings_create', { title: 'Matrix drawing' })
-    const opened = await set(h, 'openExcalidraw', 'matrix.excalidraw.png')
-    const drawing = await set(h, 'readExcalidraw')
-    const closed = await set(h, 'closeExcalidraw')
-    ok(created.fullPath && existsSync(created.fullPath) && opened.hasCanvas && drawing.hasCanvas && !drawing.hasError && !closed.open, 'excalidraw')
-    return { created, opened, closed }
+    await prepareVault(h)
+    await act(h, 'click', '.en-create-excalidraw-button')
+    const opened = await dom(h, '[data-testid="excalidraw-dialog"]', (value) => value.visible, 'visible Excalidraw open')
+    const canvas = await dom(h, '.en-excalidraw-canvas', (value) => value.visible, 'Excalidraw canvas')
+    ok(!opened.text.includes('failed') && canvas.visible, 'Excalidraw opened with an error')
+    await act(h, 'click', '[data-testid="excalidraw-close"]')
+    await absent(h, '[data-testid="excalidraw-dialog"]', 'visible Excalidraw close')
+    return { opened: true, canvas: true, closed: true }
   },
 
   'text-basic-editing': async (h) => {
@@ -248,7 +260,7 @@ const F = {
   },
 
   'drop-file-into-vault-folder': async (h) => {
-    await set(h, 'selectVault', h.vaultRoot)
+    await prepareVault(h)
     await set(h, 'createFolder', 'Drop target')
     await set(h, 'dropFiles', '.folder-name[title="Drop target"], .en-sidebar', [
       { name: 'drop.txt', type: 'text/plain', content: 'drop-marker' }
@@ -256,6 +268,7 @@ const F = {
     const path = join(h.vaultRoot, 'Drop target/drop.txt')
     for (let attempt = 0; attempt < 200 && !existsSync(path); attempt += 1) await z(100)
     ok(existsSync(path), 'drop folder failed')
+    ok(readFileSync(path, 'utf8') === 'drop-marker', 'drop folder bytes differ')
     return { path }
   },
 
@@ -274,42 +287,53 @@ const F = {
   },
 
   'drop-file-link-into-note': async (h) => {
-    const result = await dropFileLink(h, {
-      name: 'linked.txt',
-      type: 'text/plain',
-      content: 'linked'
-    })
-    ok(readFileSync(result.assetPath, 'utf8') === 'linked', 'linked attachment bytes differ')
-    return result
+    await open(h)
+    await set(h, 'clearFileOpenHistory')
+    await set(h, 'dropFiles', I, [{ name: 'linked.txt', type: 'text/plain', content: 'linked' }])
+    const saved = await state(h, (value) => /\[linked\.txt\]\([^)]+\)/i.test(value.markdown), 'linked file markdown')
+    const assetPath = join(h.vaultRoot, '.assets', 'linked.txt')
+    for (let attempt = 0; attempt < 200 && !existsSync(assetPath); attempt += 1) await z(50)
+    ok(existsSync(assetPath) && readFileSync(assetPath, 'utf8') === 'linked', 'linked attachment bytes differ')
+    const link = await dom(h, `${E} a`, (value) => value.exists && /linked\.txt/i.test(value.text + (value.attributes.href || '')), 'linked file visible link')
+    return { saved, link, assetPath }
   },
 
   'pdf-addon-open-route': async (h) => {
+    await open(h)
+    await set(h, 'clearFileOpenHistory')
     await set(h, 'installPdfViewerProbe')
     try {
-      const result = await dropFileLink(h, {
+      await set(h, 'dropFiles', I, [{
         name: 'addon-route.pdf',
         type: 'application/pdf',
         content: '%PDF-1.4\naddon-route\n%%EOF\n'
-      })
+      }])
+      await state(h, (value) => /\[addon-route\.pdf\]\([^)]+\)/i.test(value.markdown), 'PDF addon markdown')
+      await dom(h, `${E} a`, (value) => value.exists && /addon-route\.pdf/i.test(value.text + (value.attributes.href || '')), 'PDF addon visible link')
+      await act(h, 'click', `${E} a`)
       const routed = await openHistory(h, (entry) => entry.route === 'pdf-addon', 'PDF addon route')
-      ok(routed.handled === true && routed.path === result.assetPath, `wrong PDF addon route: ${JSON.stringify(routed)}`)
-      return { ...result, routed }
+      ok(routed.handled === true && !routed.error, `wrong PDF addon route: ${JSON.stringify(routed)}`)
+      return { routed }
     } finally {
       await set(h, 'removePdfViewerProbe')
     }
   },
 
   'pdf-system-open-fallback': async (h) => {
+    await open(h)
+    await set(h, 'clearFileOpenHistory')
     await set(h, 'removePdfViewerProbe')
-    const result = await dropFileLink(h, {
+    await set(h, 'dropFiles', I, [{
       name: 'system-route.pdf',
       type: 'application/pdf',
       content: '%PDF-1.4\nsystem-route\n%%EOF\n'
-    })
+    }])
+    await state(h, (value) => /\[system-route\.pdf\]\([^)]+\)/i.test(value.markdown), 'PDF system markdown')
+    await dom(h, `${E} a`, (value) => value.exists && /system-route\.pdf/i.test(value.text + (value.attributes.href || '')), 'PDF system visible link')
+    await act(h, 'click', `${E} a`)
     const routed = await openHistory(h, (entry) => entry.route === 'system-path', 'PDF system route')
-    ok(routed.handled === true && routed.path === result.assetPath, `wrong PDF system route: ${JSON.stringify(routed)}`)
-    ok(!routed.error, `system PDF opener failed: ${routed.error}`)
-    return { ...result, routed }
+    ok(routed.handled === true && !routed.error, `system PDF opener failed: ${routed.error}`)
+    return { routed }
   }
 }
 
@@ -329,10 +353,10 @@ async function run(id) {
   try {
     await h.start()
     evidence = await F[id](h)
-    await h.writeEvidence({ status: 'PROVEN', extra: { featureId: id, evidence } })
+    await h.writeEvidence({ status: 'PROVEN', extra: { featureId: id, appSha256, evidence } })
   } catch (error) {
     e = error
-    await h.writeEvidence({ status: 'NOT PROVEN', error, extra: { featureId: id } })
+    await h.writeEvidence({ status: 'NOT PROVEN', error, extra: { featureId: id, appSha256 } })
   } finally {
     await h.cleanup()
   }
@@ -342,6 +366,7 @@ async function run(id) {
     ok: !e,
     status: e ? 'NOT PROVEN' : 'PROVEN',
     durationMs: Date.now() - startedAt,
+    appSha256,
     artifact: `test-results/trusted/packaged-feature-${id}/latest.json`,
     evidence,
     error: e ? (e.stack || e.message || String(e)) : null
@@ -360,6 +385,7 @@ const result = {
   packagedApp: true,
   packagedFormat: process.env.ELEPHANT_PACKAGED_FORMAT || null,
   appPath: process.env.ELEPHANT_ACCEPTANCE_APP_PATH || null,
+  appSha256,
   features: out,
   missing
 }

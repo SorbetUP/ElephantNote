@@ -1,0 +1,704 @@
+{
+  "at": "2026-08-06T17:56:39.573Z",
+  "suite": "packaged-feature-sidebar-hide-full-shortcut",
+  "status": "PROVEN",
+  "runtime": "tauri",
+  "packagedApp": true,
+  "packagedAppRequired": true,
+  "packagedFormat": "linux-appimage",
+  "appPath": "/home/runner/work/ElephantNote/ElephantNote/repo/Elephant/backend/tauri/target/release/bundle/appimage/Elephant_0.18.9_amd64.AppImage",
+  "profileRoots": {
+    "home": "/tmp/elephant-packaged-feature-sidebar-hide-full-shortcut-qmhf0C",
+    "elephantConfig": "/tmp/elephant-packaged-feature-sidebar-hide-full-shortcut-qmhf0C/config",
+    "xdgConfig": "/tmp/elephant-packaged-feature-sidebar-hide-full-shortcut-qmhf0C/.config",
+    "xdgData": "/tmp/elephant-packaged-feature-sidebar-hide-full-shortcut-qmhf0C/.local/share",
+    "xdgCache": "/tmp/elephant-packaged-feature-sidebar-hide-full-shortcut-qmhf0C/.cache",
+    "xdgState": "/tmp/elephant-packaged-feature-sidebar-hide-full-shortcut-qmhf0C/.local/state",
+    "xdgRuntime": "/tmp/elephant-packaged-feature-sidebar-hide-full-shortcut-qmhf0C/.runtime"
+  },
+  "error": null,
+  "scenarios": [],
+  "commandPolicy": {
+    "setupCommands": [
+      {
+        "at": "2026-08-06T17:56:39.317Z",
+        "command": "selectVault",
+        "argsCount": 1
+      },
+      {
+        "at": "2026-08-06T17:56:39.530Z",
+        "command": "openNote",
+        "argsCount": 1
+      }
+    ],
+    "actionCommands": [
+      {
+        "at": "2026-08-06T17:56:39.403Z",
+        "layer": "user-journey",
+        "command": "waitFor",
+        "argsCount": 2
+      },
+      {
+        "at": "2026-08-06T17:56:39.534Z",
+        "layer": "user-journey",
+        "command": "waitFor",
+        "argsCount": 2
+      },
+      {
+        "at": "2026-08-06T17:56:39.539Z",
+        "layer": "user-journey",
+        "command": "readDom",
+        "argsCount": 1
+      },
+      {
+        "at": "2026-08-06T17:56:39.548Z",
+        "layer": "user-journey",
+        "command": "pressShortcut",
+        "argsCount": 3
+      },
+      {
+        "at": "2026-08-06T17:56:39.553Z",
+        "layer": "user-journey",
+        "command": "readDom",
+        "argsCount": 1
+      },
+      {
+        "at": "2026-08-06T17:56:39.563Z",
+        "layer": "user-journey",
+        "command": "pressShortcut",
+        "argsCount": 3
+      },
+      {
+        "at": "2026-08-06T17:56:39.568Z",
+        "layer": "user-journey",
+        "command": "readDom",
+        "argsCount": 1
+      }
+    ],
+    "frontendAllowedActions": [
+      "click",
+      "contextClick",
+      "dropFiles",
+      "fill",
+      "insertText",
+      "pointerDrag",
+      "press",
+      "pressShortcut",
+      "selectText",
+      "waitFor",
+      "waitUntilGone"
+    ],
+    "frontendAllowedObservations": [
+      "logs",
+      "readDisplayed",
+      "readDom",
+      "readState"
+    ]
+  },
+  "logs": [
+    {
+      "details": null,
+      "index": 0,
+      "level": "info",
+      "message": "renderer diagnostics installed",
+      "time": "2026-08-06T17:56:38.848Z"
+    },
+    {
+      "details": {
+        "runtime": "tauri"
+      },
+      "index": 1,
+      "level": "info",
+      "message": "bootstrapTauriRuntime:start",
+      "time": "2026-08-06T17:56:38.853Z"
+    },
+    {
+      "details": {
+        "userDataPath": "/tmp/elephant-packaged-feature-sidebar-hide-full-shortcut-qmhf0C/.local/share/com.elephantnote.app"
+      },
+      "index": 2,
+      "level": "info",
+      "message": "bootstrapTauriRuntime:appDataDir",
+      "time": "2026-08-06T17:56:38.920Z"
+    },
+    {
+      "details": {
+        "env": {
+          "debug": false,
+          "paths": {
+            "_dataCenterPath": "/tmp/elephant-packaged-feature-sidebar-hide-full-shortcut-qmhf0C/.local/share/com.elephantnote.app",
+            "_editorBufferStorePath": "/tmp/elephant-packaged-feature-sidebar-hide-full-shortcut-qmhf0C/.local/share/com.elephantnote.app/editorStates",
+            "_electronUserDataPath": "/tmp/elephant-packaged-feature-sidebar-hide-full-shortcut-qmhf0C/.local/share/com.elephantnote.app",
+            "_logPath": "/tmp/elephant-packaged-feature-sidebar-hide-full-shortcut-qmhf0C/.local/share/com.elephantnote.app/logs/20268",
+            "_preferencesFilePath": "/tmp/elephant-packaged-feature-sidebar-hide-full-shortcut-qmhf0C/.local/share/com.elephantnote.app/preference.json",
+            "_preferencesPath": "/tmp/elephant-packaged-feature-sidebar-hide-full-shortcut-qmhf0C/.local/share/com.elephantnote.app",
+            "_ripgrepBinaryPath": "rg",
+            "_userDataPath": "/tmp/elephant-packaged-feature-sidebar-hide-full-shortcut-qmhf0C/.local/share/com.elephantnote.app"
+          },
+          "type": "editor",
+          "windowId": 1
+        }
+      },
+      "index": 3,
+      "level": "info",
+      "message": "bootstrapRenderer:done",
+      "time": "2026-08-06T17:56:38.926Z"
+    },
+    {
+      "details": null,
+      "index": 4,
+      "level": "info",
+      "message": "renderer diagnostics installed",
+      "time": "2026-08-06T17:56:38.931Z"
+    },
+    {
+      "details": {
+        "runtime": "tauri"
+      },
+      "index": 5,
+      "level": "info",
+      "message": "renderer shell initialized",
+      "time": "2026-08-06T17:56:38.938Z"
+    },
+    {
+      "details": {
+        "hasPinia": true,
+        "hasTauriInvoke": true,
+        "runtime": "tauri"
+      },
+      "index": 6,
+      "level": "info",
+      "message": "[addons] install:start",
+      "time": "2026-08-06T17:56:38.938Z"
+    },
+    {
+      "details": {
+        "available": 0,
+        "count": 0,
+        "ids": []
+      },
+      "index": 7,
+      "level": "info",
+      "message": "[addons] register:start",
+      "time": "2026-08-06T17:56:38.940Z"
+    },
+    {
+      "details": {
+        "registered": 0
+      },
+      "index": 8,
+      "level": "info",
+      "message": "[addons] store:installed",
+      "time": "2026-08-06T17:56:38.942Z"
+    },
+    {
+      "details": null,
+      "index": 9,
+      "level": "info",
+      "message": "[addons] external-runtime:install:start",
+      "time": "2026-08-06T17:56:38.944Z"
+    },
+    {
+      "details": null,
+      "index": 10,
+      "level": "info",
+      "message": "[addons] external-runtime:install:done",
+      "time": "2026-08-06T17:56:38.945Z"
+    },
+    {
+      "details": {
+        "availableBuiltins": [],
+        "registered": [],
+        "resources": [
+          "addonManager",
+          "addons",
+          "document",
+          "elephantnote",
+          "fileUtils",
+          "marktext",
+          "pinia",
+          "router",
+          "runtime",
+          "services",
+          "tauri",
+          "vueApp",
+          "window"
+        ]
+      },
+      "index": 11,
+      "level": "info",
+      "message": "[addons] install:done",
+      "time": "2026-08-06T17:56:38.945Z"
+    },
+    {
+      "details": null,
+      "index": 12,
+      "level": "info",
+      "message": "[addons] community-trust-boundary:installed",
+      "time": "2026-08-06T17:56:38.946Z"
+    },
+    {
+      "details": {
+        "actions": [
+          "elephant.addon-packs.ensure-develop-parity",
+          "elephant.addon-packs.create",
+          "elephant.addon-packs.apply"
+        ],
+        "enabled": []
+      },
+      "index": 13,
+      "level": "info",
+      "message": "[addons] builtin-state:restored",
+      "time": "2026-08-06T17:56:38.948Z"
+    },
+    {
+      "details": {
+        "id": "core.addon-packs"
+      },
+      "index": 14,
+      "level": "info",
+      "message": "[core-feature] enabled",
+      "time": "2026-08-06T17:56:38.948Z"
+    },
+    {
+      "details": {
+        "id": "core.addon-packs"
+      },
+      "index": 15,
+      "level": "info",
+      "message": "[core-feature] ready",
+      "time": "2026-08-06T17:56:38.949Z"
+    },
+    {
+      "details": {
+        "hasPathExistsSync": true,
+        "hasReadFile": true,
+        "hasStat": true,
+        "vaultRoot": ""
+      },
+      "index": 16,
+      "level": "info",
+      "message": "[excalidraw-image] runtime fixes installed",
+      "time": "2026-08-06T17:56:38.953Z"
+    },
+    {
+      "details": {
+        "id": "core.excalidraw"
+      },
+      "index": 17,
+      "level": "info",
+      "message": "[core-feature] enabled",
+      "time": "2026-08-06T17:56:38.954Z"
+    },
+    {
+      "details": {
+        "id": "core.excalidraw"
+      },
+      "index": 18,
+      "level": "info",
+      "message": "[core-feature] ready",
+      "time": "2026-08-06T17:56:38.954Z"
+    },
+    {
+      "details": {
+        "hasVisibleShell": false,
+        "route": "/editor"
+      },
+      "index": 19,
+      "level": "info",
+      "message": "renderer Vue shell mounted",
+      "time": "2026-08-06T17:56:39.018Z"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": null,
+          "currentFilePath": null,
+          "currentMarkdownLength": 0,
+          "tabCount": 0,
+          "tabIds": []
+        },
+        "layout": {
+          "rightColumn": "files",
+          "showSideBar": false,
+          "showTabBar": false
+        },
+        "project": {
+          "activeItem": null,
+          "pendingTreeEvents": 0,
+          "root": null,
+          "rootName": null
+        }
+      },
+      "index": 20,
+      "level": "info",
+      "message": "store-diagnostics:installed",
+      "time": "2026-08-06T17:56:39.019Z"
+    },
+    {
+      "details": {
+        "error": "No active ElephantNote vault."
+      },
+      "index": 21,
+      "level": "warn",
+      "message": "external addon registry deferred until a vault is active",
+      "time": "2026-08-06T17:56:39.028Z"
+    },
+    {
+      "at": "2026-08-06T17:56:39.032Z",
+      "commands": [
+        "invokeTauri",
+        "readDom",
+        "click",
+        "fill",
+        "insertText",
+        "waitFor",
+        "waitUntilGone",
+        "executeCommand",
+        "press",
+        "selectText",
+        "contextClick",
+        "capabilities",
+        "addonState",
+        "enableAddon",
+        "disableAddon",
+        "runAddonAction",
+        "installOfficialAddon",
+        "invokeAddonResource",
+        "addonNativeStatus",
+        "addonNativeCall",
+        "listNotes",
+        "selectVault",
+        "readNote",
+        "createNote",
+        "openNote",
+        "setMarkdown",
+        "appendMarkdown",
+        "save",
+        "readDisplayed",
+        "openExcalidraw",
+        "closeExcalidraw",
+        "readExcalidraw",
+        "readState",
+        "queryAll",
+        "uiSnapshot",
+        "clearLogs",
+        "assertUi",
+        "assertLogs"
+      ],
+      "event": "installed",
+      "index": 22
+    },
+    {
+      "at": "2026-08-06T17:56:39.033Z",
+      "details": {},
+      "index": 23,
+      "level": "info",
+      "message": "[elephantnote:citation] runtime installed"
+    },
+    {
+      "at": "2026-08-06T17:56:39.073Z",
+      "event": "transport:ready",
+      "index": 24
+    },
+    {
+      "at": "2026-08-06T17:56:39.276Z",
+      "command": "tauri_vaults_select_path",
+      "event": "tauri:invoke:start",
+      "index": 25
+    },
+    {
+      "at": "2026-08-06T17:56:39.279Z",
+      "command": "tauri_vaults_select_path",
+      "event": "tauri:invoke:done",
+      "index": 26
+    },
+    {
+      "details": null,
+      "index": 27,
+      "level": "info",
+      "message": "external addon registry retrying after vault activation",
+      "time": "2026-08-06T17:56:39.280Z"
+    },
+    {
+      "at": "2026-08-06T17:56:39.280Z",
+      "event": "vault:select",
+      "index": 28,
+      "path": "/tmp/elephant-packaged-feature-sidebar-hide-full-shortcut-qmhf0C/vault",
+      "vaultId": "vault"
+    },
+    {
+      "at": "2026-08-06T17:56:39.289Z",
+      "details": {
+        "hidden": [],
+        "order": [
+          "search",
+          "vault",
+          "sidebar-toggle"
+        ],
+        "visible": [
+          "search",
+          "vault",
+          "sidebar-toggle"
+        ]
+      },
+      "index": 29,
+      "level": "info",
+      "message": "[icon-rail] layout:resolved"
+    },
+    {
+      "at": "2026-08-06T17:56:39.311Z",
+      "details": {
+        "activeVaultId": "vault",
+        "isMac": false,
+        "sidebarVisible": true
+      },
+      "index": 30,
+      "level": "info",
+      "message": "[icon-rail] mounted"
+    },
+    {
+      "details": {
+        "noteDirectory": "/tmp/elephant-packaged-feature-sidebar-hide-full-shortcut-qmhf0C/vault",
+        "vaultRoot": "/tmp/elephant-packaged-feature-sidebar-hide-full-shortcut-qmhf0C/vault"
+      },
+      "index": 31,
+      "level": "info",
+      "message": "[excalidraw-addon] overlay mounted",
+      "time": "2026-08-06T17:56:39.312Z"
+    },
+    {
+      "at": "2026-08-06T17:56:39.400Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 3517,
+      "index": 32,
+      "selector": ".en-library-toolbar",
+      "textLength": 41
+    },
+    {
+      "at": "2026-08-06T17:56:39.400Z",
+      "event": "dom:wait:done",
+      "index": 33,
+      "selector": ".en-library-toolbar"
+    },
+    {
+      "at": "2026-08-06T17:56:39.405Z",
+      "event": "open:start",
+      "index": 34,
+      "path": "Feature.md"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": "mt-0",
+          "currentFilePath": "/tmp/elephant-packaged-feature-sidebar-hide-full-shortcut-qmhf0C/vault/Feature.md",
+          "currentMarkdownLength": 25,
+          "tabCount": 1,
+          "tabIds": [
+            "mt-0"
+          ]
+        },
+        "type": "direct"
+      },
+      "index": 35,
+      "level": "info",
+      "message": "pinia:editor",
+      "time": "2026-08-06T17:56:39.420Z"
+    },
+    {
+      "at": "2026-08-06T17:56:39.423Z",
+      "details": {
+        "activeFileId": "mt-0",
+        "activeVaultId": "vault",
+        "currentFileId": "mt-0",
+        "notePath": "Feature.md",
+        "openedPath": "Feature.md",
+        "previous": {
+          "activeFileId": null,
+          "currentFileId": null,
+          "notePath": null,
+          "openedPath": null
+        },
+        "tabCount": 1
+      },
+      "index": 36,
+      "level": "info",
+      "message": "[elephantnote:editor] identity-change"
+    },
+    {
+      "at": "2026-08-06T17:56:39.424Z",
+      "details": {
+        "activeFileId": "mt-0",
+        "hasEditorDocument": true,
+        "markdownLength": 25,
+        "notePath": "Feature.md",
+        "visibleMarkdownLength": 14
+      },
+      "index": 37,
+      "level": "info",
+      "message": "[elephantnote:editor] input-state"
+    },
+    {
+      "at": "2026-08-06T17:56:39.485Z",
+      "details": {
+        "notePath": "Feature.md",
+        "vault": "/tmp/elephant-packaged-feature-sidebar-hide-full-shortcut-qmhf0C/vault"
+      },
+      "index": 38,
+      "level": "info",
+      "message": "[elephantnote:editor] mounted"
+    },
+    {
+      "at": "2026-08-06T17:56:39.486Z",
+      "details": {
+        "isSaved": true,
+        "length": 25,
+        "notePath": "Feature.md",
+        "reason": "mount"
+      },
+      "index": 39,
+      "level": "info",
+      "message": "[elephantnote:save] observed active markdown"
+    },
+    {
+      "at": "2026-08-06T17:56:39.494Z",
+      "event": "open:done",
+      "index": 40,
+      "markdownLength": 25,
+      "path": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:56:39.494Z",
+      "event": "read:state",
+      "index": 41,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:56:39.527Z",
+      "event": "read:state",
+      "index": 42,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:56:39.532Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 1165,
+      "index": 43,
+      "selector": "[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]",
+      "textLength": 16
+    },
+    {
+      "at": "2026-08-06T17:56:39.532Z",
+      "event": "dom:wait:done",
+      "index": 44,
+      "selector": "[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]"
+    },
+    {
+      "at": "2026-08-06T17:56:39.536Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 9075,
+      "index": 45,
+      "selector": ".en-body",
+      "textLength": 102
+    },
+    {
+      "at": "2026-08-06T17:56:39.541Z",
+      "details": {
+        "activeVaultId": "vault",
+        "id": "sidebar-toggle",
+        "title": "Hide sidebar",
+        "workspaceView": "notes"
+      },
+      "index": 46,
+      "level": "info",
+      "message": "[icon-rail] action:run"
+    },
+    {
+      "at": "2026-08-06T17:56:39.541Z",
+      "details": {
+        "currentVisible": true,
+        "nextVisible": false
+      },
+      "index": 47,
+      "level": "info",
+      "message": "[icon-rail] action:sidebar-toggle"
+    },
+    {
+      "at": "2026-08-06T17:56:39.544Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 1165,
+      "index": 48,
+      "selector": "[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]",
+      "textLength": 16
+    },
+    {
+      "at": "2026-08-06T17:56:39.551Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 5804,
+      "index": 49,
+      "selector": ".en-body",
+      "textLength": 44
+    },
+    {
+      "at": "2026-08-06T17:56:39.555Z",
+      "details": {
+        "activeVaultId": "vault",
+        "id": "sidebar-toggle",
+        "title": "Show sidebar",
+        "workspaceView": "notes"
+      },
+      "index": 50,
+      "level": "info",
+      "message": "[icon-rail] action:run"
+    },
+    {
+      "at": "2026-08-06T17:56:39.555Z",
+      "details": {
+        "currentVisible": false,
+        "nextVisible": true
+      },
+      "index": 51,
+      "level": "info",
+      "message": "[icon-rail] action:sidebar-toggle"
+    },
+    {
+      "at": "2026-08-06T17:56:39.556Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 1165,
+      "index": 52,
+      "selector": "[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]",
+      "textLength": 16
+    },
+    {
+      "at": "2026-08-06T17:56:39.566Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 9075,
+      "index": 53,
+      "selector": ".en-body",
+      "textLength": 102
+    }
+  ],
+  "featureId": "sidebar-hide-full-shortcut",
+  "appSha256": "011f2f1cf215881fd751e332ae006ed7b54bb6c2356e25038b33cfa9082dff72",
+  "evidence": {
+    "attributes": {
+      "class": "en-body",
+      "data-v-13782a03": ""
+    },
+    "exists": true,
+    "html": "<aside data-v-aea70920=\"\" data-v-13782a03=\"\" class=\"en-sidebar\"><div data-v-aea70920=\"\" class=\"en-sidebar-scroll\"><button data-v-aea70920=\"\" class=\"en-all-notes\" type=\"button\"><svg data-v-aea70920=\"\" xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-inbox-icon lucide-inbox en-all-notes-icon\"><polyline points=\"22 12 16 12 14 15 10 15 8 12 2 12\"></polyline><path d=\"M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z\"></path></svg><span data-v-aea70920=\"\">All notes</span></button><div data-v-aea70920=\"\" class=\"en-tags-header\"><span data-v-aea70920=\"\" class=\"en-tags-label\">Tags</span><button data-v-aea70920=\"\" class=\"en-tags-search-btn\" type=\"button\" title=\"Search tags\"><svg data-v-aea70920=\"\" xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-search-icon lucide-search en-tags-search-icon\"><path d=\"m21 21-4.34-4.34\"></path><circle cx=\"11\" cy=\"11\" r=\"8\"></circle></svg></button></div><div data-v-aea70920=\"\" class=\"en-sidebar-main\"><div data-v-d4712d82=\"\" data-v-aea70920=\"\" class=\"en-sidebar-tree-node\" style=\"--tree-depth: 0;\"><div data-v-d4712d82=\"\" class=\"en-sidebar-tree-row\" draggable=\"true\"><button data-v-d4712d82=\"\" class=\"en-sidebar-tree-toggle\" type=\"button\" aria-label=\"Expand Getting Started\" aria-expanded=\"false\" aria-busy=\"false\"><svg data-v-d4712d82=\"\" xmlns=\"http://www.w3.org/2000/svg\" width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-chevron-right-icon lucide-chevron-right en-sidebar-tree-chevron\"><path d=\"m9 18 6-6-6-6\"></path></svg></button><button data-v-d4712d82=\"\" class=\"en-sidebar-tree-label\" type=\"button\" title=\"Getting Started\" aria-label=\"Open folder Getting Started\">Getting Started</button><!----><!----></div><!----></div><div data-v-d4712d82=\"\" data-v-aea70920=\"\" class=\"en-sidebar-tree-node\" style=\"--tree-depth: 0;\"><div data-v-d4712d82=\"\" class=\"en-sidebar-tree-note active\" title=\"Feature\" draggable=\"true\"><button data-v-d4712d82=\"\" class=\"en-sidebar-tree-label\" type=\"button\" aria-label=\"Open note Feature\">Feature</button><!----><!----></div><!----></div><div data-v-d4712d82=\"\" data-v-aea70920=\"\" class=\"en-sidebar-tree-node\" style=\"--tree-depth: 0;\"><div data-v-d4712d82=\"\" class=\"en-sidebar-tree-note\" title=\"Formatting\" draggable=\"true\"><button data-v-d4712d82=\"\" class=\"en-sidebar-tree-label\" type=\"button\" aria-label=\"Open note Formatting\">Formatting</button><!----><!----></div><!----></div><div data-v-d4712d82=\"\" data-v-aea70920=\"\" class=\"en-sidebar-tree-node\" style=\"--tree-depth: 0;\"><div data-v-d4712d82=\"\" class=\"en-sidebar-tree-note\" title=\"Long\" draggable=\"true\"><button data-v-d4712d82=\"\" class=\"en-sidebar-tree-label\" type=\"button\" aria-label=\"Open note Long\">Long</button><!----><!----></div><!----></div></div></div></aside><div data-v-13782a03=\"\" class=\"en-sidebar-resizer\" role=\"separator\" aria-orientation=\"vertical\" aria-label=\"Resize sidebar\"></div><main data-v-f667ad42=\"\" data-v-13782a03=\"\" class=\"en-main has-editor-open en-body-main\"><!----><!----><div data-v-f667ad42=\"\" class=\"en-editor-layer en-main-editor\"><section class=\"en-editor-panel\" style=\"--en-note-editor-gutter: 24px; --en-note-editor-gutter-left: 32px; --en-note-editor-gutter-right: 24px;\"><header data-v-59ef17a2=\"\" class=\"en-note-topbar\"><label data-v-59ef17a2=\"\" class=\"en-visually-hidden\" for=\"elephant-note-title\"> Note title </label><input data-v-59ef17a2=\"\" id=\"elephant-note-title\" class=\"en-note-title-input\" name=\"note-title\" type=\"text\" placeholder=\"Note title\" aria-label=\"Note title\" value=\"Feature\"><div data-v-59ef17a2=\"\" class=\"en-note-chip-rail\"><button data-v-59ef17a2=\"\" class=\"en-note-date-chip\" type=\"button\" title=\"2026-08-06\">2026-08-06</button><!----><div data-v-59ef17a2=\"\" class=\"en-note-chip-wrap\"><button data-v-59ef17a2=\"\" class=\"en-note-chip en-note-chip-add\" type=\"button\" title=\"Add tag\" aria-label=\"Add tag\"> + </button></div></div><div data-v-59ef17a2=\"\" class=\"en-note-topbar-actions\"><button type=\"button\" data-elephant-note-citation=\"true\" class=\"en-note-action-button en-note-citation-button\" title=\"Citer le texte sélectionné\" aria-label=\"Citer le texte sélectionné\" style=\"width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; padding: 0px; border: 1px solid var(--en-border); border-radius: 8px; background: none; color: var(--en-text); cursor: pointer;\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 21c3 0 7-1 7-8V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v6c0 1.1.9 2 2 2h4\"></path><path d=\"M14 21c3 0 7-1 7-8V5c0-1.1-.9-2-2-2h-3c-1.1 0-2 .9-2 2v6c0 1.1.9 2 2 2h4\"></path></svg></button><button data-v-59ef17a2=\"\" class=\"en-note-action-button\" type=\"button\" title=\"Pin note\" aria-label=\"Pin note\"><svg data-v-59ef17a2=\"\" xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-pin-icon lucide-pin en-icon\"><path d=\"M12 17v5\"></path><path d=\"M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z\"></path></svg></button><button data-v-59ef17a2=\"\" class=\"en-note-action-button\" type=\"button\" title=\"Close note\" aria-label=\"Close note\"><svg data-v-59ef17a2=\"\" xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-x-icon lucide-x en-icon\"><path d=\"M18 6 6 18\"></path><path d=\"m6 6 12 12\"></path></svg></button></div></header><div class=\"en-note-editor-shell\"><div class=\"en-editor-host\"><div data-v-ea2faec4=\"\" class=\"editor-with-tabs\" source-code=\"false\" style=\"max-width: 100vw;\"><div data-v-bb62f37a=\"\" data-v-ea2faec4=\"\" class=\"editor-tabs\" style=\"display: none;\"><div data-v-bb62f37a=\"\" class=\"scrollable-tabs\"><ul data-v-bb62f37a=\"\" class=\"tabs-container\"><li data-v-bb62f37a=\"\" title=\"/tmp/elephant-packaged-feature-sidebar-hide-full-shortcut-qmhf0C/vault/Feature.md\" class=\"active\" data-id=\"mt-0\"><span data-v-bb62f37a=\"\">Feature.md</span><svg data-v-bb62f37a=\"\" class=\"close-icon icon\" aria-hidden=\"true\"><circle data-v-bb62f37a=\"\" id=\"unsaved-circle-icon\" cx=\"6\" cy=\"6\" r=\"3\"></circle><use data-v-bb62f37a=\"\" id=\"default-close-icon\" xlink:href=\"#icon-close-small\"></use></svg></li></ul></div><div data-v-bb62f37a=\"\" class=\"new-file\"><svg data-v-bb62f37a=\"\" class=\"icon\" aria-hidden=\"true\"><use data-v-bb62f37a=\"\" xlink:href=\"#icon-plus\"></use></svg></div></div><div data-v-ea2faec4=\"\" class=\"container\"><div data-v-dd311a9e=\"\" data-v-a709abe2=\"\" class=\"muya-rust-runtime-shell rust-editor-runtime\" data-muya-runtime-mode=\"rust\"><div data-v-dd311a9e=\"\" class=\"muya-rust-runtime-editor\" data-elephant-rust-editor-host=\"true\"><div class=\"muya-rust-runtime-mount ag-show-quick-insert-hint\" contenteditable=\"true\" autocorrect=\"false\" autocomplete=\"off\" spellcheck=\"false\" data-testid=\"muya-rust-runtime-editor\" data-elephant-rust-input-surface=\"true\"><div id=\"ag-editor-id\"><p id=\"ag-33\" class=\"ag-paragraph ag-active\"><a class=\"ag-front-icon\" contenteditable=\"false\"><i class=\"icon ag-front-icon-button\"><img class=\"icon-inner\" src=\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAYAAACM/rhtAAAAAXNSR0IArs4c6QAAAh1JREFUWAntl78vBEEUx9/b9aPRSDSC0n8gUR0SWolOpaSREwmncMgFp8AlCA1/gVKlkvhRiMQ/gJYoCIWLhNgZ81xmdvb2rIu922lmks2+mfdm3iffeTu7C2CbVcCsAhiVfmpuaZAxNsoB+oBDBwBviYqvhQ8R74E7E7uF5WNar6HSolOZhW7G4cDzvP5K/nqOcc47Edm+yNFFeUKA6cxiyuPsSCjWWk+Qatd29MCScmbh5BZLroCCtK3lyokJFwjOhtvUfL21ln2UEydnsqI0/bZXyFes52rj/JWClgKkByJcc85aW4u7mMvlWHBacj0FSE+rnpaUMw1HPKoGf44SjZC21aRyEkUBls45OQxANef3zFk+oDmGyMw+IMKDHul9fvTofVO2AhRnxLkOwYFlRA0qv+5L0lYAjuMc6onFKyf19OatmIZUgDvryyfiaDnTIQHY/HPx6zQ9uzQ8PZ9vD/qS6alzkNI5COMewJX+NiElOXgp9vEO4q1QokJ4FTGJNKUgZdvZWL1r4DACBBDVEvyQCAAS03Yhf+4i9oa3O4q4fr4QIKUiJXc3Vwdc1x0SoAeAeAOARYmBgC/Srvc9UIPlyejBEWN0hVr5V0oooEYDFRWs0do1WcYCxpXRKmgVjKtA3Pm2Bq2CcRWIO//fNSh+EW5lct2WY/Ku+3Rb+v+6/x/QbRwTXzqXP5ewf0uEVcb9Nt+OWwVMK/ANi5mZTElVwIAAAAAASUVORK5CYII=\"></i></a><span id=\"ag-34\" class=\"ag-paragraph ag-active ag-paragraph-content\"><span class=\"ag-plain-text\">Initial text.</span></span></p></div></div></div><!----></div><div class=\"el-overlay el-modal-dialog\" style=\"z-index: 2008; display: none;\"><div role=\"dialog\" aria-modal=\"true\" aria-labelledby=\"el-id-9610-14\" aria-describedby=\"el-id-9610-15\" class=\"el-overlay-dialog\"></div></div><!----></div><!----></div></div></div><!----></section></div></main>",
+    "selector": ".en-body",
+    "text": "\nAll notes\nTAGS\n\n\nGetting Started\nFeature\nFormatting\nLong\nNote title \n2026-08-06\n+\n\n\n\n\nInitial text.\n\n",
+    "value": null,
+    "visible": true
+  }
+}

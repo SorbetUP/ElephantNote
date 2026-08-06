@@ -1,0 +1,1307 @@
+libEGL warning: DRI3 error: Could not get DRI3 device
+libEGL warning: Ensure your X server supports DRI3 to get accelerated rendering
+ELEPHANT_AUTOMATION_PORT=45869
+ELEPHANT_ACCEPTANCE_TAURI_PORT=45869
+[automation-api] listening on http://127.0.0.1:45869/v1
+[32m[1786039050587][info][renderer][0m renderer diagnostics installed 
+[32m[1786039050587][info][tauri:file-utils][0m [tauri:file-utils] Rust-owned vault filesystem bridge installed 
+[32m[1786039050587][info][search][0m [search] runtime-guards:installed 
+[32m[1786039050587][info][search][0m [search] concepts:fallback:installed 
+[32m[1786039050587][info][tauri:marktext-save][0m [tauri:marktext-save] bridge:installed [{"atomic":true,"latestRevisionAcknowledgement":true,"serialized":true}]
+[32m[1786039050587][info][tauri:local-ipc][0m [tauri:local-ipc] bridge:installed 
+[32m[1786039050588][info][slash-menu][0m [slash-menu] diagnostics:installed 
+[32m[1786039050588][info][writing-command][0m [writing-command] installed 
+[32m[1786039050588][info][renderer][0m bootstrapTauriRuntime:start {"runtime":"tauri"}
+[32m[1786039050641][info][renderer][0m bootstrapTauriRuntime:appDataDir {"userDataPath":"/tmp/elephant-packaged-feature-pdf-addon-open-route-FRRUvm/.local/share/com.elephantnote.app"}
+[32m[1786039050647][info][renderer][0m bootstrapRenderer:done {"env":{"debug":false,"paths":{"_dataCenterPath":"/tmp/elephant-packaged-feature-pdf-addon-open-route-FRRUvm/.local/share/com.elephantnote.app","_editorBufferStorePath":"/tmp/elephant-packaged-feature-pdf-addon-open-route-FRRUvm/.local/share/com.elephantnote.app/editorStates","_electronUserDataPath":"/tmp/elephant-packaged-feature-pdf-addon-open-route-FRRUvm/.local/share/com.elephantnote.app","_logPath":"/tmp/elephant-packaged-feature-pdf-addon-open-route-FRRUvm/.local/share/com.elephantnote.app/logs/20268","_preferencesFilePath":"/tmp/elephant-packaged-feature-pdf-addon-open-route-FRRUvm/.local/share/com.elephantnote.app/preference.json","_preferencesPath":"/tmp/elephant-packaged-feature-pdf-addon-open-route-FRRUvm/.local/share/com.elephantnote.app","_ripgrepBinaryPath":"rg","_userDataPath":"/tmp/elephant-packaged-feature-pdf-addon-open-route-FRRUvm/.local/share/com.elephantnote.app"},"type":"editor","windowId":1}}
+[32m[1786039050652][info][renderer][0m renderer diagnostics installed 
+[32m[1786039050658][info][renderer][0m renderer shell initialized {"runtime":"tauri"}
+[32m[1786039050658][info][addons][0m [addons] install:start {"hasPinia":true,"hasTauriInvoke":true,"runtime":"tauri"}
+[32m[1786039050660][info][addons][0m [addons] register:start {"available":0,"count":0,"ids":[]}
+[32m[1786039050662][info][addons][0m [addons] store:installed {"registered":0}
+[32m[1786039050664][info][addons][0m [addons] external-runtime:install:start 
+[32m[1786039050665][info][addons][0m [addons] external-runtime:install:done 
+[32m[1786039050666][info][addons][0m [addons] install:done {"availableBuiltins":[],"registered":[],"resources":["addonManager","addons","document","elephantnote","fileUtils","marktext","pinia","router","runtime","services","tauri","vueApp","window"]}
+[32m[1786039050668][info][addons][0m [addons] community-trust-boundary:installed 
+[32m[1786039050671][info][addons][0m [addons] builtin-state:restored {"actions":["elephant.addon-packs.ensure-develop-parity","elephant.addon-packs.create","elephant.addon-packs.apply"],"enabled":[]}
+[32m[1786039050671][info][core-feature][0m [core-feature] enabled {"id":"core.addon-packs"}
+[32m[1786039050671][info][core-feature][0m [core-feature] ready {"id":"core.addon-packs"}
+[32m[1786039050678][info][excalidraw-cleanup][0m [excalidraw-cleanup] installed 
+[32m[1786039050679][info][excalidraw-image][0m [excalidraw-image] runtime fixes installed [{"hasPathExistsSync":true,"hasReadFile":true,"hasStat":true,"vaultRoot":""}]
+[32m[1786039050679][info][core-feature][0m [core-feature] enabled {"id":"core.excalidraw"}
+[32m[1786039050680][info][core-feature][0m [core-feature] ready {"id":"core.excalidraw"}
+[32m[1786039050740][info][renderer][0m renderer Vue shell mounted {"hasVisibleShell":false,"route":"/editor"}
+[32m[1786039050741][info][renderer][0m store-diagnostics:installed {"editor":{"currentFileId":null,"currentFilePath":null,"currentMarkdownLength":0,"tabCount":0,"tabIds":[]},"layout":{"rightColumn":"files","showSideBar":false,"showTabBar":false},"project":{"activeItem":null,"pendingTreeEvents":0,"root":null,"rootName":null}}
+[32m[1786039050746][info][tauri:marktext-save][0m [tauri:marktext-save] saved state reconciliation installed 
+[33;1m[1786039050750][warn][renderer][0m external addon registry deferred until a vault is active {"error":"No active ElephantNote vault."}
+[32m[1786039050752][info][automation-api][0m [automation-api] renderer inspection surface ready 
+[32m[1786039050753][info][acceptance-test][0m [acceptance-test] installed {"commands":["invokeTauri","readDom","click","fill","insertText","waitFor","waitUntilGone","executeCommand","press","selectText","contextClick","capabilities"]} 
+[32m[1786039050753][info][elephantnote:citation][0m [elephantnote:citation] runtime installed [{}]
+[32m[1786039050790][info][automation-api][0m [automation-api] renderer inspection surface ready 
+[automation-api] renderer:ready
+[32m[1786039050792][info][automation-api][0m [automation-api] canonical Rust input surface publisher installed 
+[32m[1786039050793][info][acceptance-test][0m [acceptance-test] transport:ready {} 
+[automation-api] command:start request_id=automation-0 command=selectVault args=1
+[32m[1786039050835][info][acceptance-test][0m [acceptance-test] tauri:invoke:start {"command":"tauri_vaults_select_path"} 
+[32m[1786039050838][info][acceptance-test][0m [acceptance-test] tauri:invoke:done {"command":"tauri_vaults_select_path"} 
+[32m[1786039050842][info][renderer][0m external addon registry retrying after vault activation 
+[32m[1786039050843][info][acceptance-test][0m [acceptance-test] vault:select {"path":"/tmp/elephant-packaged-feature-pdf-addon-open-route-FRRUvm/vault","vaultId":"vault"} 
+[32m[1786039050849][info][icon-rail][0m [icon-rail] layout:resolved [{"hidden":[],"order":["search","vault","sidebar-toggle"],"visible":["search","vault","sidebar-toggle"]}]
+[32m[1786039050891][info][icon-rail][0m [icon-rail] mounted [{"activeVaultId":"vault","isMac":false,"sidebarVisible":true}]
+[32m[1786039050892][info][excalidraw-addon][0m [excalidraw-addon] overlay mounted [{"noteDirectory":"/tmp/elephant-packaged-feature-pdf-addon-open-route-FRRUvm/vault","vaultRoot":"/tmp/elephant-packaged-feature-pdf-addon-open-route-FRRUvm/vault"}]
+[32m[1786039050893][info][search][0m [search] ensureActiveVault:init:start [{"previousVaultPath":"","vaultPath":"/tmp/elephant-packaged-feature-pdf-addon-open-route-FRRUvm/vault"}]
+[official-addon-catalog] source=bundled root=/tmp/appimage_extracted_f7abf4311611ee8e3dea01fe4ee9589e/usr/lib/Elephant/resources/official-addons
+[32m[1786039050896][info][search][0m [search] bridge:status:done [{"indexedDocuments":0,"realEmbedding":false,"semantic":false,"status":"","vaultPath":"/tmp/elephant-packaged-feature-pdf-addon-open-route-FRRUvm/vault"}]
+[32m[1786039050896][info][search][0m [search] ensureActiveVault:init:done [{"indexedDocuments":0,"status":"ready","vaultPath":"/tmp/elephant-packaged-feature-pdf-addon-open-route-FRRUvm/vault"}]
+[32m[1786039050896][info][search][0m [search] status:start [{"vaultPath":"/tmp/elephant-packaged-feature-pdf-addon-open-route-FRRUvm/vault"}]
+[automation-api] command:done request_id=automation-0 command=selectVault
+[automation-api] command:start request_id=automation-1 command=waitFor args=2
+[32m[1786039051021][info][acceptance-test][0m [acceptance-test] dom:read {"selector":".en-library-toolbar","exists":true,"textLength":41,"htmlLength":3517} 
+[32m[1786039051023][info][acceptance-test][0m [acceptance-test] dom:wait:done {"selector":".en-library-toolbar"} 
+[automation-api] command:done request_id=automation-1 command=waitFor
+[32m[1786039051023][info][search][0m [search] bridge:status:done [{"indexedDocuments":0,"realEmbedding":false,"semantic":false,"status":"","vaultPath":"/tmp/elephant-packaged-feature-pdf-addon-open-route-FRRUvm/vault"}]
+[automation-api] command:start request_id=automation-2 command=openNote args=1
+[32m[1786039051025][info][search][0m [search] status:done [{"indexedDocuments":0,"message":"","status":""}]
+[32m[1786039051027][info][acceptance-test][0m [acceptance-test] open:start {"path":"Feature.md"} 
+[32m[1786039051037][info][tauri:local-ipc][0m [tauri:local-ipc] open-file via notes.read [{"channel":"mt::open-file","length":25,"relativePath":"Feature.md"}]
+[32m[1786039051037][info][elephantnote:editor][0m [elephantnote:editor] NEW_TAB_WITH_CONTENT:start [{"currentFileId":null,"currentFilePath":null,"filename":"Feature.md","markdownLength":25,"pathname":"/tmp/elephant-packaged-feature-pdf-addon-open-route-FRRUvm/vault/Feature.md","selected":true,"tabCount":0}]
+[32m[1786039051040][info][elephantnote:editor][0m [elephantnote:editor] NEW_TAB_WITH_CONTENT:done [{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-pdf-addon-open-route-FRRUvm/vault/Feature.md","id":"mt-0","pathname":"/tmp/elephant-packaged-feature-pdf-addon-open-route-FRRUvm/vault/Feature.md","selected":true,"tabCount":1}]
+[32m[1786039051041][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-pdf-addon-open-route-FRRUvm/vault/Feature.md","currentMarkdownLength":25,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786039051046][info][elephantnote:editor][0m [elephantnote:editor] identity-change [{"activeFileId":"mt-0","activeVaultId":"vault","currentFileId":"mt-0","notePath":"Feature.md","openedPath":"Feature.md","previous":{"activeFileId":null,"currentFileId":null,"notePath":null,"openedPath":null},"tabCount":1}]
+[32m[1786039051047][info][elephantnote:editor][0m [elephantnote:editor] input-state [{"activeFileId":"mt-0","hasEditorDocument":true,"markdownLength":25,"notePath":"Feature.md","visibleMarkdownLength":14}]
+[32m[1786039051059][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] component:mounted [{"markdownLength":14,"mode":"rust"}]
+[32m[1786039051060][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] mount:start [{"generation":1,"hasFactory":false,"markdownLength":14,"mode":"rust"}]
+[32m[1786039051134][info][elephantnote:muya-rust][0m [elephantnote:muya-rust] using official Tauri core invoke 
+[32m[1786039051135][info][elephantnote:editor][0m [elephantnote:editor] real Muya UI with Rust-owned core active [{"engine":"rust","sessionId":"muya:1786039051133:1","surface":"muya"}]
+[32m[1786039051136][info][elephantnote:editor][0m [elephantnote:editor] mounted [{"notePath":"Feature.md","vault":"/tmp/elephant-packaged-feature-pdf-addon-open-route-FRRUvm/vault"}]
+[32m[1786039051137][info][elephantnote:save][0m [elephantnote:save] observed active markdown [{"isSaved":true,"length":25,"notePath":"Feature.md","reason":"mount"}]
+[32m[1786039051138][info][elephantnote:muya-rust][0m [elephantnote:muya-rust] initial session:create:start [{"markdownLength":14,"sessionId":"muya:1786039051133:1"}]
+[32m[1786039051140][info][automation-api][0m [automation-api] installed command error observability 
+[32m[1786039051142][info][acceptance-test][0m [acceptance-test] open:done {"path":"Feature.md","markdownLength":25} 
+[32m[1786039051142][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[32m[1786039051147][info][elephantnote:muya-rust][0m [elephantnote:muya-rust] initial session:create:done [{"markdownLength":14,"revision":0,"sessionId":"muya:1786039051133:1"}]
+[32m[1786039051154][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] mount:ready [{"contentEditable":"true","generation":1,"hasDomContainer":true,"markdownLength":14,"revision":0}]
+[32m[1786039051156][info][automation-api][0m [automation-api] published canonical Rust input surface [{"connected":true,"contentEditable":"true","revision":0}]
+[32m[1786039051169][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-2 command=openNote
+[automation-api] command:start request_id=automation-3 command=waitFor args=2
+[32m[1786039051172][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]","exists":true,"textLength":16,"htmlLength":1165} 
+[32m[1786039051173][info][acceptance-test][0m [acceptance-test] dom:wait:done {"selector":"[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]"} 
+[automation-api] command:done request_id=automation-3 command=waitFor
+[automation-api] command:start request_id=automation-4 command=clearFileOpenHistory args=0
+[automation-api] command:done request_id=automation-4 command=clearFileOpenHistory
+[automation-api] command:start request_id=automation-5 command=installPdfViewerProbe args=0
+[automation-api] command:done request_id=automation-5 command=installPdfViewerProbe
+[automation-api] command:start request_id=automation-6 command=dropFiles args=3
+[32m[1786039051180][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] user-mutation-boundary:opened [{"reason":"drop:files"}]
+[32m[1786039051181][info][elephantnote:muya-rust][0m [elephantnote:muya-rust] drop:delegated [{"fileCount":1,"imageCount":0}]
+[automation-api] command:done request_id=automation-6 command=dropFiles
+[automation-api] command:start request_id=automation-7 command=readState args=0
+GStreamer element appsink not found. Please install it.
+[32m[1786039051195][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-7 command=readState
+[32m[1786039051197][info][elephantnote:file-drop][0m [elephantnote:file-drop] product handler entered [{"fileCount":1}]
+[31;1m[1786039051198][error][elephantnote:muya-rust][0m [elephantnote:muya-rust] canonical command failed [{"message":"No active vault is available.","name":"Error","stack":"@tauri://localhost/assets/index-joAryrzC.js:1514:46861\n@tauri://localhost/assets/index-joAryrzC.js:1514:47950"}]
+[31;1m[1786039051199][error][elephantnote:rust-editor][0m [elephantnote:rust-editor] runtime error [{"markdownLength":14,"message":"Muya JS/Rust editor crashed.","name":"Error","revision":0,"selection":{"anchor":13,"focus":13}}]
+[automation-api] command:start request_id=automation-8 command=readState args=0
+[32m[1786039051249][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-8 command=readState
+[automation-api] command:start request_id=automation-9 command=readState args=0
+[32m[1786039051305][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-9 command=readState
+[automation-api] command:start request_id=automation-10 command=readState args=0
+[32m[1786039051359][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-10 command=readState
+[automation-api] command:start request_id=automation-11 command=readState args=0
+[32m[1786039051414][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-11 command=readState
+[automation-api] command:start request_id=automation-12 command=readState args=0
+[32m[1786039051468][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-12 command=readState
+[automation-api] command:start request_id=automation-13 command=readState args=0
+[32m[1786039051536][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-13 command=readState
+[automation-api] command:start request_id=automation-14 command=readState args=0
+[32m[1786039051590][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-14 command=readState
+[automation-api] command:start request_id=automation-15 command=readState args=0
+[32m[1786039051645][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-15 command=readState
+[automation-api] command:start request_id=automation-16 command=readState args=0
+[32m[1786039051701][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-16 command=readState
+[automation-api] command:start request_id=automation-17 command=readState args=0
+[32m[1786039051756][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-17 command=readState
+[automation-api] command:start request_id=automation-18 command=readState args=0
+[32m[1786039051809][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-18 command=readState
+[automation-api] command:start request_id=automation-19 command=readState args=0
+[32m[1786039051864][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-19 command=readState
+[automation-api] command:start request_id=automation-20 command=readState args=0
+[32m[1786039051919][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-20 command=readState
+[automation-api] command:start request_id=automation-21 command=readState args=0
+[32m[1786039051974][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-21 command=readState
+[automation-api] command:start request_id=automation-22 command=readState args=0
+[32m[1786039052028][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-22 command=readState
+[32m[1786039052043][info][elephantnote:recovery][0m [elephantnote:recovery] checkpoint:persisted [{"currentFileId":"mt-0","revision":1,"tabCount":1}]
+[automation-api] command:start request_id=automation-23 command=readState args=0
+[32m[1786039052082][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-23 command=readState
+[automation-api] command:start request_id=automation-24 command=readState args=0
+[32m[1786039052136][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-24 command=readState
+[automation-api] command:start request_id=automation-25 command=readState args=0
+[32m[1786039052191][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-25 command=readState
+[automation-api] command:start request_id=automation-26 command=readState args=0
+[32m[1786039052247][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-26 command=readState
+[automation-api] command:start request_id=automation-27 command=readState args=0
+[32m[1786039052302][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-27 command=readState
+[automation-api] command:start request_id=automation-28 command=readState args=0
+[32m[1786039052357][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-28 command=readState
+[automation-api] command:start request_id=automation-29 command=readState args=0
+[32m[1786039052411][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-29 command=readState
+[automation-api] command:start request_id=automation-30 command=readState args=0
+[32m[1786039052465][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-30 command=readState
+[automation-api] command:start request_id=automation-31 command=readState args=0
+[32m[1786039052520][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-31 command=readState
+[automation-api] command:start request_id=automation-32 command=readState args=0
+[32m[1786039052575][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-32 command=readState
+[automation-api] command:start request_id=automation-33 command=readState args=0
+[32m[1786039052630][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-33 command=readState
+[automation-api] command:start request_id=automation-34 command=readState args=0
+[32m[1786039052683][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-34 command=readState
+[automation-api] command:start request_id=automation-35 command=readState args=0
+[32m[1786039052737][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-35 command=readState
+[automation-api] command:start request_id=automation-36 command=readState args=0
+[32m[1786039052790][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-36 command=readState
+[automation-api] command:start request_id=automation-37 command=readState args=0
+[32m[1786039052842][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-37 command=readState
+[automation-api] command:start request_id=automation-38 command=readState args=0
+[32m[1786039052895][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-38 command=readState
+[automation-api] command:start request_id=automation-39 command=readState args=0
+[32m[1786039052951][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-39 command=readState
+[automation-api] command:start request_id=automation-40 command=readState args=0
+[32m[1786039053008][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-40 command=readState
+[automation-api] command:start request_id=automation-41 command=readState args=0
+[32m[1786039053060][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-41 command=readState
+[automation-api] command:start request_id=automation-42 command=readState args=0
+[32m[1786039053113][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-42 command=readState
+[automation-api] command:start request_id=automation-43 command=readState args=0
+[32m[1786039053166][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-43 command=readState
+[automation-api] command:start request_id=automation-44 command=readState args=0
+[32m[1786039053219][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-44 command=readState
+[automation-api] command:start request_id=automation-45 command=readState args=0
+[32m[1786039053272][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-45 command=readState
+[automation-api] command:start request_id=automation-46 command=readState args=0
+[32m[1786039053326][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-46 command=readState
+[automation-api] command:start request_id=automation-47 command=readState args=0
+[32m[1786039053379][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-47 command=readState
+[automation-api] command:start request_id=automation-48 command=readState args=0
+[32m[1786039053431][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-48 command=readState
+[automation-api] command:start request_id=automation-49 command=readState args=0
+[32m[1786039053483][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-49 command=readState
+[automation-api] command:start request_id=automation-50 command=readState args=0
+[32m[1786039053536][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-50 command=readState
+[automation-api] command:start request_id=automation-51 command=readState args=0
+[32m[1786039053589][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-51 command=readState
+[automation-api] command:start request_id=automation-52 command=readState args=0
+[32m[1786039053642][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-52 command=readState
+[automation-api] command:start request_id=automation-53 command=readState args=0
+[32m[1786039053695][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-53 command=readState
+[automation-api] command:start request_id=automation-54 command=readState args=0
+[32m[1786039053748][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-54 command=readState
+[automation-api] command:start request_id=automation-55 command=readState args=0
+[32m[1786039053801][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-55 command=readState
+[automation-api] command:start request_id=automation-56 command=readState args=0
+[32m[1786039053855][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-56 command=readState
+[automation-api] command:start request_id=automation-57 command=readState args=0
+[32m[1786039053908][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-57 command=readState
+[automation-api] command:start request_id=automation-58 command=readState args=0
+[32m[1786039053961][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-58 command=readState
+[automation-api] command:start request_id=automation-59 command=readState args=0
+[32m[1786039054014][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-59 command=readState
+[automation-api] command:start request_id=automation-60 command=readState args=0
+[32m[1786039054067][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-60 command=readState
+[automation-api] command:start request_id=automation-61 command=readState args=0
+[32m[1786039054120][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-61 command=readState
+[automation-api] command:start request_id=automation-62 command=readState args=0
+[32m[1786039054173][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-62 command=readState
+[automation-api] command:start request_id=automation-63 command=readState args=0
+[32m[1786039054226][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-63 command=readState
+[automation-api] command:start request_id=automation-64 command=readState args=0
+[32m[1786039054280][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-64 command=readState
+[automation-api] command:start request_id=automation-65 command=readState args=0
+[32m[1786039054333][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-65 command=readState
+[automation-api] command:start request_id=automation-66 command=readState args=0
+[32m[1786039054386][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-66 command=readState
+[automation-api] command:start request_id=automation-67 command=readState args=0
+[32m[1786039054439][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-67 command=readState
+[automation-api] command:start request_id=automation-68 command=readState args=0
+[32m[1786039054492][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-68 command=readState
+[automation-api] command:start request_id=automation-69 command=readState args=0
+[32m[1786039054545][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-69 command=readState
+[automation-api] command:start request_id=automation-70 command=readState args=0
+[32m[1786039054599][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-70 command=readState
+[automation-api] command:start request_id=automation-71 command=readState args=0
+[32m[1786039054651][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-71 command=readState
+[automation-api] command:start request_id=automation-72 command=readState args=0
+[32m[1786039054704][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-72 command=readState
+[automation-api] command:start request_id=automation-73 command=readState args=0
+[32m[1786039054758][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-73 command=readState
+[automation-api] command:start request_id=automation-74 command=readState args=0
+[32m[1786039054811][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-74 command=readState
+[automation-api] command:start request_id=automation-75 command=readState args=0
+[32m[1786039054864][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-75 command=readState
+[automation-api] command:start request_id=automation-76 command=readState args=0
+[32m[1786039054916][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-76 command=readState
+[automation-api] command:start request_id=automation-77 command=readState args=0
+[32m[1786039054969][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-77 command=readState
+[automation-api] command:start request_id=automation-78 command=readState args=0
+[32m[1786039055023][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-78 command=readState
+[automation-api] command:start request_id=automation-79 command=readState args=0
+[32m[1786039055076][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-79 command=readState
+[automation-api] command:start request_id=automation-80 command=readState args=0
+[32m[1786039055129][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-80 command=readState
+[automation-api] command:start request_id=automation-81 command=readState args=0
+[32m[1786039055182][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-81 command=readState
+[automation-api] command:start request_id=automation-82 command=readState args=0
+[32m[1786039055234][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-82 command=readState
+[automation-api] command:start request_id=automation-83 command=readState args=0
+[32m[1786039055286][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-83 command=readState
+[automation-api] command:start request_id=automation-84 command=readState args=0
+[32m[1786039055340][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-84 command=readState
+[automation-api] command:start request_id=automation-85 command=readState args=0
+[32m[1786039055393][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-85 command=readState
+[automation-api] command:start request_id=automation-86 command=readState args=0
+[32m[1786039055446][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-86 command=readState
+[automation-api] command:start request_id=automation-87 command=readState args=0
+[32m[1786039055500][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-87 command=readState
+[automation-api] command:start request_id=automation-88 command=readState args=0
+[32m[1786039055553][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-88 command=readState
+[automation-api] command:start request_id=automation-89 command=readState args=0
+[32m[1786039055606][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-89 command=readState
+[automation-api] command:start request_id=automation-90 command=readState args=0
+[32m[1786039055659][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-90 command=readState
+[automation-api] command:start request_id=automation-91 command=readState args=0
+[32m[1786039055712][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-91 command=readState
+[automation-api] command:start request_id=automation-92 command=readState args=0
+[32m[1786039055765][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-92 command=readState
+[automation-api] command:start request_id=automation-93 command=readState args=0
+[32m[1786039055818][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-93 command=readState
+[automation-api] command:start request_id=automation-94 command=readState args=0
+[32m[1786039055871][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-94 command=readState
+[automation-api] command:start request_id=automation-95 command=readState args=0
+[32m[1786039055924][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-95 command=readState
+[automation-api] command:start request_id=automation-96 command=readState args=0
+[32m[1786039055977][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-96 command=readState
+[automation-api] command:start request_id=automation-97 command=readState args=0
+[32m[1786039056031][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-97 command=readState
+[automation-api] command:start request_id=automation-98 command=readState args=0
+[32m[1786039056084][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-98 command=readState
+[automation-api] command:start request_id=automation-99 command=readState args=0
+[32m[1786039056136][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-99 command=readState
+[automation-api] command:start request_id=automation-100 command=readState args=0
+[32m[1786039056188][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-100 command=readState
+[automation-api] command:start request_id=automation-101 command=readState args=0
+[32m[1786039056241][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-101 command=readState
+[automation-api] command:start request_id=automation-102 command=readState args=0
+[32m[1786039056294][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-102 command=readState
+[automation-api] command:start request_id=automation-103 command=readState args=0
+[32m[1786039056348][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-103 command=readState
+[automation-api] command:start request_id=automation-104 command=readState args=0
+[32m[1786039056401][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-104 command=readState
+[automation-api] command:start request_id=automation-105 command=readState args=0
+[32m[1786039056454][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-105 command=readState
+[automation-api] command:start request_id=automation-106 command=readState args=0
+[32m[1786039056507][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-106 command=readState
+[automation-api] command:start request_id=automation-107 command=readState args=0
+[32m[1786039056560][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-107 command=readState
+[automation-api] command:start request_id=automation-108 command=readState args=0
+[32m[1786039056614][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-108 command=readState
+[automation-api] command:start request_id=automation-109 command=readState args=0
+[32m[1786039056667][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-109 command=readState
+[automation-api] command:start request_id=automation-110 command=readState args=0
+[32m[1786039056720][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-110 command=readState
+[automation-api] command:start request_id=automation-111 command=readState args=0
+[32m[1786039056773][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-111 command=readState
+[automation-api] command:start request_id=automation-112 command=readState args=0
+[32m[1786039056827][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-112 command=readState
+[automation-api] command:start request_id=automation-113 command=readState args=0
+[32m[1786039056880][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-113 command=readState
+[automation-api] command:start request_id=automation-114 command=readState args=0
+[32m[1786039056933][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-114 command=readState
+[automation-api] command:start request_id=automation-115 command=readState args=0
+[32m[1786039056986][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-115 command=readState
+[automation-api] command:start request_id=automation-116 command=readState args=0
+[32m[1786039057039][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-116 command=readState
+[automation-api] command:start request_id=automation-117 command=readState args=0
+[32m[1786039057093][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-117 command=readState
+[automation-api] command:start request_id=automation-118 command=readState args=0
+[32m[1786039057146][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-118 command=readState
+[automation-api] command:start request_id=automation-119 command=readState args=0
+[32m[1786039057199][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-119 command=readState
+[automation-api] command:start request_id=automation-120 command=readState args=0
+[32m[1786039057251][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-120 command=readState
+[automation-api] command:start request_id=automation-121 command=readState args=0
+[32m[1786039057304][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-121 command=readState
+[automation-api] command:start request_id=automation-122 command=readState args=0
+[32m[1786039057357][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-122 command=readState
+[automation-api] command:start request_id=automation-123 command=readState args=0
+[32m[1786039057410][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-123 command=readState
+[automation-api] command:start request_id=automation-124 command=readState args=0
+[32m[1786039057463][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-124 command=readState
+[automation-api] command:start request_id=automation-125 command=readState args=0
+[32m[1786039057516][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-125 command=readState
+[automation-api] command:start request_id=automation-126 command=readState args=0
+[32m[1786039057569][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-126 command=readState
+[automation-api] command:start request_id=automation-127 command=readState args=0
+[32m[1786039057622][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-127 command=readState
+[automation-api] command:start request_id=automation-128 command=readState args=0
+[32m[1786039057675][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-128 command=readState
+[automation-api] command:start request_id=automation-129 command=readState args=0
+[32m[1786039057729][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-129 command=readState
+[automation-api] command:start request_id=automation-130 command=readState args=0
+[32m[1786039057782][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-130 command=readState
+[automation-api] command:start request_id=automation-131 command=readState args=0
+[32m[1786039057835][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-131 command=readState
+[automation-api] command:start request_id=automation-132 command=readState args=0
+[32m[1786039057888][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-132 command=readState
+[automation-api] command:start request_id=automation-133 command=readState args=0
+[32m[1786039057941][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-133 command=readState
+[automation-api] command:start request_id=automation-134 command=readState args=0
+[32m[1786039057994][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-134 command=readState
+[automation-api] command:start request_id=automation-135 command=readState args=0
+[32m[1786039058048][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-135 command=readState
+[automation-api] command:start request_id=automation-136 command=readState args=0
+[32m[1786039058101][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-136 command=readState
+[automation-api] command:start request_id=automation-137 command=readState args=0
+[32m[1786039058154][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-137 command=readState
+[automation-api] command:start request_id=automation-138 command=readState args=0
+[32m[1786039058207][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-138 command=readState
+[automation-api] command:start request_id=automation-139 command=readState args=0
+[32m[1786039058261][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-139 command=readState
+[automation-api] command:start request_id=automation-140 command=readState args=0
+[32m[1786039058314][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-140 command=readState
+[automation-api] command:start request_id=automation-141 command=readState args=0
+[32m[1786039058367][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-141 command=readState
+[automation-api] command:start request_id=automation-142 command=readState args=0
+[32m[1786039058419][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-142 command=readState
+[automation-api] command:start request_id=automation-143 command=readState args=0
+[32m[1786039058472][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-143 command=readState
+[automation-api] command:start request_id=automation-144 command=readState args=0
+[32m[1786039058525][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-144 command=readState
+[automation-api] command:start request_id=automation-145 command=readState args=0
+[32m[1786039058578][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-145 command=readState
+[automation-api] command:start request_id=automation-146 command=readState args=0
+[32m[1786039058631][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-146 command=readState
+[automation-api] command:start request_id=automation-147 command=readState args=0
+[32m[1786039058685][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-147 command=readState
+[automation-api] command:start request_id=automation-148 command=readState args=0
+[32m[1786039058737][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-148 command=readState
+[automation-api] command:start request_id=automation-149 command=readState args=0
+[32m[1786039058790][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-149 command=readState
+[automation-api] command:start request_id=automation-150 command=readState args=0
+[32m[1786039058843][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-150 command=readState
+[automation-api] command:start request_id=automation-151 command=readState args=0
+[32m[1786039058896][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-151 command=readState
+[automation-api] command:start request_id=automation-152 command=readState args=0
+[32m[1786039058950][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-152 command=readState
+[automation-api] command:start request_id=automation-153 command=readState args=0
+[32m[1786039059003][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-153 command=readState
+[automation-api] command:start request_id=automation-154 command=readState args=0
+[32m[1786039059056][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-154 command=readState
+[automation-api] command:start request_id=automation-155 command=readState args=0
+[32m[1786039059109][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-155 command=readState
+[automation-api] command:start request_id=automation-156 command=readState args=0
+[32m[1786039059163][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-156 command=readState
+[automation-api] command:start request_id=automation-157 command=readState args=0
+[32m[1786039059216][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-157 command=readState
+[automation-api] command:start request_id=automation-158 command=readState args=0
+[32m[1786039059270][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-158 command=readState
+[automation-api] command:start request_id=automation-159 command=readState args=0
+[32m[1786039059324][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-159 command=readState
+[automation-api] command:start request_id=automation-160 command=readState args=0
+[32m[1786039059376][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-160 command=readState
+[automation-api] command:start request_id=automation-161 command=readState args=0
+[32m[1786039059429][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-161 command=readState
+[automation-api] command:start request_id=automation-162 command=readState args=0
+[32m[1786039059483][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-162 command=readState
+[automation-api] command:start request_id=automation-163 command=readState args=0
+[32m[1786039059536][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-163 command=readState
+[automation-api] command:start request_id=automation-164 command=readState args=0
+[32m[1786039059589][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-164 command=readState
+[automation-api] command:start request_id=automation-165 command=readState args=0
+[32m[1786039059642][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-165 command=readState
+[automation-api] command:start request_id=automation-166 command=readState args=0
+[32m[1786039059695][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-166 command=readState
+[automation-api] command:start request_id=automation-167 command=readState args=0
+[32m[1786039059748][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-167 command=readState
+[automation-api] command:start request_id=automation-168 command=readState args=0
+[32m[1786039059801][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-168 command=readState
+[automation-api] command:start request_id=automation-169 command=readState args=0
+[32m[1786039059855][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-169 command=readState
+[automation-api] command:start request_id=automation-170 command=readState args=0
+[32m[1786039059908][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-170 command=readState
+[automation-api] command:start request_id=automation-171 command=readState args=0
+[32m[1786039059961][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-171 command=readState
+[automation-api] command:start request_id=automation-172 command=readState args=0
+[32m[1786039060014][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-172 command=readState
+[automation-api] command:start request_id=automation-173 command=readState args=0
+[32m[1786039060068][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-173 command=readState
+[automation-api] command:start request_id=automation-174 command=readState args=0
+[32m[1786039060121][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-174 command=readState
+[automation-api] command:start request_id=automation-175 command=readState args=0
+[32m[1786039060175][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-175 command=readState
+[automation-api] command:start request_id=automation-176 command=readState args=0
+[32m[1786039060228][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-176 command=readState
+[automation-api] command:start request_id=automation-177 command=readState args=0
+[32m[1786039060281][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-177 command=readState
+[automation-api] command:start request_id=automation-178 command=readState args=0
+[32m[1786039060333][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-178 command=readState
+[automation-api] command:start request_id=automation-179 command=readState args=0
+[32m[1786039060386][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-179 command=readState
+[automation-api] command:start request_id=automation-180 command=readState args=0
+[32m[1786039060439][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-180 command=readState
+[automation-api] command:start request_id=automation-181 command=readState args=0
+[32m[1786039060492][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-181 command=readState
+[automation-api] command:start request_id=automation-182 command=readState args=0
+[32m[1786039060545][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-182 command=readState
+[automation-api] command:start request_id=automation-183 command=readState args=0
+[32m[1786039060598][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-183 command=readState
+[automation-api] command:start request_id=automation-184 command=readState args=0
+[32m[1786039060651][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-184 command=readState
+[automation-api] command:start request_id=automation-185 command=readState args=0
+[32m[1786039060704][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-185 command=readState
+[automation-api] command:start request_id=automation-186 command=readState args=0
+[32m[1786039060757][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-186 command=readState
+[automation-api] command:start request_id=automation-187 command=readState args=0
+[32m[1786039060810][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-187 command=readState
+[automation-api] command:start request_id=automation-188 command=readState args=0
+[32m[1786039060863][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-188 command=readState
+[automation-api] command:start request_id=automation-189 command=readState args=0
+[32m[1786039060916][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-189 command=readState
+[automation-api] command:start request_id=automation-190 command=readState args=0
+[32m[1786039060969][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-190 command=readState
+[automation-api] command:start request_id=automation-191 command=readState args=0
+[32m[1786039061024][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-191 command=readState
+[automation-api] command:start request_id=automation-192 command=readState args=0
+[32m[1786039061078][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-192 command=readState
+[automation-api] command:start request_id=automation-193 command=readState args=0
+[32m[1786039061130][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-193 command=readState
+[automation-api] command:start request_id=automation-194 command=readState args=0
+[32m[1786039061182][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-194 command=readState
+[automation-api] command:start request_id=automation-195 command=readState args=0
+[32m[1786039061235][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-195 command=readState
+[automation-api] command:start request_id=automation-196 command=readState args=0
+[32m[1786039061287][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-196 command=readState
+[automation-api] command:start request_id=automation-197 command=readState args=0
+[32m[1786039061340][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-197 command=readState
+[automation-api] command:start request_id=automation-198 command=readState args=0
+[32m[1786039061393][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-198 command=readState
+[automation-api] command:start request_id=automation-199 command=readState args=0
+[32m[1786039061446][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-199 command=readState
+[automation-api] command:start request_id=automation-200 command=readState args=0
+[32m[1786039061499][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-200 command=readState
+[automation-api] command:start request_id=automation-201 command=readState args=0
+[32m[1786039061552][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-201 command=readState
+[automation-api] command:start request_id=automation-202 command=readState args=0
+[32m[1786039061605][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-202 command=readState
+[automation-api] command:start request_id=automation-203 command=readState args=0
+[32m[1786039061658][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-203 command=readState
+[automation-api] command:start request_id=automation-204 command=readState args=0
+[32m[1786039061711][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-204 command=readState
+[automation-api] command:start request_id=automation-205 command=readState args=0
+[32m[1786039061764][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-205 command=readState
+[automation-api] command:start request_id=automation-206 command=readState args=0
+[32m[1786039061817][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-206 command=readState
+[automation-api] command:start request_id=automation-207 command=readState args=0
+[32m[1786039061870][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-207 command=readState
+[automation-api] command:start request_id=automation-208 command=readState args=0
+[32m[1786039061923][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-208 command=readState
+[automation-api] command:start request_id=automation-209 command=readState args=0
+[32m[1786039061976][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-209 command=readState
+[automation-api] command:start request_id=automation-210 command=readState args=0
+[32m[1786039062029][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-210 command=readState
+[automation-api] command:start request_id=automation-211 command=readState args=0
+[32m[1786039062082][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-211 command=readState
+[automation-api] command:start request_id=automation-212 command=readState args=0
+[32m[1786039062135][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-212 command=readState
+[automation-api] command:start request_id=automation-213 command=readState args=0
+[32m[1786039062188][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-213 command=readState
+[automation-api] command:start request_id=automation-214 command=readState args=0
+[32m[1786039062241][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-214 command=readState
+[automation-api] command:start request_id=automation-215 command=readState args=0
+[32m[1786039062295][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-215 command=readState
+[automation-api] command:start request_id=automation-216 command=readState args=0
+[32m[1786039062348][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-216 command=readState
+[automation-api] command:start request_id=automation-217 command=readState args=0
+[32m[1786039062402][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-217 command=readState
+[automation-api] command:start request_id=automation-218 command=readState args=0
+[32m[1786039062455][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-218 command=readState
+[automation-api] command:start request_id=automation-219 command=readState args=0
+[32m[1786039062508][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-219 command=readState
+[automation-api] command:start request_id=automation-220 command=readState args=0
+[32m[1786039062561][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-220 command=readState
+[automation-api] command:start request_id=automation-221 command=readState args=0
+[32m[1786039062614][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-221 command=readState
+[automation-api] command:start request_id=automation-222 command=readState args=0
+[32m[1786039062667][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-222 command=readState
+[automation-api] command:start request_id=automation-223 command=readState args=0
+[32m[1786039062720][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-223 command=readState
+[automation-api] command:start request_id=automation-224 command=readState args=0
+[32m[1786039062774][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-224 command=readState
+[automation-api] command:start request_id=automation-225 command=readState args=0
+[32m[1786039062827][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-225 command=readState
+[automation-api] command:start request_id=automation-226 command=readState args=0
+[32m[1786039062879][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-226 command=readState
+[automation-api] command:start request_id=automation-227 command=readState args=0
+[32m[1786039062931][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-227 command=readState
+[automation-api] command:start request_id=automation-228 command=readState args=0
+[32m[1786039062984][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-228 command=readState
+[automation-api] command:start request_id=automation-229 command=readState args=0
+[32m[1786039063037][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-229 command=readState
+[automation-api] command:start request_id=automation-230 command=readState args=0
+[32m[1786039063090][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-230 command=readState
+[automation-api] command:start request_id=automation-231 command=readState args=0
+[32m[1786039063143][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-231 command=readState
+[automation-api] command:start request_id=automation-232 command=readState args=0
+[32m[1786039063196][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-232 command=readState
+[automation-api] command:start request_id=automation-233 command=readState args=0
+[32m[1786039063249][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-233 command=readState
+[automation-api] command:start request_id=automation-234 command=readState args=0
+[32m[1786039063302][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-234 command=readState
+[automation-api] command:start request_id=automation-235 command=readState args=0
+[32m[1786039063355][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-235 command=readState
+[automation-api] command:start request_id=automation-236 command=readState args=0
+[32m[1786039063408][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-236 command=readState
+[automation-api] command:start request_id=automation-237 command=readState args=0
+[32m[1786039063461][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-237 command=readState
+[automation-api] command:start request_id=automation-238 command=readState args=0
+[32m[1786039063514][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-238 command=readState
+[automation-api] command:start request_id=automation-239 command=readState args=0
+[32m[1786039063566][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-239 command=readState
+[automation-api] command:start request_id=automation-240 command=readState args=0
+[32m[1786039063618][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-240 command=readState
+[automation-api] command:start request_id=automation-241 command=readState args=0
+[32m[1786039063671][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-241 command=readState
+[automation-api] command:start request_id=automation-242 command=readState args=0
+[32m[1786039063724][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-242 command=readState
+[automation-api] command:start request_id=automation-243 command=readState args=0
+[32m[1786039063777][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-243 command=readState
+[automation-api] command:start request_id=automation-244 command=readState args=0
+[32m[1786039063830][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-244 command=readState
+[automation-api] command:start request_id=automation-245 command=readState args=0
+[32m[1786039063883][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-245 command=readState
+[automation-api] command:start request_id=automation-246 command=readState args=0
+[32m[1786039063935][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-246 command=readState
+[automation-api] command:start request_id=automation-247 command=readState args=0
+[32m[1786039063988][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-247 command=readState
+[automation-api] command:start request_id=automation-248 command=readState args=0
+[32m[1786039064041][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-248 command=readState
+[automation-api] command:start request_id=automation-249 command=readState args=0
+[32m[1786039064095][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-249 command=readState
+[automation-api] command:start request_id=automation-250 command=readState args=0
+[32m[1786039064148][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-250 command=readState
+[automation-api] command:start request_id=automation-251 command=readState args=0
+[32m[1786039064201][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-251 command=readState
+[automation-api] command:start request_id=automation-252 command=readState args=0
+[32m[1786039064253][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-252 command=readState
+[automation-api] command:start request_id=automation-253 command=readState args=0
+[32m[1786039064307][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-253 command=readState
+[automation-api] command:start request_id=automation-254 command=readState args=0
+[32m[1786039064360][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-254 command=readState
+[automation-api] command:start request_id=automation-255 command=readState args=0
+[32m[1786039064413][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-255 command=readState
+[automation-api] command:start request_id=automation-256 command=readState args=0
+[32m[1786039064466][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-256 command=readState
+[automation-api] command:start request_id=automation-257 command=readState args=0
+[32m[1786039064519][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-257 command=readState
+[automation-api] command:start request_id=automation-258 command=readState args=0
+[32m[1786039064573][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-258 command=readState
+[automation-api] command:start request_id=automation-259 command=readState args=0
+[32m[1786039064626][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-259 command=readState
+[automation-api] command:start request_id=automation-260 command=readState args=0
+[32m[1786039064678][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-260 command=readState
+[automation-api] command:start request_id=automation-261 command=readState args=0
+[32m[1786039064732][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-261 command=readState
+[automation-api] command:start request_id=automation-262 command=readState args=0
+[32m[1786039064785][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-262 command=readState
+[automation-api] command:start request_id=automation-263 command=readState args=0
+[32m[1786039064837][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-263 command=readState
+[automation-api] command:start request_id=automation-264 command=readState args=0
+[32m[1786039064891][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-264 command=readState
+[automation-api] command:start request_id=automation-265 command=readState args=0
+[32m[1786039064944][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-265 command=readState
+[automation-api] command:start request_id=automation-266 command=readState args=0
+[32m[1786039064996][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-266 command=readState
+[automation-api] command:start request_id=automation-267 command=readState args=0
+[32m[1786039065049][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-267 command=readState
+[automation-api] command:start request_id=automation-268 command=readState args=0
+[32m[1786039065102][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-268 command=readState
+[automation-api] command:start request_id=automation-269 command=readState args=0
+[32m[1786039065155][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-269 command=readState
+[automation-api] command:start request_id=automation-270 command=readState args=0
+[32m[1786039065208][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-270 command=readState
+[automation-api] command:start request_id=automation-271 command=readState args=0
+[32m[1786039065261][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-271 command=readState
+[automation-api] command:start request_id=automation-272 command=readState args=0
+[32m[1786039065315][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-272 command=readState
+[automation-api] command:start request_id=automation-273 command=readState args=0
+[32m[1786039065368][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-273 command=readState
+[automation-api] command:start request_id=automation-274 command=readState args=0
+[32m[1786039065421][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-274 command=readState
+[automation-api] command:start request_id=automation-275 command=readState args=0
+[32m[1786039065474][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-275 command=readState
+[automation-api] command:start request_id=automation-276 command=readState args=0
+[32m[1786039065526][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-276 command=readState
+[automation-api] command:start request_id=automation-277 command=readState args=0
+[32m[1786039065579][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-277 command=readState
+[automation-api] command:start request_id=automation-278 command=readState args=0
+[32m[1786039065632][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-278 command=readState
+[automation-api] command:start request_id=automation-279 command=readState args=0
+[32m[1786039065685][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-279 command=readState
+[automation-api] command:start request_id=automation-280 command=readState args=0
+[32m[1786039065738][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-280 command=readState
+[automation-api] command:start request_id=automation-281 command=readState args=0
+[32m[1786039065791][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-281 command=readState
+[automation-api] command:start request_id=automation-282 command=readState args=0
+[32m[1786039065844][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-282 command=readState
+[automation-api] command:start request_id=automation-283 command=readState args=0
+[32m[1786039065897][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-283 command=readState
+[automation-api] command:start request_id=automation-284 command=readState args=0
+[32m[1786039065950][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-284 command=readState
+[automation-api] command:start request_id=automation-285 command=readState args=0
+[32m[1786039066003][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-285 command=readState
+[automation-api] command:start request_id=automation-286 command=readState args=0
+[32m[1786039066057][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-286 command=readState
+[automation-api] command:start request_id=automation-287 command=readState args=0
+[32m[1786039066109][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-287 command=readState
+[automation-api] command:start request_id=automation-288 command=readState args=0
+[32m[1786039066163][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-288 command=readState
+[automation-api] command:start request_id=automation-289 command=readState args=0
+[32m[1786039066216][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-289 command=readState
+[automation-api] command:start request_id=automation-290 command=readState args=0
+[32m[1786039066268][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-290 command=readState
+[automation-api] command:start request_id=automation-291 command=readState args=0
+[32m[1786039066321][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-291 command=readState
+[automation-api] command:start request_id=automation-292 command=readState args=0
+[32m[1786039066374][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-292 command=readState
+[automation-api] command:start request_id=automation-293 command=readState args=0
+[32m[1786039066428][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-293 command=readState
+[automation-api] command:start request_id=automation-294 command=readState args=0
+[32m[1786039066481][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-294 command=readState
+[automation-api] command:start request_id=automation-295 command=readState args=0
+[32m[1786039066534][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-295 command=readState
+[automation-api] command:start request_id=automation-296 command=readState args=0
+[32m[1786039066587][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-296 command=readState
+[automation-api] command:start request_id=automation-297 command=readState args=0
+[32m[1786039066639][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-297 command=readState
+[automation-api] command:start request_id=automation-298 command=readState args=0
+[32m[1786039066691][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-298 command=readState
+[automation-api] command:start request_id=automation-299 command=readState args=0
+[32m[1786039066744][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-299 command=readState
+[automation-api] command:start request_id=automation-300 command=readState args=0
+[32m[1786039066797][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-300 command=readState
+[automation-api] command:start request_id=automation-301 command=readState args=0
+[32m[1786039066850][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-301 command=readState
+[automation-api] command:start request_id=automation-302 command=readState args=0
+[32m[1786039066903][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-302 command=readState
+[automation-api] command:start request_id=automation-303 command=readState args=0
+[32m[1786039066956][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-303 command=readState
+[automation-api] command:start request_id=automation-304 command=readState args=0
+[32m[1786039067008][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-304 command=readState
+[automation-api] command:start request_id=automation-305 command=readState args=0
+[32m[1786039067061][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-305 command=readState
+[automation-api] command:start request_id=automation-306 command=readState args=0
+[32m[1786039067114][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-306 command=readState
+[automation-api] command:start request_id=automation-307 command=readState args=0
+[32m[1786039067167][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-307 command=readState
+[automation-api] command:start request_id=automation-308 command=readState args=0
+[32m[1786039067220][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-308 command=readState
+[automation-api] command:start request_id=automation-309 command=readState args=0
+[32m[1786039067273][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-309 command=readState
+[automation-api] command:start request_id=automation-310 command=readState args=0
+[32m[1786039067326][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-310 command=readState
+[automation-api] command:start request_id=automation-311 command=readState args=0
+[32m[1786039067379][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-311 command=readState
+[automation-api] command:start request_id=automation-312 command=readState args=0
+[32m[1786039067432][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-312 command=readState
+[automation-api] command:start request_id=automation-313 command=readState args=0
+[32m[1786039067485][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-313 command=readState
+[automation-api] command:start request_id=automation-314 command=readState args=0
+[32m[1786039067539][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-314 command=readState
+[automation-api] command:start request_id=automation-315 command=readState args=0
+[32m[1786039067592][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-315 command=readState
+[automation-api] command:start request_id=automation-316 command=readState args=0
+[32m[1786039067645][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-316 command=readState
+[automation-api] command:start request_id=automation-317 command=readState args=0
+[32m[1786039067698][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-317 command=readState
+[automation-api] command:start request_id=automation-318 command=readState args=0
+[32m[1786039067751][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-318 command=readState
+[automation-api] command:start request_id=automation-319 command=readState args=0
+[32m[1786039067805][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-319 command=readState
+[automation-api] command:start request_id=automation-320 command=readState args=0
+[32m[1786039067857][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-320 command=readState
+[automation-api] command:start request_id=automation-321 command=readState args=0
+[32m[1786039067909][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-321 command=readState
+[automation-api] command:start request_id=automation-322 command=readState args=0
+[32m[1786039067961][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-322 command=readState
+[automation-api] command:start request_id=automation-323 command=readState args=0
+[32m[1786039068013][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-323 command=readState
+[automation-api] command:start request_id=automation-324 command=readState args=0
+[32m[1786039068066][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-324 command=readState
+[automation-api] command:start request_id=automation-325 command=readState args=0
+[32m[1786039068119][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-325 command=readState
+[automation-api] command:start request_id=automation-326 command=readState args=0
+[32m[1786039068172][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-326 command=readState
+[automation-api] command:start request_id=automation-327 command=readState args=0
+[32m[1786039068225][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-327 command=readState
+[automation-api] command:start request_id=automation-328 command=readState args=0
+[32m[1786039068278][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-328 command=readState
+[automation-api] command:start request_id=automation-329 command=readState args=0
+[32m[1786039068331][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-329 command=readState
+[automation-api] command:start request_id=automation-330 command=readState args=0
+[32m[1786039068385][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-330 command=readState
+[automation-api] command:start request_id=automation-331 command=readState args=0
+[32m[1786039068438][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-331 command=readState
+[automation-api] command:start request_id=automation-332 command=readState args=0
+[32m[1786039068491][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-332 command=readState
+[automation-api] command:start request_id=automation-333 command=readState args=0
+[32m[1786039068544][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-333 command=readState
+[automation-api] command:start request_id=automation-334 command=readState args=0
+[32m[1786039068599][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-334 command=readState
+[automation-api] command:start request_id=automation-335 command=readState args=0
+[32m[1786039068652][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-335 command=readState
+[automation-api] command:start request_id=automation-336 command=readState args=0
+[32m[1786039068705][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-336 command=readState
+[automation-api] command:start request_id=automation-337 command=readState args=0
+[32m[1786039068758][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-337 command=readState
+[automation-api] command:start request_id=automation-338 command=readState args=0
+[32m[1786039068811][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-338 command=readState
+[automation-api] command:start request_id=automation-339 command=readState args=0
+[32m[1786039068865][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-339 command=readState
+[automation-api] command:start request_id=automation-340 command=readState args=0
+[32m[1786039068918][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-340 command=readState
+[automation-api] command:start request_id=automation-341 command=readState args=0
+[32m[1786039068971][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-341 command=readState
+[automation-api] command:start request_id=automation-342 command=readState args=0
+[32m[1786039069024][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-342 command=readState
+[automation-api] command:start request_id=automation-343 command=readState args=0
+[32m[1786039069077][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-343 command=readState
+[automation-api] command:start request_id=automation-344 command=readState args=0
+[32m[1786039069130][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-344 command=readState
+[automation-api] command:start request_id=automation-345 command=readState args=0
+[32m[1786039069183][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-345 command=readState
+[automation-api] command:start request_id=automation-346 command=readState args=0
+[32m[1786039069237][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-346 command=readState
+[automation-api] command:start request_id=automation-347 command=readState args=0
+[32m[1786039069290][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-347 command=readState
+[automation-api] command:start request_id=automation-348 command=readState args=0
+[32m[1786039069343][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-348 command=readState
+[automation-api] command:start request_id=automation-349 command=readState args=0
+[32m[1786039069396][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-349 command=readState
+[automation-api] command:start request_id=automation-350 command=readState args=0
+[32m[1786039069449][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-350 command=readState
+[automation-api] command:start request_id=automation-351 command=readState args=0
+[32m[1786039069502][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-351 command=readState
+[automation-api] command:start request_id=automation-352 command=readState args=0
+[32m[1786039069555][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-352 command=readState
+[automation-api] command:start request_id=automation-353 command=readState args=0
+[32m[1786039069608][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-353 command=readState
+[automation-api] command:start request_id=automation-354 command=readState args=0
+[32m[1786039069663][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-354 command=readState
+[automation-api] command:start request_id=automation-355 command=readState args=0
+[32m[1786039069717][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-355 command=readState
+[automation-api] command:start request_id=automation-356 command=readState args=0
+[32m[1786039069769][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-356 command=readState
+[automation-api] command:start request_id=automation-357 command=readState args=0
+[32m[1786039069822][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-357 command=readState
+[automation-api] command:start request_id=automation-358 command=readState args=0
+[32m[1786039069875][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-358 command=readState
+[automation-api] command:start request_id=automation-359 command=readState args=0
+[32m[1786039069928][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-359 command=readState
+[automation-api] command:start request_id=automation-360 command=readState args=0
+[32m[1786039069981][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-360 command=readState
+[automation-api] command:start request_id=automation-361 command=readState args=0
+[32m[1786039070034][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-361 command=readState
+[automation-api] command:start request_id=automation-362 command=readState args=0
+[32m[1786039070088][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-362 command=readState
+[automation-api] command:start request_id=automation-363 command=readState args=0
+[32m[1786039070141][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-363 command=readState
+[automation-api] command:start request_id=automation-364 command=readState args=0
+[32m[1786039070193][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-364 command=readState
+[automation-api] command:start request_id=automation-365 command=readState args=0
+[32m[1786039070246][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-365 command=readState
+[automation-api] command:start request_id=automation-366 command=readState args=0
+[32m[1786039070299][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-366 command=readState
+[automation-api] command:start request_id=automation-367 command=readState args=0
+[32m[1786039070352][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-367 command=readState
+[automation-api] command:start request_id=automation-368 command=readState args=0
+[32m[1786039070405][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-368 command=readState
+[automation-api] command:start request_id=automation-369 command=readState args=0
+[32m[1786039070458][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-369 command=readState
+[automation-api] command:start request_id=automation-370 command=readState args=0
+[32m[1786039070511][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-370 command=readState
+[automation-api] command:start request_id=automation-371 command=readState args=0
+[32m[1786039070564][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-371 command=readState
+[automation-api] command:start request_id=automation-372 command=readState args=0
+[32m[1786039070618][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-372 command=readState
+[automation-api] command:start request_id=automation-373 command=readState args=0
+[32m[1786039070671][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-373 command=readState
+[automation-api] command:start request_id=automation-374 command=readState args=0
+[32m[1786039070724][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-374 command=readState
+[automation-api] command:start request_id=automation-375 command=readState args=0
+[32m[1786039070777][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-375 command=readState
+[automation-api] command:start request_id=automation-376 command=readState args=0
+[32m[1786039070831][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-376 command=readState
+[automation-api] command:start request_id=automation-377 command=readState args=0
+[32m[1786039070884][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-377 command=readState
+[automation-api] command:start request_id=automation-378 command=readState args=0
+[32m[1786039070937][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-378 command=readState
+[automation-api] command:start request_id=automation-379 command=readState args=0
+[32m[1786039070990][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-379 command=readState
+[automation-api] command:start request_id=automation-380 command=readState args=0
+[32m[1786039071043][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-380 command=readState
+[automation-api] command:start request_id=automation-381 command=readState args=0
+[32m[1786039071096][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-381 command=readState
+[automation-api] command:start request_id=automation-382 command=readState args=0
+[32m[1786039071149][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-382 command=readState
+[automation-api] command:start request_id=automation-383 command=readState args=0
+[32m[1786039071202][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-383 command=readState
+[automation-api] command:start request_id=automation-384 command=readState args=0
+[32m[1786039071255][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-384 command=readState
+[automation-api] command:start request_id=automation-385 command=readState args=0
+[32m[1786039071309][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-385 command=readState
+[automation-api] command:start request_id=automation-386 command=readState args=0
+[32m[1786039071361][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-386 command=readState
+[automation-api] command:start request_id=automation-387 command=readState args=0
+[32m[1786039071414][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-387 command=readState
+[automation-api] command:start request_id=automation-388 command=readState args=0
+[32m[1786039071467][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-388 command=readState
+[automation-api] command:start request_id=automation-389 command=readState args=0
+[32m[1786039071520][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-389 command=readState
+[automation-api] command:start request_id=automation-390 command=readState args=0
+[32m[1786039071573][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-390 command=readState
+[automation-api] command:start request_id=automation-391 command=readState args=0
+[32m[1786039071626][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-391 command=readState
+[automation-api] command:start request_id=automation-392 command=readState args=0
+[32m[1786039071679][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-392 command=readState
+[automation-api] command:start request_id=automation-393 command=readState args=0
+[32m[1786039071731][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-393 command=readState
+[automation-api] command:start request_id=automation-394 command=readState args=0
+[32m[1786039071784][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-394 command=readState
+[automation-api] command:start request_id=automation-395 command=readState args=0
+[32m[1786039071837][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-395 command=readState
+[automation-api] command:start request_id=automation-396 command=readState args=0
+[32m[1786039071891][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-396 command=readState
+[automation-api] command:start request_id=automation-397 command=readState args=0
+[32m[1786039071944][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-397 command=readState
+[automation-api] command:start request_id=automation-398 command=readState args=0
+[32m[1786039071997][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-398 command=readState
+[automation-api] command:start request_id=automation-399 command=readState args=0
+[32m[1786039072049][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-399 command=readState
+[automation-api] command:start request_id=automation-400 command=readState args=0
+[32m[1786039072102][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-400 command=readState
+[automation-api] command:start request_id=automation-401 command=readState args=0
+[32m[1786039072155][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-401 command=readState
+[automation-api] command:start request_id=automation-402 command=readState args=0
+[32m[1786039072208][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-402 command=readState
+[automation-api] command:start request_id=automation-403 command=readState args=0
+[32m[1786039072261][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-403 command=readState
+[automation-api] command:start request_id=automation-404 command=readState args=0
+[32m[1786039072313][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-404 command=readState
+[automation-api] command:start request_id=automation-405 command=readState args=0
+[32m[1786039072367][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-405 command=readState
+[automation-api] command:start request_id=automation-406 command=readState args=0
+[32m[1786039072420][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-406 command=readState
+[automation-api] command:start request_id=automation-407 command=removePdfViewerProbe args=0
+[automation-api] command:done request_id=automation-407 command=removePdfViewerProbe
+[automation-api] command:start request_id=automation-408 command=logs args=0
+[automation-api] command:done request_id=automation-408 command=logs

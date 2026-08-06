@@ -1,0 +1,887 @@
+{
+  "at": "2026-08-06T17:56:32.143Z",
+  "suite": "packaged-feature-markdown-live-formatting",
+  "status": "PROVEN",
+  "runtime": "tauri",
+  "packagedApp": true,
+  "packagedAppRequired": true,
+  "packagedFormat": "linux-appimage",
+  "appPath": "/home/runner/work/ElephantNote/ElephantNote/repo/Elephant/backend/tauri/target/release/bundle/appimage/Elephant_0.18.9_amd64.AppImage",
+  "profileRoots": {
+    "home": "/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1",
+    "elephantConfig": "/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/config",
+    "xdgConfig": "/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/.config",
+    "xdgData": "/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/.local/share",
+    "xdgCache": "/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/.cache",
+    "xdgState": "/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/.local/state",
+    "xdgRuntime": "/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/.runtime"
+  },
+  "error": null,
+  "scenarios": [],
+  "commandPolicy": {
+    "setupCommands": [
+      {
+        "at": "2026-08-06T17:56:31.562Z",
+        "command": "selectVault",
+        "argsCount": 1
+      },
+      {
+        "at": "2026-08-06T17:56:31.836Z",
+        "command": "openNote",
+        "argsCount": 1
+      }
+    ],
+    "actionCommands": [
+      {
+        "at": "2026-08-06T17:56:31.656Z",
+        "layer": "user-journey",
+        "command": "waitFor",
+        "argsCount": 2
+      },
+      {
+        "at": "2026-08-06T17:56:31.840Z",
+        "layer": "user-journey",
+        "command": "waitFor",
+        "argsCount": 2
+      },
+      {
+        "at": "2026-08-06T17:56:31.843Z",
+        "layer": "user-journey",
+        "command": "readDom",
+        "argsCount": 1
+      },
+      {
+        "at": "2026-08-06T17:56:31.847Z",
+        "layer": "user-journey",
+        "command": "readDom",
+        "argsCount": 1
+      },
+      {
+        "at": "2026-08-06T17:56:31.856Z",
+        "layer": "user-journey",
+        "command": "selectText",
+        "argsCount": 3
+      },
+      {
+        "at": "2026-08-06T17:56:31.920Z",
+        "layer": "user-journey",
+        "command": "insertText",
+        "argsCount": 2
+      },
+      {
+        "at": "2026-08-06T17:56:31.928Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:56:31.932Z",
+        "layer": "user-journey",
+        "command": "readDom",
+        "argsCount": 1
+      },
+      {
+        "at": "2026-08-06T17:56:31.937Z",
+        "layer": "user-journey",
+        "command": "readDom",
+        "argsCount": 1
+      }
+    ],
+    "frontendAllowedActions": [
+      "click",
+      "contextClick",
+      "dropFiles",
+      "fill",
+      "insertText",
+      "pointerDrag",
+      "press",
+      "pressShortcut",
+      "selectText",
+      "waitFor",
+      "waitUntilGone"
+    ],
+    "frontendAllowedObservations": [
+      "logs",
+      "readDisplayed",
+      "readDom",
+      "readState"
+    ]
+  },
+  "logs": [
+    {
+      "details": null,
+      "index": 0,
+      "level": "info",
+      "message": "renderer diagnostics installed",
+      "time": "2026-08-06T17:56:31.092Z"
+    },
+    {
+      "details": {
+        "runtime": "tauri"
+      },
+      "index": 1,
+      "level": "info",
+      "message": "bootstrapTauriRuntime:start",
+      "time": "2026-08-06T17:56:31.097Z"
+    },
+    {
+      "details": {
+        "userDataPath": "/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/.local/share/com.elephantnote.app"
+      },
+      "index": 2,
+      "level": "info",
+      "message": "bootstrapTauriRuntime:appDataDir",
+      "time": "2026-08-06T17:56:31.159Z"
+    },
+    {
+      "details": {
+        "env": {
+          "debug": false,
+          "paths": {
+            "_dataCenterPath": "/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/.local/share/com.elephantnote.app",
+            "_editorBufferStorePath": "/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/.local/share/com.elephantnote.app/editorStates",
+            "_electronUserDataPath": "/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/.local/share/com.elephantnote.app",
+            "_logPath": "/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/.local/share/com.elephantnote.app/logs/20268",
+            "_preferencesFilePath": "/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/.local/share/com.elephantnote.app/preference.json",
+            "_preferencesPath": "/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/.local/share/com.elephantnote.app",
+            "_ripgrepBinaryPath": "rg",
+            "_userDataPath": "/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/.local/share/com.elephantnote.app"
+          },
+          "type": "editor",
+          "windowId": 1
+        }
+      },
+      "index": 3,
+      "level": "info",
+      "message": "bootstrapRenderer:done",
+      "time": "2026-08-06T17:56:31.165Z"
+    },
+    {
+      "details": null,
+      "index": 4,
+      "level": "info",
+      "message": "renderer diagnostics installed",
+      "time": "2026-08-06T17:56:31.169Z"
+    },
+    {
+      "details": {
+        "runtime": "tauri"
+      },
+      "index": 5,
+      "level": "info",
+      "message": "renderer shell initialized",
+      "time": "2026-08-06T17:56:31.176Z"
+    },
+    {
+      "details": {
+        "hasPinia": true,
+        "hasTauriInvoke": true,
+        "runtime": "tauri"
+      },
+      "index": 6,
+      "level": "info",
+      "message": "[addons] install:start",
+      "time": "2026-08-06T17:56:31.177Z"
+    },
+    {
+      "details": {
+        "available": 0,
+        "count": 0,
+        "ids": []
+      },
+      "index": 7,
+      "level": "info",
+      "message": "[addons] register:start",
+      "time": "2026-08-06T17:56:31.178Z"
+    },
+    {
+      "details": {
+        "registered": 0
+      },
+      "index": 8,
+      "level": "info",
+      "message": "[addons] store:installed",
+      "time": "2026-08-06T17:56:31.181Z"
+    },
+    {
+      "details": null,
+      "index": 9,
+      "level": "info",
+      "message": "[addons] external-runtime:install:start",
+      "time": "2026-08-06T17:56:31.182Z"
+    },
+    {
+      "details": null,
+      "index": 10,
+      "level": "info",
+      "message": "[addons] external-runtime:install:done",
+      "time": "2026-08-06T17:56:31.183Z"
+    },
+    {
+      "details": {
+        "availableBuiltins": [],
+        "registered": [],
+        "resources": [
+          "addonManager",
+          "addons",
+          "document",
+          "elephantnote",
+          "fileUtils",
+          "marktext",
+          "pinia",
+          "router",
+          "runtime",
+          "services",
+          "tauri",
+          "vueApp",
+          "window"
+        ]
+      },
+      "index": 11,
+      "level": "info",
+      "message": "[addons] install:done",
+      "time": "2026-08-06T17:56:31.184Z"
+    },
+    {
+      "details": null,
+      "index": 12,
+      "level": "info",
+      "message": "[addons] community-trust-boundary:installed",
+      "time": "2026-08-06T17:56:31.184Z"
+    },
+    {
+      "details": {
+        "actions": [
+          "elephant.addon-packs.ensure-develop-parity",
+          "elephant.addon-packs.create",
+          "elephant.addon-packs.apply"
+        ],
+        "enabled": []
+      },
+      "index": 13,
+      "level": "info",
+      "message": "[addons] builtin-state:restored",
+      "time": "2026-08-06T17:56:31.186Z"
+    },
+    {
+      "details": {
+        "id": "core.addon-packs"
+      },
+      "index": 14,
+      "level": "info",
+      "message": "[core-feature] enabled",
+      "time": "2026-08-06T17:56:31.187Z"
+    },
+    {
+      "details": {
+        "id": "core.addon-packs"
+      },
+      "index": 15,
+      "level": "info",
+      "message": "[core-feature] ready",
+      "time": "2026-08-06T17:56:31.187Z"
+    },
+    {
+      "details": {
+        "hasPathExistsSync": true,
+        "hasReadFile": true,
+        "hasStat": true,
+        "vaultRoot": ""
+      },
+      "index": 16,
+      "level": "info",
+      "message": "[excalidraw-image] runtime fixes installed",
+      "time": "2026-08-06T17:56:31.191Z"
+    },
+    {
+      "details": {
+        "id": "core.excalidraw"
+      },
+      "index": 17,
+      "level": "info",
+      "message": "[core-feature] enabled",
+      "time": "2026-08-06T17:56:31.192Z"
+    },
+    {
+      "details": {
+        "id": "core.excalidraw"
+      },
+      "index": 18,
+      "level": "info",
+      "message": "[core-feature] ready",
+      "time": "2026-08-06T17:56:31.192Z"
+    },
+    {
+      "details": {
+        "hasVisibleShell": false,
+        "route": "/editor"
+      },
+      "index": 19,
+      "level": "info",
+      "message": "renderer Vue shell mounted",
+      "time": "2026-08-06T17:56:31.257Z"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": null,
+          "currentFilePath": null,
+          "currentMarkdownLength": 0,
+          "tabCount": 0,
+          "tabIds": []
+        },
+        "layout": {
+          "rightColumn": "files",
+          "showSideBar": false,
+          "showTabBar": false
+        },
+        "project": {
+          "activeItem": null,
+          "pendingTreeEvents": 0,
+          "root": null,
+          "rootName": null
+        }
+      },
+      "index": 20,
+      "level": "info",
+      "message": "store-diagnostics:installed",
+      "time": "2026-08-06T17:56:31.257Z"
+    },
+    {
+      "details": {
+        "error": "No active ElephantNote vault."
+      },
+      "index": 21,
+      "level": "warn",
+      "message": "external addon registry deferred until a vault is active",
+      "time": "2026-08-06T17:56:31.267Z"
+    },
+    {
+      "at": "2026-08-06T17:56:31.272Z",
+      "commands": [
+        "invokeTauri",
+        "readDom",
+        "click",
+        "fill",
+        "insertText",
+        "waitFor",
+        "waitUntilGone",
+        "executeCommand",
+        "press",
+        "selectText",
+        "contextClick",
+        "capabilities",
+        "addonState",
+        "enableAddon",
+        "disableAddon",
+        "runAddonAction",
+        "installOfficialAddon",
+        "invokeAddonResource",
+        "addonNativeStatus",
+        "addonNativeCall",
+        "listNotes",
+        "selectVault",
+        "readNote",
+        "createNote",
+        "openNote",
+        "setMarkdown",
+        "appendMarkdown",
+        "save",
+        "readDisplayed",
+        "openExcalidraw",
+        "closeExcalidraw",
+        "readExcalidraw",
+        "readState",
+        "queryAll",
+        "uiSnapshot",
+        "clearLogs",
+        "assertUi",
+        "assertLogs"
+      ],
+      "event": "installed",
+      "index": 22
+    },
+    {
+      "at": "2026-08-06T17:56:31.273Z",
+      "details": {},
+      "index": 23,
+      "level": "info",
+      "message": "[elephantnote:citation] runtime installed"
+    },
+    {
+      "at": "2026-08-06T17:56:31.331Z",
+      "event": "transport:ready",
+      "index": 24
+    },
+    {
+      "at": "2026-08-06T17:56:31.518Z",
+      "command": "tauri_vaults_select_path",
+      "event": "tauri:invoke:start",
+      "index": 25
+    },
+    {
+      "at": "2026-08-06T17:56:31.521Z",
+      "command": "tauri_vaults_select_path",
+      "event": "tauri:invoke:done",
+      "index": 26
+    },
+    {
+      "details": null,
+      "index": 27,
+      "level": "info",
+      "message": "external addon registry retrying after vault activation",
+      "time": "2026-08-06T17:56:31.522Z"
+    },
+    {
+      "at": "2026-08-06T17:56:31.522Z",
+      "event": "vault:select",
+      "index": 28,
+      "path": "/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault",
+      "vaultId": "vault"
+    },
+    {
+      "at": "2026-08-06T17:56:31.532Z",
+      "details": {
+        "hidden": [],
+        "order": [
+          "search",
+          "vault",
+          "sidebar-toggle"
+        ],
+        "visible": [
+          "search",
+          "vault",
+          "sidebar-toggle"
+        ]
+      },
+      "index": 29,
+      "level": "info",
+      "message": "[icon-rail] layout:resolved"
+    },
+    {
+      "at": "2026-08-06T17:56:31.558Z",
+      "details": {
+        "activeVaultId": "vault",
+        "isMac": false,
+        "sidebarVisible": true
+      },
+      "index": 30,
+      "level": "info",
+      "message": "[icon-rail] mounted"
+    },
+    {
+      "details": {
+        "noteDirectory": "/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault",
+        "vaultRoot": "/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault"
+      },
+      "index": 31,
+      "level": "info",
+      "message": "[excalidraw-addon] overlay mounted",
+      "time": "2026-08-06T17:56:31.559Z"
+    },
+    {
+      "at": "2026-08-06T17:56:31.652Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 3517,
+      "index": 32,
+      "selector": ".en-library-toolbar",
+      "textLength": 41
+    },
+    {
+      "at": "2026-08-06T17:56:31.652Z",
+      "event": "dom:wait:done",
+      "index": 33,
+      "selector": ".en-library-toolbar"
+    },
+    {
+      "at": "2026-08-06T17:56:31.659Z",
+      "event": "open:start",
+      "index": 34,
+      "path": "Formatting.md"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": "mt-0",
+          "currentFilePath": "/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault/Formatting.md",
+          "currentMarkdownLength": 47,
+          "tabCount": 1,
+          "tabIds": [
+            "mt-0"
+          ]
+        },
+        "type": "direct"
+      },
+      "index": 35,
+      "level": "info",
+      "message": "pinia:editor",
+      "time": "2026-08-06T17:56:31.673Z"
+    },
+    {
+      "at": "2026-08-06T17:56:31.677Z",
+      "details": {
+        "activeFileId": "mt-0",
+        "activeVaultId": "vault",
+        "currentFileId": "mt-0",
+        "notePath": "Formatting.md",
+        "openedPath": "Formatting.md",
+        "previous": {
+          "activeFileId": null,
+          "currentFileId": null,
+          "notePath": null,
+          "openedPath": null
+        },
+        "tabCount": 1
+      },
+      "index": 36,
+      "level": "info",
+      "message": "[elephantnote:editor] identity-change"
+    },
+    {
+      "at": "2026-08-06T17:56:31.678Z",
+      "details": {
+        "activeFileId": "mt-0",
+        "hasEditorDocument": true,
+        "markdownLength": 47,
+        "notePath": "Formatting.md",
+        "visibleMarkdownLength": 33
+      },
+      "index": 37,
+      "level": "info",
+      "message": "[elephantnote:editor] input-state"
+    },
+    {
+      "at": "2026-08-06T17:56:31.771Z",
+      "details": {
+        "notePath": "Formatting.md",
+        "vault": "/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault"
+      },
+      "index": 38,
+      "level": "info",
+      "message": "[elephantnote:editor] mounted"
+    },
+    {
+      "at": "2026-08-06T17:56:31.772Z",
+      "details": {
+        "isSaved": true,
+        "length": 47,
+        "notePath": "Formatting.md",
+        "reason": "mount"
+      },
+      "index": 39,
+      "level": "info",
+      "message": "[elephantnote:save] observed active markdown"
+    },
+    {
+      "at": "2026-08-06T17:56:31.776Z",
+      "event": "open:done",
+      "index": 40,
+      "markdownLength": 47,
+      "path": "Formatting.md"
+    },
+    {
+      "at": "2026-08-06T17:56:31.776Z",
+      "event": "read:state",
+      "index": 41,
+      "markdownLength": 47,
+      "notePath": "Formatting.md"
+    },
+    {
+      "at": "2026-08-06T17:56:31.803Z",
+      "event": "read:state",
+      "index": 42,
+      "markdownLength": 47,
+      "notePath": "Formatting.md"
+    },
+    {
+      "at": "2026-08-06T17:56:31.833Z",
+      "event": "read:state",
+      "index": 43,
+      "markdownLength": 47,
+      "notePath": "Formatting.md"
+    },
+    {
+      "at": "2026-08-06T17:56:31.838Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 1650,
+      "index": 44,
+      "selector": "[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]",
+      "textLength": 29
+    },
+    {
+      "at": "2026-08-06T17:56:31.838Z",
+      "event": "dom:wait:done",
+      "index": 45,
+      "selector": "[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]"
+    },
+    {
+      "at": "2026-08-06T17:56:31.841Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 1650,
+      "index": 46,
+      "selector": "[data-testid=\"muya-rust-runtime-editor\"]",
+      "textLength": 29
+    },
+    {
+      "at": "2026-08-06T17:56:31.846Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 39,
+      "index": 47,
+      "selector": "[data-testid=\"muya-rust-runtime-editor\"] strong",
+      "textLength": 4
+    },
+    {
+      "at": "2026-08-06T17:56:31.853Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 39,
+      "index": 48,
+      "selector": "[data-testid=\"muya-rust-runtime-editor\"] strong",
+      "textLength": 4
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": "mt-0",
+          "currentFilePath": "/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault/Formatting.md",
+          "currentMarkdownLength": 170,
+          "tabCount": 1,
+          "tabIds": [
+            "mt-0"
+          ]
+        },
+        "type": "direct"
+      },
+      "index": 49,
+      "level": "info",
+      "message": "pinia:editor",
+      "time": "2026-08-06T17:56:31.876Z"
+    },
+    {
+      "at": "2026-08-06T17:56:31.878Z",
+      "details": {
+        "delay": 160,
+        "editDelta": 123,
+        "length": 170,
+        "notePath": "Formatting.md",
+        "reason": "vue-watch"
+      },
+      "index": 50,
+      "level": "info",
+      "message": "[elephantnote:save] schedule"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": "mt-0",
+          "currentFilePath": "/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault/Formatting.md",
+          "currentMarkdownLength": 171,
+          "tabCount": 1,
+          "tabIds": [
+            "mt-0"
+          ]
+        },
+        "type": "direct"
+      },
+      "index": 51,
+      "level": "info",
+      "message": "pinia:editor",
+      "time": "2026-08-06T17:56:31.893Z"
+    },
+    {
+      "at": "2026-08-06T17:56:31.894Z",
+      "details": {
+        "delay": 160,
+        "editDelta": 1,
+        "length": 171,
+        "notePath": "Formatting.md",
+        "reason": "vue-watch"
+      },
+      "index": 52,
+      "level": "info",
+      "message": "[elephantnote:save] schedule"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": "mt-0",
+          "currentFilePath": "/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault/Formatting.md",
+          "currentMarkdownLength": 172,
+          "tabCount": 1,
+          "tabIds": [
+            "mt-0"
+          ]
+        },
+        "type": "direct"
+      },
+      "index": 53,
+      "level": "info",
+      "message": "pinia:editor",
+      "time": "2026-08-06T17:56:31.904Z"
+    },
+    {
+      "at": "2026-08-06T17:56:31.905Z",
+      "details": {
+        "delay": 160,
+        "editDelta": 1,
+        "length": 172,
+        "notePath": "Formatting.md",
+        "reason": "vue-watch"
+      },
+      "index": 54,
+      "level": "info",
+      "message": "[elephantnote:save] schedule"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": "mt-0",
+          "currentFilePath": "/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault/Formatting.md",
+          "currentMarkdownLength": 173,
+          "tabCount": 1,
+          "tabIds": [
+            "mt-0"
+          ]
+        },
+        "type": "direct"
+      },
+      "index": 55,
+      "level": "info",
+      "message": "pinia:editor",
+      "time": "2026-08-06T17:56:31.914Z"
+    },
+    {
+      "at": "2026-08-06T17:56:31.915Z",
+      "details": {
+        "delay": 160,
+        "editDelta": 1,
+        "length": 173,
+        "notePath": "Formatting.md",
+        "reason": "vue-watch"
+      },
+      "index": 56,
+      "level": "info",
+      "message": "[elephantnote:save] schedule"
+    },
+    {
+      "at": "2026-08-06T17:56:31.917Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 1650,
+      "index": 57,
+      "selector": "[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]",
+      "textLength": 31
+    },
+    {
+      "at": "2026-08-06T17:56:31.925Z",
+      "event": "read:state",
+      "index": 58,
+      "markdownLength": 173,
+      "notePath": "Formatting.md"
+    },
+    {
+      "at": "2026-08-06T17:56:31.930Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 39,
+      "index": 59,
+      "selector": "[data-testid=\"muya-rust-runtime-editor\"] strong",
+      "textLength": 4
+    },
+    {
+      "at": "2026-08-06T17:56:31.935Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 1650,
+      "index": 60,
+      "selector": "[data-testid=\"muya-rust-runtime-editor\"]",
+      "textLength": 31
+    },
+    {
+      "at": "2026-08-06T17:56:32.076Z",
+      "details": {
+        "length": 173,
+        "notePath": "Formatting.md",
+        "reason": "vue-watch"
+      },
+      "index": 61,
+      "level": "info",
+      "message": "[elephantnote:save] write:start"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": "mt-0",
+          "currentFilePath": "/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault/Formatting.md",
+          "currentMarkdownLength": 173,
+          "tabCount": 1,
+          "tabIds": [
+            "mt-0"
+          ]
+        },
+        "type": "patch function"
+      },
+      "index": 62,
+      "level": "info",
+      "message": "pinia:editor",
+      "time": "2026-08-06T17:56:32.087Z"
+    },
+    {
+      "at": "2026-08-06T17:56:32.087Z",
+      "details": {
+        "length": 173,
+        "notePath": "Formatting.md",
+        "via": "notes.write"
+      },
+      "index": 63,
+      "level": "info",
+      "message": "[elephantnote:save] write:done"
+    }
+  ],
+  "featureId": "markdown-live-formatting",
+  "appSha256": "011f2f1cf215881fd751e332ae006ed7b54bb6c2356e25038b33cfa9082dff72",
+  "evidence": {
+    "beforeHtmlLength": 1650,
+    "current": {
+      "activeFile": {
+        "isSaved": false,
+        "markdownLength": 173,
+        "path": "Formatting.md"
+      },
+      "activeVault": "/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault",
+      "codeMirrorPresent": false,
+      "displayedHtml": "<div data-v-ea2faec4=\"\" class=\"editor-with-tabs\" source-code=\"false\" style=\"max-width: 100vw;\"><div data-v-bb62f37a=\"\" data-v-ea2faec4=\"\" class=\"editor-tabs\" style=\"display: none;\"><div data-v-bb62f37a=\"\" class=\"scrollable-tabs\"><ul data-v-bb62f37a=\"\" class=\"tabs-container\"><li data-v-bb62f37a=\"\" title=\"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault/Formatting.md\" class=\"active unsaved\" data-id=\"mt-0\"><span data-v-bb62f37a=\"\">Formatting.md</span><svg data-v-bb62f37a=\"\" class=\"close-icon icon\" aria-hidden=\"true\"><circle data-v-bb62f37a=\"\" id=\"unsaved-circle-icon\" cx=\"6\" cy=\"6\" r=\"3\"></circle><use data-v-bb62f37a=\"\" id=\"default-close-icon\" xlink:href=\"#icon-close-small\"></use></svg></li></ul></div><div data-v-bb62f37a=\"\" class=\"new-file\"><svg data-v-bb62f37a=\"\" class=\"icon\" aria-hidden=\"true\"><use data-v-bb62f37a=\"\" xlink:href=\"#icon-plus\"></use></svg></div></div><div data-v-ea2faec4=\"\" class=\"container\"><div data-v-dd311a9e=\"\" data-v-a709abe2=\"\" class=\"muya-rust-runtime-shell rust-editor-runtime\" data-muya-runtime-mode=\"rust\"><div data-v-dd311a9e=\"\" class=\"muya-rust-runtime-editor\" data-elephant-rust-editor-host=\"true\"><div class=\"muya-rust-runtime-mount ag-show-quick-insert-hint\" contenteditable=\"true\" autocorrect=\"false\" autocomplete=\"off\" spellcheck=\"false\" data-testid=\"muya-rust-runtime-editor\" data-elephant-rust-input-surface=\"true\"><div id=\"ag-editor-id\"><p id=\"ag-44\" class=\"ag-paragraph ag-active\"><a class=\"ag-front-icon\" contenteditable=\"false\"><i class=\"icon ag-front-icon-button\"><img class=\"icon-inner\" src=\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAYAAACM/rhtAAAAAXNSR0IArs4c6QAAAh1JREFUWAntl78vBEEUx9/b9aPRSDSC0n8gUR0SWolOpaSREwmncMgFp8AlCA1/gVKlkvhRiMQ/gJYoCIWLhNgZ81xmdvb2rIu922lmks2+mfdm3iffeTu7C2CbVcCsAhiVfmpuaZAxNsoB+oBDBwBviYqvhQ8R74E7E7uF5WNar6HSolOZhW7G4cDzvP5K/nqOcc47Edm+yNFFeUKA6cxiyuPsSCjWWk+Qatd29MCScmbh5BZLroCCtK3lyokJFwjOhtvUfL21ln2UEydnsqI0/bZXyFes52rj/JWClgKkByJcc85aW4u7mMvlWHBacj0FSE+rnpaUMw1HPKoGf44SjZC21aRyEkUBls45OQxANef3zFk+oDmGyMw+IMKDHul9fvTofVO2AhRnxLkOwYFlRA0qv+5L0lYAjuMc6onFKyf19OatmIZUgDvryyfiaDnTIQHY/HPx6zQ9uzQ8PZ9vD/qS6alzkNI5COMewJX+NiElOXgp9vEO4q1QokJ4FTGJNKUgZdvZWL1r4DACBBDVEvyQCAAS03Yhf+4i9oa3O4q4fr4QIKUiJXc3Vwdc1x0SoAeAeAOARYmBgC/Srvc9UIPlyejBEWN0hVr5V0oooEYDFRWs0do1WcYCxpXRKmgVjKtA3Pm2Bq2CcRWIO//fNSh+EW5lct2WY/Ku+3Rb+v+6/x/QbRwTXzqXP5ewf0uEVcb9Nt+OWwVMK/ANi5mZTElVwIAAAAAASUVORK5CYII=\"></i></a><span id=\"ag-45\" class=\"ag-paragraph ag-active ag-paragraph-content\"><span class=\"ag-gray ag-remove\">**</span><strong class=\"ag-inline-rule\"><span class=\"ag-plain-text\">BOLD</span></strong><span class=\"ag-gray ag-remove\">**</span><span class=\"ag-plain-text\"> and </span><span class=\"ag-hide ag-remove\">*</span><em class=\"ag-inline-rule\"><span class=\"ag-plain-text\">italic</span></em><span class=\"ag-hide ag-remove\">*</span><span class=\"ag-plain-text\"> and </span><span class=\"ag-hide ag-remove\">`</span><code class=\"ag-inline-rule\" spellcheck=\"false\">code</code><span class=\"ag-hide ag-remove\">`</span></span></p></div></div></div><!----></div><div class=\"el-overlay el-modal-dialog\" style=\"z-index: 2008; display: none;\"><div role=\"dialog\" aria-modal=\"true\" aria-labelledby=\"el-id-1463-14\" aria-describedby=\"el-id-1463-15\" class=\"el-overlay-dialog\"></div></div><!----></div><!----></div>",
+      "displayedText": "\n**BOLD** and italic and code\n\n",
+      "editorRuntime": {
+        "active": true,
+        "contentEditable": "true",
+        "contentEditableConnected": true,
+        "engine": "rust",
+        "pendingMutations": 0
+      },
+      "isSaved": false,
+      "markdown": "---\ntitle: \"Formatting\"\ntype: \"note\"\ntags: []\ncreatedAt: \"2026-08-06T17:56:31.873Z\"\nupdatedAt: \"2026-08-06T17:56:31.873Z\"\n---\n\n# Formatting\n\n**BOLD** and *italic* and `code`",
+      "notePath": "Formatting.md",
+      "rustEditorPresent": true,
+      "rustMirror": {
+        "active": true,
+        "canonicalMarkdownLength": 33,
+        "canonicalRevision": 4,
+        "error": null,
+        "markdownLength": 33,
+        "pending": 0,
+        "phase": "ready",
+        "renderedMarkdownLength": 33,
+        "renderedMatchesCanonical": true,
+        "revision": 4
+      },
+      "sourceCode": false
+    },
+    "strongText": "BOLD",
+    "htmlLength": 1650
+  }
+}

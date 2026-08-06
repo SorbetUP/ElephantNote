@@ -1,0 +1,146 @@
+libEGL warning: DRI3 error: Could not get DRI3 device
+libEGL warning: Ensure your X server supports DRI3 to get accelerated rendering
+ELEPHANT_AUTOMATION_PORT=40653
+ELEPHANT_ACCEPTANCE_TAURI_PORT=40653
+[automation-api] listening on http://127.0.0.1:40653/v1
+[32m[1786038975282][info][renderer][0m renderer diagnostics installed 
+[32m[1786038975285][info][tauri:file-utils][0m [tauri:file-utils] Rust-owned vault filesystem bridge installed 
+[32m[1786038975296][info][search][0m [search] runtime-guards:installed 
+[32m[1786038975296][info][search][0m [search] concepts:fallback:installed 
+[32m[1786038975296][info][tauri:marktext-save][0m [tauri:marktext-save] bridge:installed [{"atomic":true,"latestRevisionAcknowledgement":true,"serialized":true}]
+[32m[1786038975296][info][tauri:local-ipc][0m [tauri:local-ipc] bridge:installed 
+[32m[1786038975296][info][slash-menu][0m [slash-menu] diagnostics:installed 
+[32m[1786038975296][info][writing-command][0m [writing-command] installed 
+[32m[1786038975296][info][renderer][0m bootstrapTauriRuntime:start {"runtime":"tauri"}
+[32m[1786038975332][info][renderer][0m bootstrapTauriRuntime:appDataDir {"userDataPath":"/tmp/elephant-packaged-feature-external-folder-refresh-P4HKbZ/.local/share/com.elephantnote.app"}
+[32m[1786038975337][info][renderer][0m bootstrapRenderer:done {"env":{"debug":false,"paths":{"_dataCenterPath":"/tmp/elephant-packaged-feature-external-folder-refresh-P4HKbZ/.local/share/com.elephantnote.app","_editorBufferStorePath":"/tmp/elephant-packaged-feature-external-folder-refresh-P4HKbZ/.local/share/com.elephantnote.app/editorStates","_electronUserDataPath":"/tmp/elephant-packaged-feature-external-folder-refresh-P4HKbZ/.local/share/com.elephantnote.app","_logPath":"/tmp/elephant-packaged-feature-external-folder-refresh-P4HKbZ/.local/share/com.elephantnote.app/logs/20268","_preferencesFilePath":"/tmp/elephant-packaged-feature-external-folder-refresh-P4HKbZ/.local/share/com.elephantnote.app/preference.json","_preferencesPath":"/tmp/elephant-packaged-feature-external-folder-refresh-P4HKbZ/.local/share/com.elephantnote.app","_ripgrepBinaryPath":"rg","_userDataPath":"/tmp/elephant-packaged-feature-external-folder-refresh-P4HKbZ/.local/share/com.elephantnote.app"},"type":"editor","windowId":1}}
+[32m[1786038975341][info][renderer][0m renderer diagnostics installed 
+[32m[1786038975346][info][renderer][0m renderer shell initialized {"runtime":"tauri"}
+[32m[1786038975347][info][addons][0m [addons] install:start {"hasPinia":true,"hasTauriInvoke":true,"runtime":"tauri"}
+[32m[1786038975348][info][addons][0m [addons] register:start {"available":0,"count":0,"ids":[]}
+[32m[1786038975350][info][addons][0m [addons] store:installed {"registered":0}
+[32m[1786038975351][info][addons][0m [addons] external-runtime:install:start 
+[32m[1786038975353][info][addons][0m [addons] external-runtime:install:done 
+[32m[1786038975353][info][addons][0m [addons] install:done {"availableBuiltins":[],"registered":[],"resources":["addonManager","addons","document","elephantnote","fileUtils","marktext","pinia","router","runtime","services","tauri","vueApp","window"]}
+[32m[1786038975353][info][addons][0m [addons] community-trust-boundary:installed 
+[32m[1786038975357][info][addons][0m [addons] builtin-state:restored {"actions":["elephant.addon-packs.ensure-develop-parity","elephant.addon-packs.create","elephant.addon-packs.apply"],"enabled":[]}
+[32m[1786038975357][info][core-feature][0m [core-feature] enabled {"id":"core.addon-packs"}
+[32m[1786038975357][info][core-feature][0m [core-feature] ready {"id":"core.addon-packs"}
+[32m[1786038975363][info][excalidraw-cleanup][0m [excalidraw-cleanup] installed 
+[32m[1786038975365][info][excalidraw-image][0m [excalidraw-image] runtime fixes installed [{"hasPathExistsSync":true,"hasReadFile":true,"hasStat":true,"vaultRoot":""}]
+[32m[1786038975366][info][core-feature][0m [core-feature] enabled {"id":"core.excalidraw"}
+[32m[1786038975367][info][core-feature][0m [core-feature] ready {"id":"core.excalidraw"}
+[32m[1786038975414][info][renderer][0m renderer Vue shell mounted {"hasVisibleShell":false,"route":"/editor"}
+[32m[1786038975415][info][renderer][0m store-diagnostics:installed {"editor":{"currentFileId":null,"currentFilePath":null,"currentMarkdownLength":0,"tabCount":0,"tabIds":[]},"layout":{"rightColumn":"files","showSideBar":false,"showTabBar":false},"project":{"activeItem":null,"pendingTreeEvents":0,"root":null,"rootName":null}}
+[32m[1786038975422][info][tauri:marktext-save][0m [tauri:marktext-save] saved state reconciliation installed 
+[33;1m[1786038975426][warn][renderer][0m external addon registry deferred until a vault is active {"error":"No active ElephantNote vault."}
+[32m[1786038975428][info][automation-api][0m [automation-api] renderer inspection surface ready 
+[32m[1786038975428][info][acceptance-test][0m [acceptance-test] installed {"commands":["invokeTauri","readDom","click","fill","insertText","waitFor","waitUntilGone","executeCommand","press","selectText","contextClick","capabilities"]} 
+[32m[1786038975430][info][elephantnote:citation][0m [elephantnote:citation] runtime installed [{}]
+[32m[1786038975467][info][automation-api][0m [automation-api] renderer inspection surface ready 
+[automation-api] renderer:ready
+[32m[1786038975468][info][automation-api][0m [automation-api] canonical Rust input surface publisher installed 
+[32m[1786038975469][info][acceptance-test][0m [acceptance-test] transport:ready {} 
+[automation-api] command:start request_id=automation-0 command=selectVault args=1
+[32m[1786038975520][info][acceptance-test][0m [acceptance-test] tauri:invoke:start {"command":"tauri_vaults_select_path"} 
+[32m[1786038975535][info][acceptance-test][0m [acceptance-test] tauri:invoke:done {"command":"tauri_vaults_select_path"} 
+[32m[1786038975536][info][renderer][0m external addon registry retrying after vault activation 
+[32m[1786038975537][info][acceptance-test][0m [acceptance-test] vault:select {"path":"/tmp/elephant-packaged-feature-external-folder-refresh-P4HKbZ/vault","vaultId":"vault"} 
+[32m[1786038975546][info][icon-rail][0m [icon-rail] layout:resolved [{"hidden":[],"order":["search","vault","sidebar-toggle"],"visible":["search","vault","sidebar-toggle"]}]
+[32m[1786038975574][info][icon-rail][0m [icon-rail] mounted [{"activeVaultId":"vault","isMac":false,"sidebarVisible":true}]
+[32m[1786038975574][info][excalidraw-addon][0m [excalidraw-addon] overlay mounted [{"noteDirectory":"/tmp/elephant-packaged-feature-external-folder-refresh-P4HKbZ/vault","vaultRoot":"/tmp/elephant-packaged-feature-external-folder-refresh-P4HKbZ/vault"}]
+[32m[1786038975578][info][search][0m [search] ensureActiveVault:init:start [{"previousVaultPath":"","vaultPath":"/tmp/elephant-packaged-feature-external-folder-refresh-P4HKbZ/vault"}]
+[automation-api] command:done request_id=automation-0 command=selectVault
+[official-addon-catalog] source=bundled root=/tmp/appimage_extracted_f7abf4311611ee8e3dea01fe4ee9589e/usr/lib/Elephant/resources/official-addons
+[32m[1786038975582][info][search][0m [search] bridge:status:done [{"indexedDocuments":0,"realEmbedding":false,"semantic":false,"status":"","vaultPath":"/tmp/elephant-packaged-feature-external-folder-refresh-P4HKbZ/vault"}]
+[32m[1786038975583][info][search][0m [search] ensureActiveVault:init:done [{"indexedDocuments":0,"status":"ready","vaultPath":"/tmp/elephant-packaged-feature-external-folder-refresh-P4HKbZ/vault"}]
+[32m[1786038975583][info][search][0m [search] status:start [{"vaultPath":"/tmp/elephant-packaged-feature-external-folder-refresh-P4HKbZ/vault"}]
+[automation-api] command:start request_id=automation-1 command=waitFor args=2
+[32m[1786038975706][info][acceptance-test][0m [acceptance-test] dom:read {"selector":".en-library-toolbar","exists":true,"textLength":41,"htmlLength":3517} 
+[32m[1786038975706][info][acceptance-test][0m [acceptance-test] dom:wait:done {"selector":".en-library-toolbar"} 
+[32m[1786038975708][info][search][0m [search] bridge:status:done [{"indexedDocuments":0,"realEmbedding":false,"semantic":false,"status":"","vaultPath":"/tmp/elephant-packaged-feature-external-folder-refresh-P4HKbZ/vault"}]
+[32m[1786038975708][info][search][0m [search] status:done [{"indexedDocuments":0,"message":"","status":""}]
+[automation-api] command:done request_id=automation-1 command=waitFor
+[automation-api] command:start request_id=automation-2 command=click args=1
+[32m[1786038975714][info][icon-rail][0m [icon-rail] action:run [{"activeVaultId":"vault","id":"search","title":"Search","workspaceView":"notes"}]
+[32m[1786038975715][info][search][0m [search] open [{"mode":"exact","vaultPath":"/tmp/elephant-packaged-feature-external-folder-refresh-P4HKbZ/vault"}]
+[32m[1786038975717][info][acceptance-test][0m [acceptance-test] dom:click {"selector":".en-rail-icon[aria-label=\"Search\"]"} 
+[32m[1786038975717][info][acceptance-test][0m [acceptance-test] dom:read {"selector":".en-rail-icon[aria-label=\"Search\"]","exists":true,"textLength":0,"htmlLength":363} 
+[automation-api] command:done request_id=automation-2 command=click
+[automation-api] command:start request_id=automation-3 command=waitFor args=2
+[32m[1786038975779][info][search][0m [search] status:skip-throttled [{"ageMs":71,"throttleMs":2000}]
+[32m[1786038975780][info][search][0m [search] status:start [{"vaultPath":"/tmp/elephant-packaged-feature-external-folder-refresh-P4HKbZ/vault"}]
+[32m[1786038975781][info][acceptance-test][0m [acceptance-test] dom:read {"selector":".en-search-bar-input","exists":true,"textLength":0,"htmlLength":0} 
+[32m[1786038975782][info][acceptance-test][0m [acceptance-test] dom:wait:done {"selector":".en-search-bar-input"} 
+[automation-api] command:done request_id=automation-3 command=waitFor
+[automation-api] command:start request_id=automation-4 command=fill args=2
+[32m[1786038975785][info][search][0m [search] bridge:status:done [{"indexedDocuments":0,"realEmbedding":false,"semantic":false,"status":"","vaultPath":"/tmp/elephant-packaged-feature-external-folder-refresh-P4HKbZ/vault"}]
+[32m[1786038975786][info][search][0m [search] status:done [{"indexedDocuments":0,"message":"","status":""}]
+[32m[1786038975787][info][search][0m [search] query:set [{"nextLength":13,"previousLength":0,"query":"folder-marker"}]
+[32m[1786038975787][info][acceptance-test][0m [acceptance-test] dom:fill {"selector":".en-search-bar-input","valueLength":13} 
+[32m[1786038975788][info][acceptance-test][0m [acceptance-test] dom:read {"selector":".en-search-bar-input","exists":true,"textLength":0,"htmlLength":0} 
+[automation-api] command:done request_id=automation-4 command=fill
+[automation-api] command:start request_id=automation-5 command=press args=2
+[32m[1786038975817][info][acceptance-test][0m [acceptance-test] dom:press {"selector":".en-search-bar-input","key":"Enter"} 
+[32m[1786038975818][info][acceptance-test][0m [acceptance-test] dom:read {"selector":".en-search-bar-input","exists":true,"textLength":0,"htmlLength":0} 
+[automation-api] command:done request_id=automation-5 command=press
+[automation-api] command:start request_id=automation-6 command=readDom args=1
+[32m[1786038975824][info][acceptance-test][0m [acceptance-test] dom:read {"selector":".en-search-results","exists":false,"textLength":0,"htmlLength":0} 
+[automation-api] command:done request_id=automation-6 command=readDom
+[automation-api] command:start request_id=automation-7 command=readDom args=1
+[32m[1786038975878][info][acceptance-test][0m [acceptance-test] dom:read {"selector":".en-search-results","exists":false,"textLength":0,"htmlLength":0} 
+[automation-api] command:done request_id=automation-7 command=readDom
+[automation-api] command:start request_id=automation-8 command=readDom args=1
+[32m[1786038975932][info][acceptance-test][0m [acceptance-test] dom:read {"selector":".en-search-results","exists":false,"textLength":0,"htmlLength":0} 
+[automation-api] command:done request_id=automation-8 command=readDom
+[automation-api] command:start request_id=automation-9 command=readDom args=1
+[32m[1786038975985][info][acceptance-test][0m [acceptance-test] dom:read {"selector":".en-search-results","exists":false,"textLength":0,"htmlLength":0} 
+[automation-api] command:done request_id=automation-9 command=readDom
+[32m[1786038976009][info][search][0m [search] request:start [{"limit":20,"mode":"exact","query":"folder-marker","requestId":1,"vaultPath":"/tmp/elephant-packaged-feature-external-folder-refresh-P4HKbZ/vault"}]
+[32m[1786038976010][info][search][0m [search] concepts:start [{"query":"folder-marker","requestId":1}]
+[32m[1786038976010][info][search][0m [search] concepts:fallback:start [{"evidenceLimit":4,"limit":5,"query":"folder-marker"}]
+[32m[1786038976018][info][search][0m [search] backend:start [{"mode":"exact","query":"folder-marker","requestId":1}]
+[32m[1786038976030][info][search][0m [search] concepts:fallback:done [{"candidates":1,"evidence":1,"query":"folder-marker"}]
+[32m[1786038976031][info][search][0m [search] concepts:done [{"candidates":1,"elapsedMs":21,"query":"folder-marker","requestId":1}]
+[32m[1786038976032][info][search][0m [search] backend:done [{"elapsedMs":23,"query":"folder-marker","requestId":1,"results":1}]
+[32m[1786038976032][info][search][0m [search] request:results:set-backend [{"query":"folder-marker","requestId":1,"results":1}]
+[32m[1786038976034][info][search][0m [search] status:skip-throttled [{"ageMs":250,"throttleMs":2000}]
+[32m[1786038976034][info][search][0m [search] request:finish [{"activeQuery":"folder-marker","activeRequestId":1,"busy":false,"elapsedMs":24,"query":"folder-marker","requestId":1,"results":1}]
+[automation-api] command:start request_id=automation-10 command=readDom args=1
+[32m[1786038976110][info][acceptance-test][0m [acceptance-test] dom:read {"selector":".en-search-results","exists":true,"textLength":132,"htmlLength":2155} 
+[automation-api] command:done request_id=automation-10 command=readDom
+[automation-api] command:start request_id=automation-11 command=press args=2
+[32m[1786038976116][info][search][0m [search] query:set [{"nextLength":0,"previousLength":13,"query":""}]
+[32m[1786038976116][info][acceptance-test][0m [acceptance-test] dom:press {"selector":".en-search-bar-input","key":"Escape"} 
+[32m[1786038976117][info][acceptance-test][0m [acceptance-test] dom:read {"selector":".en-search-bar-input","exists":true,"textLength":0,"htmlLength":0} 
+[automation-api] command:done request_id=automation-11 command=press
+[automation-api] command:start request_id=automation-12 command=press args=2
+[32m[1786038976123][info][search][0m [search] close [{}]
+[32m[1786038976123][info][acceptance-test][0m [acceptance-test] dom:press {"selector":".en-search-bar-input","key":"Escape"} 
+[32m[1786038976126][info][acceptance-test][0m [acceptance-test] dom:read {"selector":".en-search-bar-input","exists":true,"textLength":0,"htmlLength":0} 
+[automation-api] command:done request_id=automation-12 command=press
+[automation-api] command:start request_id=automation-13 command=openNote args=1
+[32m[1786038976134][info][acceptance-test][0m [acceptance-test] open:start {"path":"External folder/Nested.md"} 
+[32m[1786038976142][info][tauri:local-ipc][0m [tauri:local-ipc] open-file via notes.read [{"channel":"mt::open-file","length":24,"relativePath":"External folder/Nested.md"}]
+[32m[1786038976143][info][elephantnote:editor][0m [elephantnote:editor] NEW_TAB_WITH_CONTENT:start [{"currentFileId":null,"currentFilePath":null,"filename":"Nested.md","markdownLength":24,"pathname":"/tmp/elephant-packaged-feature-external-folder-refresh-P4HKbZ/vault/External folder/Nested.md","selected":true,"tabCount":0}]
+[32m[1786038976144][info][elephantnote:editor][0m [elephantnote:editor] NEW_TAB_WITH_CONTENT:done [{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-external-folder-refresh-P4HKbZ/vault/External folder/Nested.md","id":"mt-0","pathname":"/tmp/elephant-packaged-feature-external-folder-refresh-P4HKbZ/vault/External folder/Nested.md","selected":true,"tabCount":1}]
+[32m[1786038976147][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-external-folder-refresh-P4HKbZ/vault/External folder/Nested.md","currentMarkdownLength":24,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038976151][info][elephantnote:editor][0m [elephantnote:editor] identity-change [{"activeFileId":"mt-0","activeVaultId":"vault","currentFileId":"mt-0","notePath":"External folder/Nested.md","openedPath":"External folder/Nested.md","previous":{"activeFileId":null,"currentFileId":null,"notePath":null,"openedPath":null},"tabCount":1}]
+[32m[1786038976152][info][elephantnote:editor][0m [elephantnote:editor] input-state [{"activeFileId":"mt-0","hasEditorDocument":true,"markdownLength":24,"notePath":"External folder/Nested.md","visibleMarkdownLength":14}]
+[32m[1786038976164][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] component:mounted [{"markdownLength":14,"mode":"rust"}]
+[32m[1786038976165][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] mount:start [{"generation":1,"hasFactory":false,"markdownLength":14,"mode":"rust"}]
+[32m[1786038976216][info][elephantnote:muya-rust][0m [elephantnote:muya-rust] using official Tauri core invoke 
+[32m[1786038976217][info][elephantnote:editor][0m [elephantnote:editor] real Muya UI with Rust-owned core active [{"engine":"rust","sessionId":"muya:1786038976215:1","surface":"muya"}]
+[32m[1786038976218][info][elephantnote:editor][0m [elephantnote:editor] mounted [{"notePath":"External folder/Nested.md","vault":"/tmp/elephant-packaged-feature-external-folder-refresh-P4HKbZ/vault"}]
+[32m[1786038976220][info][elephantnote:save][0m [elephantnote:save] observed active markdown [{"isSaved":true,"length":24,"notePath":"External folder/Nested.md","reason":"mount"}]
+[32m[1786038976221][info][elephantnote:muya-rust][0m [elephantnote:muya-rust] initial session:create:start [{"markdownLength":14,"sessionId":"muya:1786038976215:1"}]
+[32m[1786038976222][info][automation-api][0m [automation-api] installed command error observability 
+[32m[1786038976225][info][acceptance-test][0m [acceptance-test] open:done {"path":"External folder/Nested.md","markdownLength":24} 
+[32m[1786038976226][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"External folder/Nested.md","markdownLength":24} 
+[32m[1786038976247][info][elephantnote:muya-rust][0m [elephantnote:muya-rust] initial session:create:done [{"markdownLength":14,"revision":0,"sessionId":"muya:1786038976215:1"}]
+[32m[1786038976252][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] mount:ready [{"contentEditable":"true","generation":1,"hasDomContainer":true,"markdownLength":14,"revision":0}]
+[32m[1786038976255][info][automation-api][0m [automation-api] published canonical Rust input surface [{"connected":true,"contentEditable":"true","revision":0}]
+[32m[1786038976255][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"External folder/Nested.md","markdownLength":24} 
+[automation-api] command:done request_id=automation-13 command=openNote
+[automation-api] command:start request_id=automation-14 command=logs args=0
+[automation-api] command:done request_id=automation-14 command=logs

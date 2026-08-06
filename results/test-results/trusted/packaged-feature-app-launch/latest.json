@@ -1,0 +1,381 @@
+{
+  "at": "2026-08-06T17:56:04.576Z",
+  "suite": "packaged-feature-app-launch",
+  "status": "PROVEN",
+  "runtime": "tauri",
+  "packagedApp": true,
+  "packagedAppRequired": true,
+  "packagedFormat": "linux-appimage",
+  "appPath": "/home/runner/work/ElephantNote/ElephantNote/repo/Elephant/backend/tauri/target/release/bundle/appimage/Elephant_0.18.9_amd64.AppImage",
+  "profileRoots": {
+    "home": "/tmp/elephant-packaged-feature-app-launch-HAro47",
+    "elephantConfig": "/tmp/elephant-packaged-feature-app-launch-HAro47/config",
+    "xdgConfig": "/tmp/elephant-packaged-feature-app-launch-HAro47/.config",
+    "xdgData": "/tmp/elephant-packaged-feature-app-launch-HAro47/.local/share",
+    "xdgCache": "/tmp/elephant-packaged-feature-app-launch-HAro47/.cache",
+    "xdgState": "/tmp/elephant-packaged-feature-app-launch-HAro47/.local/state",
+    "xdgRuntime": "/tmp/elephant-packaged-feature-app-launch-HAro47/.runtime"
+  },
+  "error": null,
+  "scenarios": [],
+  "commandPolicy": {
+    "setupCommands": [],
+    "actionCommands": [
+      {
+        "at": "2026-08-06T17:56:04.571Z",
+        "layer": "user-journey",
+        "command": "readDom",
+        "argsCount": 1
+      }
+    ],
+    "frontendAllowedActions": [
+      "click",
+      "contextClick",
+      "dropFiles",
+      "fill",
+      "insertText",
+      "pointerDrag",
+      "press",
+      "pressShortcut",
+      "selectText",
+      "waitFor",
+      "waitUntilGone"
+    ],
+    "frontendAllowedObservations": [
+      "logs",
+      "readDisplayed",
+      "readDom",
+      "readState"
+    ]
+  },
+  "logs": [
+    {
+      "details": null,
+      "index": 0,
+      "level": "info",
+      "message": "renderer diagnostics installed",
+      "time": "2026-08-06T17:56:04.282Z"
+    },
+    {
+      "details": {
+        "runtime": "tauri"
+      },
+      "index": 1,
+      "level": "info",
+      "message": "bootstrapTauriRuntime:start",
+      "time": "2026-08-06T17:56:04.287Z"
+    },
+    {
+      "details": {
+        "userDataPath": "/tmp/elephant-packaged-feature-app-launch-HAro47/.local/share/com.elephantnote.app"
+      },
+      "index": 2,
+      "level": "info",
+      "message": "bootstrapTauriRuntime:appDataDir",
+      "time": "2026-08-06T17:56:04.331Z"
+    },
+    {
+      "details": {
+        "env": {
+          "debug": false,
+          "paths": {
+            "_dataCenterPath": "/tmp/elephant-packaged-feature-app-launch-HAro47/.local/share/com.elephantnote.app",
+            "_editorBufferStorePath": "/tmp/elephant-packaged-feature-app-launch-HAro47/.local/share/com.elephantnote.app/editorStates",
+            "_electronUserDataPath": "/tmp/elephant-packaged-feature-app-launch-HAro47/.local/share/com.elephantnote.app",
+            "_logPath": "/tmp/elephant-packaged-feature-app-launch-HAro47/.local/share/com.elephantnote.app/logs/20268",
+            "_preferencesFilePath": "/tmp/elephant-packaged-feature-app-launch-HAro47/.local/share/com.elephantnote.app/preference.json",
+            "_preferencesPath": "/tmp/elephant-packaged-feature-app-launch-HAro47/.local/share/com.elephantnote.app",
+            "_ripgrepBinaryPath": "rg",
+            "_userDataPath": "/tmp/elephant-packaged-feature-app-launch-HAro47/.local/share/com.elephantnote.app"
+          },
+          "type": "editor",
+          "windowId": 1
+        }
+      },
+      "index": 3,
+      "level": "info",
+      "message": "bootstrapRenderer:done",
+      "time": "2026-08-06T17:56:04.335Z"
+    },
+    {
+      "details": null,
+      "index": 4,
+      "level": "info",
+      "message": "renderer diagnostics installed",
+      "time": "2026-08-06T17:56:04.338Z"
+    },
+    {
+      "details": {
+        "runtime": "tauri"
+      },
+      "index": 5,
+      "level": "info",
+      "message": "renderer shell initialized",
+      "time": "2026-08-06T17:56:04.342Z"
+    },
+    {
+      "details": {
+        "hasPinia": true,
+        "hasTauriInvoke": true,
+        "runtime": "tauri"
+      },
+      "index": 6,
+      "level": "info",
+      "message": "[addons] install:start",
+      "time": "2026-08-06T17:56:04.343Z"
+    },
+    {
+      "details": {
+        "available": 0,
+        "count": 0,
+        "ids": []
+      },
+      "index": 7,
+      "level": "info",
+      "message": "[addons] register:start",
+      "time": "2026-08-06T17:56:04.344Z"
+    },
+    {
+      "details": {
+        "registered": 0
+      },
+      "index": 8,
+      "level": "info",
+      "message": "[addons] store:installed",
+      "time": "2026-08-06T17:56:04.345Z"
+    },
+    {
+      "details": null,
+      "index": 9,
+      "level": "info",
+      "message": "[addons] external-runtime:install:start",
+      "time": "2026-08-06T17:56:04.347Z"
+    },
+    {
+      "details": null,
+      "index": 10,
+      "level": "info",
+      "message": "[addons] external-runtime:install:done",
+      "time": "2026-08-06T17:56:04.348Z"
+    },
+    {
+      "details": {
+        "availableBuiltins": [],
+        "registered": [],
+        "resources": [
+          "addonManager",
+          "addons",
+          "document",
+          "elephantnote",
+          "fileUtils",
+          "marktext",
+          "pinia",
+          "router",
+          "runtime",
+          "services",
+          "tauri",
+          "vueApp",
+          "window"
+        ]
+      },
+      "index": 11,
+      "level": "info",
+      "message": "[addons] install:done",
+      "time": "2026-08-06T17:56:04.348Z"
+    },
+    {
+      "details": null,
+      "index": 12,
+      "level": "info",
+      "message": "[addons] community-trust-boundary:installed",
+      "time": "2026-08-06T17:56:04.348Z"
+    },
+    {
+      "details": {
+        "actions": [
+          "elephant.addon-packs.ensure-develop-parity",
+          "elephant.addon-packs.create",
+          "elephant.addon-packs.apply"
+        ],
+        "enabled": []
+      },
+      "index": 13,
+      "level": "info",
+      "message": "[addons] builtin-state:restored",
+      "time": "2026-08-06T17:56:04.350Z"
+    },
+    {
+      "details": {
+        "id": "core.addon-packs"
+      },
+      "index": 14,
+      "level": "info",
+      "message": "[core-feature] enabled",
+      "time": "2026-08-06T17:56:04.351Z"
+    },
+    {
+      "details": {
+        "id": "core.addon-packs"
+      },
+      "index": 15,
+      "level": "info",
+      "message": "[core-feature] ready",
+      "time": "2026-08-06T17:56:04.351Z"
+    },
+    {
+      "details": {
+        "hasPathExistsSync": true,
+        "hasReadFile": true,
+        "hasStat": true,
+        "vaultRoot": ""
+      },
+      "index": 16,
+      "level": "info",
+      "message": "[excalidraw-image] runtime fixes installed",
+      "time": "2026-08-06T17:56:04.355Z"
+    },
+    {
+      "details": {
+        "id": "core.excalidraw"
+      },
+      "index": 17,
+      "level": "info",
+      "message": "[core-feature] enabled",
+      "time": "2026-08-06T17:56:04.356Z"
+    },
+    {
+      "details": {
+        "id": "core.excalidraw"
+      },
+      "index": 18,
+      "level": "info",
+      "message": "[core-feature] ready",
+      "time": "2026-08-06T17:56:04.356Z"
+    },
+    {
+      "details": {
+        "hasVisibleShell": false,
+        "route": "/editor"
+      },
+      "index": 19,
+      "level": "info",
+      "message": "renderer Vue shell mounted",
+      "time": "2026-08-06T17:56:04.400Z"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": null,
+          "currentFilePath": null,
+          "currentMarkdownLength": 0,
+          "tabCount": 0,
+          "tabIds": []
+        },
+        "layout": {
+          "rightColumn": "files",
+          "showSideBar": false,
+          "showTabBar": false
+        },
+        "project": {
+          "activeItem": null,
+          "pendingTreeEvents": 0,
+          "root": null,
+          "rootName": null
+        }
+      },
+      "index": 20,
+      "level": "info",
+      "message": "store-diagnostics:installed",
+      "time": "2026-08-06T17:56:04.401Z"
+    },
+    {
+      "details": {
+        "error": "No active ElephantNote vault."
+      },
+      "index": 21,
+      "level": "warn",
+      "message": "external addon registry deferred until a vault is active",
+      "time": "2026-08-06T17:56:04.408Z"
+    },
+    {
+      "at": "2026-08-06T17:56:04.411Z",
+      "commands": [
+        "invokeTauri",
+        "readDom",
+        "click",
+        "fill",
+        "insertText",
+        "waitFor",
+        "waitUntilGone",
+        "executeCommand",
+        "press",
+        "selectText",
+        "contextClick",
+        "capabilities",
+        "addonState",
+        "enableAddon",
+        "disableAddon",
+        "runAddonAction",
+        "installOfficialAddon",
+        "invokeAddonResource",
+        "addonNativeStatus",
+        "addonNativeCall",
+        "listNotes",
+        "selectVault",
+        "readNote",
+        "createNote",
+        "openNote",
+        "setMarkdown",
+        "appendMarkdown",
+        "save",
+        "readDisplayed",
+        "openExcalidraw",
+        "closeExcalidraw",
+        "readExcalidraw",
+        "readState",
+        "queryAll",
+        "uiSnapshot",
+        "clearLogs",
+        "assertUi",
+        "assertLogs"
+      ],
+      "event": "installed",
+      "index": 22
+    },
+    {
+      "at": "2026-08-06T17:56:04.412Z",
+      "details": {},
+      "index": 23,
+      "level": "info",
+      "message": "[elephantnote:citation] runtime installed"
+    },
+    {
+      "at": "2026-08-06T17:56:04.465Z",
+      "event": "transport:ready",
+      "index": 24
+    },
+    {
+      "at": "2026-08-06T17:56:04.567Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 776,
+      "index": 25,
+      "selector": ".en-empty-card",
+      "textLength": 186
+    }
+  ],
+  "featureId": "app-launch",
+  "appSha256": "011f2f1cf215881fd751e332ae006ed7b54bb6c2356e25038b33cfa9082dff72",
+  "evidence": {
+    "attributes": {
+      "class": "en-empty-card",
+      "data-v-66daf6c0": ""
+    },
+    "exists": true,
+    "html": "<img data-v-66daf6c0=\"\" class=\"en-logo-image\" src=\"tauri://localhost/assets/icon-BOuFG6JN.png\" alt=\"Elephant\"><h1 data-v-66daf6c0=\"\">Choose your first vault</h1><p data-v-66daf6c0=\"\" class=\"en-empty-copy\">Keep notes in private app storage or choose an existing folder.</p><div data-v-66daf6c0=\"\" class=\"en-empty-actions\"><button data-v-66daf6c0=\"\" class=\"en-primary-button\" type=\"button\"><strong data-v-66daf6c0=\"\">Private storage</strong><span data-v-66daf6c0=\"\">Create a vault managed by Elephant</span></button><button data-v-66daf6c0=\"\" class=\"en-secondary-button\" type=\"button\" aria-label=\"Dossier Android — Choose a folder and authorize access\"><strong data-v-66daf6c0=\"\">Choose folder</strong><span data-v-66daf6c0=\"\">Open an existing notes folder</span></button></div>",
+    "selector": ".en-empty-card",
+    "text": "\nChoose your first vault\nKeep notes in private app storage or choose an existing folder.\n\nPrivate storage\nCreate a vault managed by Elephant\n\nChoose folder\nOpen an existing notes folder\n",
+    "value": null,
+    "visible": true
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "testedCommit": "15356c09a122a8842214693b427a8341a850e21b",
+  "workflowRun": "31121697778",
+  "buildExit": 0,
+  "matrixExit": 1,
+  "proofBranch": "proof/standalone-15356c09a122"
+}

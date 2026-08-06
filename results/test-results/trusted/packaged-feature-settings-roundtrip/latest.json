@@ -1,0 +1,854 @@
+{
+  "at": "2026-08-06T17:56:34.814Z",
+  "suite": "packaged-feature-settings-roundtrip",
+  "status": "PROVEN",
+  "runtime": "tauri",
+  "packagedApp": true,
+  "packagedAppRequired": true,
+  "packagedFormat": "linux-appimage",
+  "appPath": "/home/runner/work/ElephantNote/ElephantNote/repo/Elephant/backend/tauri/target/release/bundle/appimage/Elephant_0.18.9_amd64.AppImage",
+  "profileRoots": {
+    "home": "/tmp/elephant-packaged-feature-settings-roundtrip-mG0luV",
+    "elephantConfig": "/tmp/elephant-packaged-feature-settings-roundtrip-mG0luV/config",
+    "xdgConfig": "/tmp/elephant-packaged-feature-settings-roundtrip-mG0luV/.config",
+    "xdgData": "/tmp/elephant-packaged-feature-settings-roundtrip-mG0luV/.local/share",
+    "xdgCache": "/tmp/elephant-packaged-feature-settings-roundtrip-mG0luV/.cache",
+    "xdgState": "/tmp/elephant-packaged-feature-settings-roundtrip-mG0luV/.local/state",
+    "xdgRuntime": "/tmp/elephant-packaged-feature-settings-roundtrip-mG0luV/.runtime"
+  },
+  "error": null,
+  "scenarios": [],
+  "commandPolicy": {
+    "setupCommands": [
+      {
+        "at": "2026-08-06T17:56:34.236Z",
+        "command": "selectVault",
+        "argsCount": 1
+      },
+      {
+        "at": "2026-08-06T17:56:34.496Z",
+        "command": "openNote",
+        "argsCount": 1
+      }
+    ],
+    "actionCommands": [
+      {
+        "at": "2026-08-06T17:56:34.330Z",
+        "layer": "user-journey",
+        "command": "waitFor",
+        "argsCount": 2
+      },
+      {
+        "at": "2026-08-06T17:56:34.501Z",
+        "layer": "user-journey",
+        "command": "waitFor",
+        "argsCount": 2
+      },
+      {
+        "at": "2026-08-06T17:56:34.531Z",
+        "layer": "user-journey",
+        "command": "click",
+        "argsCount": 1
+      },
+      {
+        "at": "2026-08-06T17:56:34.712Z",
+        "layer": "user-journey",
+        "command": "waitFor",
+        "argsCount": 2
+      },
+      {
+        "at": "2026-08-06T17:56:34.721Z",
+        "layer": "user-journey",
+        "command": "fill",
+        "argsCount": 2
+      },
+      {
+        "at": "2026-08-06T17:56:34.751Z",
+        "layer": "user-journey",
+        "command": "readDom",
+        "argsCount": 1
+      },
+      {
+        "at": "2026-08-06T17:56:34.767Z",
+        "layer": "user-journey",
+        "command": "fill",
+        "argsCount": 2
+      },
+      {
+        "at": "2026-08-06T17:56:34.778Z",
+        "layer": "user-journey",
+        "command": "click",
+        "argsCount": 1
+      },
+      {
+        "at": "2026-08-06T17:56:34.784Z",
+        "layer": "user-journey",
+        "command": "readDom",
+        "argsCount": 1
+      },
+      {
+        "at": "2026-08-06T17:56:34.792Z",
+        "layer": "user-journey",
+        "command": "click",
+        "argsCount": 1
+      },
+      {
+        "at": "2026-08-06T17:56:34.808Z",
+        "layer": "user-journey",
+        "command": "readDom",
+        "argsCount": 1
+      }
+    ],
+    "frontendAllowedActions": [
+      "click",
+      "contextClick",
+      "dropFiles",
+      "fill",
+      "insertText",
+      "pointerDrag",
+      "press",
+      "pressShortcut",
+      "selectText",
+      "waitFor",
+      "waitUntilGone"
+    ],
+    "frontendAllowedObservations": [
+      "logs",
+      "readDisplayed",
+      "readDom",
+      "readState"
+    ]
+  },
+  "logs": [
+    {
+      "details": null,
+      "index": 0,
+      "level": "info",
+      "message": "renderer diagnostics installed",
+      "time": "2026-08-06T17:56:33.772Z"
+    },
+    {
+      "details": {
+        "runtime": "tauri"
+      },
+      "index": 1,
+      "level": "info",
+      "message": "bootstrapTauriRuntime:start",
+      "time": "2026-08-06T17:56:33.778Z"
+    },
+    {
+      "details": {
+        "userDataPath": "/tmp/elephant-packaged-feature-settings-roundtrip-mG0luV/.local/share/com.elephantnote.app"
+      },
+      "index": 2,
+      "level": "info",
+      "message": "bootstrapTauriRuntime:appDataDir",
+      "time": "2026-08-06T17:56:33.844Z"
+    },
+    {
+      "details": {
+        "env": {
+          "debug": false,
+          "paths": {
+            "_dataCenterPath": "/tmp/elephant-packaged-feature-settings-roundtrip-mG0luV/.local/share/com.elephantnote.app",
+            "_editorBufferStorePath": "/tmp/elephant-packaged-feature-settings-roundtrip-mG0luV/.local/share/com.elephantnote.app/editorStates",
+            "_electronUserDataPath": "/tmp/elephant-packaged-feature-settings-roundtrip-mG0luV/.local/share/com.elephantnote.app",
+            "_logPath": "/tmp/elephant-packaged-feature-settings-roundtrip-mG0luV/.local/share/com.elephantnote.app/logs/20268",
+            "_preferencesFilePath": "/tmp/elephant-packaged-feature-settings-roundtrip-mG0luV/.local/share/com.elephantnote.app/preference.json",
+            "_preferencesPath": "/tmp/elephant-packaged-feature-settings-roundtrip-mG0luV/.local/share/com.elephantnote.app",
+            "_ripgrepBinaryPath": "rg",
+            "_userDataPath": "/tmp/elephant-packaged-feature-settings-roundtrip-mG0luV/.local/share/com.elephantnote.app"
+          },
+          "type": "editor",
+          "windowId": 1
+        }
+      },
+      "index": 3,
+      "level": "info",
+      "message": "bootstrapRenderer:done",
+      "time": "2026-08-06T17:56:33.851Z"
+    },
+    {
+      "details": null,
+      "index": 4,
+      "level": "info",
+      "message": "renderer diagnostics installed",
+      "time": "2026-08-06T17:56:33.856Z"
+    },
+    {
+      "details": {
+        "runtime": "tauri"
+      },
+      "index": 5,
+      "level": "info",
+      "message": "renderer shell initialized",
+      "time": "2026-08-06T17:56:33.862Z"
+    },
+    {
+      "details": {
+        "hasPinia": true,
+        "hasTauriInvoke": true,
+        "runtime": "tauri"
+      },
+      "index": 6,
+      "level": "info",
+      "message": "[addons] install:start",
+      "time": "2026-08-06T17:56:33.862Z"
+    },
+    {
+      "details": {
+        "available": 0,
+        "count": 0,
+        "ids": []
+      },
+      "index": 7,
+      "level": "info",
+      "message": "[addons] register:start",
+      "time": "2026-08-06T17:56:33.863Z"
+    },
+    {
+      "details": {
+        "registered": 0
+      },
+      "index": 8,
+      "level": "info",
+      "message": "[addons] store:installed",
+      "time": "2026-08-06T17:56:33.867Z"
+    },
+    {
+      "details": null,
+      "index": 9,
+      "level": "info",
+      "message": "[addons] external-runtime:install:start",
+      "time": "2026-08-06T17:56:33.869Z"
+    },
+    {
+      "details": null,
+      "index": 10,
+      "level": "info",
+      "message": "[addons] external-runtime:install:done",
+      "time": "2026-08-06T17:56:33.870Z"
+    },
+    {
+      "details": {
+        "availableBuiltins": [],
+        "registered": [],
+        "resources": [
+          "addonManager",
+          "addons",
+          "document",
+          "elephantnote",
+          "fileUtils",
+          "marktext",
+          "pinia",
+          "router",
+          "runtime",
+          "services",
+          "tauri",
+          "vueApp",
+          "window"
+        ]
+      },
+      "index": 11,
+      "level": "info",
+      "message": "[addons] install:done",
+      "time": "2026-08-06T17:56:33.870Z"
+    },
+    {
+      "details": null,
+      "index": 12,
+      "level": "info",
+      "message": "[addons] community-trust-boundary:installed",
+      "time": "2026-08-06T17:56:33.871Z"
+    },
+    {
+      "details": {
+        "actions": [
+          "elephant.addon-packs.ensure-develop-parity",
+          "elephant.addon-packs.create",
+          "elephant.addon-packs.apply"
+        ],
+        "enabled": []
+      },
+      "index": 13,
+      "level": "info",
+      "message": "[addons] builtin-state:restored",
+      "time": "2026-08-06T17:56:33.873Z"
+    },
+    {
+      "details": {
+        "id": "core.addon-packs"
+      },
+      "index": 14,
+      "level": "info",
+      "message": "[core-feature] enabled",
+      "time": "2026-08-06T17:56:33.874Z"
+    },
+    {
+      "details": {
+        "id": "core.addon-packs"
+      },
+      "index": 15,
+      "level": "info",
+      "message": "[core-feature] ready",
+      "time": "2026-08-06T17:56:33.874Z"
+    },
+    {
+      "details": {
+        "hasPathExistsSync": true,
+        "hasReadFile": true,
+        "hasStat": true,
+        "vaultRoot": ""
+      },
+      "index": 16,
+      "level": "info",
+      "message": "[excalidraw-image] runtime fixes installed",
+      "time": "2026-08-06T17:56:33.879Z"
+    },
+    {
+      "details": {
+        "id": "core.excalidraw"
+      },
+      "index": 17,
+      "level": "info",
+      "message": "[core-feature] enabled",
+      "time": "2026-08-06T17:56:33.879Z"
+    },
+    {
+      "details": {
+        "id": "core.excalidraw"
+      },
+      "index": 18,
+      "level": "info",
+      "message": "[core-feature] ready",
+      "time": "2026-08-06T17:56:33.880Z"
+    },
+    {
+      "details": {
+        "hasVisibleShell": false,
+        "route": "/editor"
+      },
+      "index": 19,
+      "level": "info",
+      "message": "renderer Vue shell mounted",
+      "time": "2026-08-06T17:56:33.946Z"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": null,
+          "currentFilePath": null,
+          "currentMarkdownLength": 0,
+          "tabCount": 0,
+          "tabIds": []
+        },
+        "layout": {
+          "rightColumn": "files",
+          "showSideBar": false,
+          "showTabBar": false
+        },
+        "project": {
+          "activeItem": null,
+          "pendingTreeEvents": 0,
+          "root": null,
+          "rootName": null
+        }
+      },
+      "index": 20,
+      "level": "info",
+      "message": "store-diagnostics:installed",
+      "time": "2026-08-06T17:56:33.947Z"
+    },
+    {
+      "details": {
+        "error": "No active ElephantNote vault."
+      },
+      "index": 21,
+      "level": "warn",
+      "message": "external addon registry deferred until a vault is active",
+      "time": "2026-08-06T17:56:34.042Z"
+    },
+    {
+      "at": "2026-08-06T17:56:34.046Z",
+      "commands": [
+        "invokeTauri",
+        "readDom",
+        "click",
+        "fill",
+        "insertText",
+        "waitFor",
+        "waitUntilGone",
+        "executeCommand",
+        "press",
+        "selectText",
+        "contextClick",
+        "capabilities",
+        "addonState",
+        "enableAddon",
+        "disableAddon",
+        "runAddonAction",
+        "installOfficialAddon",
+        "invokeAddonResource",
+        "addonNativeStatus",
+        "addonNativeCall",
+        "listNotes",
+        "selectVault",
+        "readNote",
+        "createNote",
+        "openNote",
+        "setMarkdown",
+        "appendMarkdown",
+        "save",
+        "readDisplayed",
+        "openExcalidraw",
+        "closeExcalidraw",
+        "readExcalidraw",
+        "readState",
+        "queryAll",
+        "uiSnapshot",
+        "clearLogs",
+        "assertUi",
+        "assertLogs"
+      ],
+      "event": "installed",
+      "index": 22
+    },
+    {
+      "at": "2026-08-06T17:56:34.047Z",
+      "details": {},
+      "index": 23,
+      "level": "info",
+      "message": "[elephantnote:citation] runtime installed"
+    },
+    {
+      "at": "2026-08-06T17:56:34.104Z",
+      "event": "transport:ready",
+      "index": 24
+    },
+    {
+      "at": "2026-08-06T17:56:34.197Z",
+      "command": "tauri_vaults_select_path",
+      "event": "tauri:invoke:start",
+      "index": 25
+    },
+    {
+      "at": "2026-08-06T17:56:34.199Z",
+      "command": "tauri_vaults_select_path",
+      "event": "tauri:invoke:done",
+      "index": 26
+    },
+    {
+      "details": null,
+      "index": 27,
+      "level": "info",
+      "message": "external addon registry retrying after vault activation",
+      "time": "2026-08-06T17:56:34.200Z"
+    },
+    {
+      "at": "2026-08-06T17:56:34.200Z",
+      "event": "vault:select",
+      "index": 28,
+      "path": "/tmp/elephant-packaged-feature-settings-roundtrip-mG0luV/vault",
+      "vaultId": "vault"
+    },
+    {
+      "at": "2026-08-06T17:56:34.208Z",
+      "details": {
+        "hidden": [],
+        "order": [
+          "search",
+          "vault",
+          "sidebar-toggle"
+        ],
+        "visible": [
+          "search",
+          "vault",
+          "sidebar-toggle"
+        ]
+      },
+      "index": 29,
+      "level": "info",
+      "message": "[icon-rail] layout:resolved"
+    },
+    {
+      "at": "2026-08-06T17:56:34.230Z",
+      "details": {
+        "activeVaultId": "vault",
+        "isMac": false,
+        "sidebarVisible": true
+      },
+      "index": 30,
+      "level": "info",
+      "message": "[icon-rail] mounted"
+    },
+    {
+      "details": {
+        "noteDirectory": "/tmp/elephant-packaged-feature-settings-roundtrip-mG0luV/vault",
+        "vaultRoot": "/tmp/elephant-packaged-feature-settings-roundtrip-mG0luV/vault"
+      },
+      "index": 31,
+      "level": "info",
+      "message": "[excalidraw-addon] overlay mounted",
+      "time": "2026-08-06T17:56:34.231Z"
+    },
+    {
+      "at": "2026-08-06T17:56:34.325Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 3517,
+      "index": 32,
+      "selector": ".en-library-toolbar",
+      "textLength": 41
+    },
+    {
+      "at": "2026-08-06T17:56:34.326Z",
+      "event": "dom:wait:done",
+      "index": 33,
+      "selector": ".en-library-toolbar"
+    },
+    {
+      "at": "2026-08-06T17:56:34.333Z",
+      "event": "open:start",
+      "index": 34,
+      "path": "Feature.md"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": "mt-0",
+          "currentFilePath": "/tmp/elephant-packaged-feature-settings-roundtrip-mG0luV/vault/Feature.md",
+          "currentMarkdownLength": 25,
+          "tabCount": 1,
+          "tabIds": [
+            "mt-0"
+          ]
+        },
+        "type": "direct"
+      },
+      "index": 35,
+      "level": "info",
+      "message": "pinia:editor",
+      "time": "2026-08-06T17:56:34.346Z"
+    },
+    {
+      "at": "2026-08-06T17:56:34.350Z",
+      "details": {
+        "activeFileId": "mt-0",
+        "activeVaultId": "vault",
+        "currentFileId": "mt-0",
+        "notePath": "Feature.md",
+        "openedPath": "Feature.md",
+        "previous": {
+          "activeFileId": null,
+          "currentFileId": null,
+          "notePath": null,
+          "openedPath": null
+        },
+        "tabCount": 1
+      },
+      "index": 36,
+      "level": "info",
+      "message": "[elephantnote:editor] identity-change"
+    },
+    {
+      "at": "2026-08-06T17:56:34.350Z",
+      "details": {
+        "activeFileId": "mt-0",
+        "hasEditorDocument": true,
+        "markdownLength": 25,
+        "notePath": "Feature.md",
+        "visibleMarkdownLength": 14
+      },
+      "index": 37,
+      "level": "info",
+      "message": "[elephantnote:editor] input-state"
+    },
+    {
+      "at": "2026-08-06T17:56:34.422Z",
+      "details": {
+        "notePath": "Feature.md",
+        "vault": "/tmp/elephant-packaged-feature-settings-roundtrip-mG0luV/vault"
+      },
+      "index": 38,
+      "level": "info",
+      "message": "[elephantnote:editor] mounted"
+    },
+    {
+      "at": "2026-08-06T17:56:34.423Z",
+      "details": {
+        "isSaved": true,
+        "length": 25,
+        "notePath": "Feature.md",
+        "reason": "mount"
+      },
+      "index": 39,
+      "level": "info",
+      "message": "[elephantnote:save] observed active markdown"
+    },
+    {
+      "at": "2026-08-06T17:56:34.429Z",
+      "event": "open:done",
+      "index": 40,
+      "markdownLength": 25,
+      "path": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:56:34.430Z",
+      "event": "read:state",
+      "index": 41,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:56:34.467Z",
+      "event": "read:state",
+      "index": 42,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:56:34.493Z",
+      "event": "read:state",
+      "index": 43,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:56:34.498Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 1165,
+      "index": 44,
+      "selector": "[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]",
+      "textLength": 16
+    },
+    {
+      "at": "2026-08-06T17:56:34.498Z",
+      "event": "dom:wait:done",
+      "index": 45,
+      "selector": "[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]"
+    },
+    {
+      "at": "2026-08-06T17:56:34.503Z",
+      "details": {
+        "activeVaultId": "vault",
+        "id": "settings",
+        "title": "Settings",
+        "workspaceView": "notes"
+      },
+      "index": 46,
+      "level": "info",
+      "message": "[icon-rail] action:run"
+    },
+    {
+      "at": "2026-08-06T17:56:34.504Z",
+      "event": "dom:click",
+      "index": 47,
+      "selector": "[aria-label=\"Settings\"]"
+    },
+    {
+      "at": "2026-08-06T17:56:34.504Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 678,
+      "index": 48,
+      "selector": "[aria-label=\"Settings\"]",
+      "textLength": 0
+    },
+    {
+      "details": {
+        "message": "invalid language tag: c",
+        "name": "RangeError",
+        "stack": "DisplayNames@[native code]\ny9e@tauri://localhost/assets/index-joAryrzC.js:1009:72586\nkJ@tauri://localhost/assets/index-joAryrzC.js:2:7743\nvalue@tauri://localhost/assets/index-joAryrzC.js:2:19783\n@tauri://localhost/assets/index-joAryrzC.js:1516:81816\nDD@tauri://localhost/assets/index-joAryrzC.js:2:44110\nBe@tauri://localhost/assets/index-joAryrzC.js:2:54470\nrun@tauri://localhost/assets/index-joAryrzC.js:2:6329\nee@tauri://localhost/assets/index-joAryrzC.js:2:54882\nK@tauri://localhost/assets/index-joAryrzC.js:2:53446\n$@tauri://localhost/assets/index-joAryrzC.js:2:53181\ng@tauri://localhost/assets/index-joAryrzC.js:2:49434\nx@tauri://localhost/assets/index-joAryrzC.js:2:51246\nC@tauri://localhost/assets/index-joAryrzC.js:2:50451\nS@tauri://localhost/assets/index-joAryrzC.js:2:50144\ng@tauri://localhost/assets/index-joAryrzC.js:2:49400\nx@tauri://localhost/assets/index-joAryrzC.js:2:51246\nB@tauri://localhost/assets/index-joAryrzC.js:2:52839\ng@tauri://localhost/assets/index-joAryrzC.js:2:49352\nx@tauri://localhost/assets/index-joAryrzC.js:2:51246\nC@tauri://localhost/assets/index-joAryrzC.js:2:50451\nS@tauri://localhost/assets/index-joAryrzC.js:2:50144\ng@tauri://localhost/assets/index-joAryrzC.js:2:49400\nx@tauri://localhost/assets/index-joAryrzC.js:2:51246\nC@tauri://localhost/assets/index-joAryrzC.js:2:50451\nS@tauri://localhost/assets/index-joAryrzC.js:2:50144\ng@tauri://localhost/assets/index-joAryrzC.js:2:49400\nx@tauri://localhost/assets/index-joAryrzC.js:2:51246\nC@tauri://localhost/assets/index-joAryrzC.js:2:50451\nS@tauri://localhost/assets/index-joAryrzC.js:2:50144\ng@tauri://localhost/assets/index-joAryrzC.js:2:49400\nx@tauri://localhost/assets/index-joAryrzC.js:2:51246\nC@tauri://localhost/assets/index-joAryrzC.js:2:50451\nS@tauri://localhost/assets/index-joAryrzC.js:2:50144\ng@tauri://localhost/assets/index-joAryrzC.js:2:49400\nBe@tauri://localhost/assets/index-joAryrzC.js:2:54475\nrun@tauri://localhost/assets/index-joAryrzC.js:2:6329\nee@tauri://localhost/assets/index-joAryrzC.js:2:54882\nK@tauri://localhost/assets/index-joAryrzC.js:2:53446\n$@tauri://localhost/assets/index-joAryrzC.js:2:53181\ng@tauri://localhost/assets/index-joAryrzC.js:2:49434\nO@tauri://localhost/assets/index-joAryrzC.js:2:52329\nR@tauri://localhost/assets/index-joAryrzC.js:2:51629\nS@tauri://localhost/assets/index-joAryrzC.js:2:50240\ng@tauri://localhost/assets/index-joAryrzC.js:2:49400\nBe@tauri://localhost/assets/index-joAryrzC.js:2:54043\nrun@tauri://localhost/assets/index-joAryrzC.js:2:6329\nrunIfDirty@tauri://localhost/assets/index-joAryrzC.js:2:6640\nz4@tauri://localhost/assets/index-joAryrzC.js:2:21689\n$J@tauri://localhost/assets/index-joAryrzC.js:2:23448"
+      },
+      "index": 49,
+      "level": "error",
+      "message": "vue error: https://vuejs.org/error-reference/#runtime-1",
+      "time": "2026-08-06T17:56:34.515Z"
+    },
+    {
+      "at": "2026-08-06T17:56:34.525Z",
+      "details": {
+        "available": [
+          {
+            "id": "vault",
+            "label": "Vault",
+            "source": "core"
+          },
+          {
+            "id": "sidebar-toggle",
+            "label": "Sidebar",
+            "source": "core"
+          },
+          {
+            "id": "search",
+            "label": "Search",
+            "source": "core"
+          }
+        ],
+        "hidden": [],
+        "order": [
+          "search",
+          "vault",
+          "sidebar-toggle"
+        ]
+      },
+      "index": 50,
+      "level": "info",
+      "message": "[icon-rail] settings:mounted"
+    },
+    {
+      "at": "2026-08-06T17:56:34.706Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 23601,
+      "index": 51,
+      "selector": ".en-settings-panel",
+      "textLength": 757
+    },
+    {
+      "at": "2026-08-06T17:56:34.707Z",
+      "event": "dom:wait:done",
+      "index": 52,
+      "selector": ".en-settings-panel"
+    },
+    {
+      "at": "2026-08-06T17:56:34.715Z",
+      "event": "dom:fill",
+      "index": 53,
+      "selector": "[aria-label=\"Search all settings\"]",
+      "valueLength": 8
+    },
+    {
+      "at": "2026-08-06T17:56:34.716Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 0,
+      "index": 54,
+      "selector": "[aria-label=\"Search all settings\"]",
+      "textLength": 0
+    },
+    {
+      "at": "2026-08-06T17:56:34.748Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 2273,
+      "index": 55,
+      "selector": ".en-settings-search-results",
+      "textLength": 117
+    },
+    {
+      "at": "2026-08-06T17:56:34.753Z",
+      "event": "dom:fill",
+      "index": 56,
+      "selector": "[aria-label=\"Search all settings\"]",
+      "valueLength": 0
+    },
+    {
+      "at": "2026-08-06T17:56:34.754Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 0,
+      "index": 57,
+      "selector": "[aria-label=\"Search all settings\"]",
+      "textLength": 0
+    },
+    {
+      "details": {
+        "message": "invalid language tag: c",
+        "name": "RangeError",
+        "stack": "DisplayNames@[native code]\ny9e@tauri://localhost/assets/index-joAryrzC.js:1009:72586\nkJ@tauri://localhost/assets/index-joAryrzC.js:2:7743\nvalue@tauri://localhost/assets/index-joAryrzC.js:2:19783\n@tauri://localhost/assets/index-joAryrzC.js:1516:81816\nDD@tauri://localhost/assets/index-joAryrzC.js:2:44110\nBe@tauri://localhost/assets/index-joAryrzC.js:2:54470\nrun@tauri://localhost/assets/index-joAryrzC.js:2:6329\nee@tauri://localhost/assets/index-joAryrzC.js:2:54882\nK@tauri://localhost/assets/index-joAryrzC.js:2:53446\n$@tauri://localhost/assets/index-joAryrzC.js:2:53181\ng@tauri://localhost/assets/index-joAryrzC.js:2:49434\nx@tauri://localhost/assets/index-joAryrzC.js:2:51246\nC@tauri://localhost/assets/index-joAryrzC.js:2:50451\nS@tauri://localhost/assets/index-joAryrzC.js:2:50144\ng@tauri://localhost/assets/index-joAryrzC.js:2:49400\nx@tauri://localhost/assets/index-joAryrzC.js:2:51246\nB@tauri://localhost/assets/index-joAryrzC.js:2:52839\ng@tauri://localhost/assets/index-joAryrzC.js:2:49352\nO@tauri://localhost/assets/index-joAryrzC.js:2:52329\nR@tauri://localhost/assets/index-joAryrzC.js:2:51629\nS@tauri://localhost/assets/index-joAryrzC.js:2:50240\ng@tauri://localhost/assets/index-joAryrzC.js:2:49400\nBe@tauri://localhost/assets/index-joAryrzC.js:2:54043\nrun@tauri://localhost/assets/index-joAryrzC.js:2:6329\nrunIfDirty@tauri://localhost/assets/index-joAryrzC.js:2:6640\nz4@tauri://localhost/assets/index-joAryrzC.js:2:21689\n$J@tauri://localhost/assets/index-joAryrzC.js:2:23448"
+      },
+      "index": 58,
+      "level": "error",
+      "message": "vue error: https://vuejs.org/error-reference/#runtime-1",
+      "time": "2026-08-06T17:56:34.757Z"
+    },
+    {
+      "at": "2026-08-06T17:56:34.762Z",
+      "details": {
+        "available": [
+          {
+            "id": "vault",
+            "label": "Vault",
+            "source": "core"
+          },
+          {
+            "id": "sidebar-toggle",
+            "label": "Sidebar",
+            "source": "core"
+          },
+          {
+            "id": "search",
+            "label": "Search",
+            "source": "core"
+          }
+        ],
+        "hidden": [],
+        "order": [
+          "search",
+          "vault",
+          "sidebar-toggle"
+        ]
+      },
+      "index": 59,
+      "level": "info",
+      "message": "[icon-rail] settings:mounted"
+    },
+    {
+      "at": "2026-08-06T17:56:34.775Z",
+      "event": "dom:click",
+      "index": 60,
+      "selector": ".en-settings-nav button:first-child"
+    },
+    {
+      "at": "2026-08-06T17:56:34.775Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 1040,
+      "index": 61,
+      "selector": ".en-settings-nav button:first-child",
+      "textLength": 11
+    },
+    {
+      "at": "2026-08-06T17:56:34.780Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 41064,
+      "index": 62,
+      "selector": ".en-shell",
+      "textLength": 864
+    },
+    {
+      "at": "2026-08-06T17:56:34.787Z",
+      "event": "dom:click",
+      "index": 63,
+      "selector": ".en-segmented button:nth-child(2)"
+    },
+    {
+      "at": "2026-08-06T17:56:34.787Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 402,
+      "index": 64,
+      "selector": ".en-segmented button:nth-child(2)",
+      "textLength": 4
+    },
+    {
+      "at": "2026-08-06T17:56:34.804Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 41102,
+      "index": 65,
+      "selector": ".en-shell",
+      "textLength": 864
+    }
+  ],
+  "featureId": "settings-roundtrip",
+  "appSha256": "011f2f1cf215881fd751e332ae006ed7b54bb6c2356e25038b33cfa9082dff72",
+  "evidence": {
+    "search": "\nAutosave\nAutomatically persist changes to disk.\nEditor\n\nAutosave delay\nDelay before writing the latest edit.\nEditor\n",
+    "dark": false,
+    "changed": "en-shell en-theme-dark en-theme-dark"
+  }
+}

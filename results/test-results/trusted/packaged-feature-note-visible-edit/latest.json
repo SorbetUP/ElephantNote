@@ -1,0 +1,1153 @@
+{
+  "at": "2026-08-06T17:56:18.787Z",
+  "suite": "packaged-feature-note-visible-edit",
+  "status": "PROVEN",
+  "runtime": "tauri",
+  "packagedApp": true,
+  "packagedAppRequired": true,
+  "packagedFormat": "linux-appimage",
+  "appPath": "/home/runner/work/ElephantNote/ElephantNote/repo/Elephant/backend/tauri/target/release/bundle/appimage/Elephant_0.18.9_amd64.AppImage",
+  "profileRoots": {
+    "home": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB",
+    "elephantConfig": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/config",
+    "xdgConfig": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/.config",
+    "xdgData": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/.local/share",
+    "xdgCache": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/.cache",
+    "xdgState": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/.local/state",
+    "xdgRuntime": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/.runtime"
+  },
+  "error": null,
+  "scenarios": [],
+  "commandPolicy": {
+    "setupCommands": [
+      {
+        "at": "2026-08-06T17:56:18.357Z",
+        "command": "selectVault",
+        "argsCount": 1
+      },
+      {
+        "at": "2026-08-06T17:56:18.604Z",
+        "command": "openNote",
+        "argsCount": 1
+      }
+    ],
+    "actionCommands": [
+      {
+        "at": "2026-08-06T17:56:18.449Z",
+        "layer": "user-journey",
+        "command": "waitFor",
+        "argsCount": 2
+      },
+      {
+        "at": "2026-08-06T17:56:18.609Z",
+        "layer": "user-journey",
+        "command": "waitFor",
+        "argsCount": 2
+      },
+      {
+        "at": "2026-08-06T17:56:18.612Z",
+        "layer": "user-journey",
+        "command": "readDom",
+        "argsCount": 1
+      },
+      {
+        "at": "2026-08-06T17:56:18.618Z",
+        "layer": "user-journey",
+        "command": "selectText",
+        "argsCount": 3
+      },
+      {
+        "at": "2026-08-06T17:56:18.772Z",
+        "layer": "user-journey",
+        "command": "insertText",
+        "argsCount": 2
+      },
+      {
+        "at": "2026-08-06T17:56:18.777Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:56:18.781Z",
+        "layer": "user-journey",
+        "command": "readDom",
+        "argsCount": 1
+      }
+    ],
+    "frontendAllowedActions": [
+      "click",
+      "contextClick",
+      "dropFiles",
+      "fill",
+      "insertText",
+      "pointerDrag",
+      "press",
+      "pressShortcut",
+      "selectText",
+      "waitFor",
+      "waitUntilGone"
+    ],
+    "frontendAllowedObservations": [
+      "logs",
+      "readDisplayed",
+      "readDom",
+      "readState"
+    ]
+  },
+  "logs": [
+    {
+      "details": null,
+      "index": 0,
+      "level": "info",
+      "message": "renderer diagnostics installed",
+      "time": "2026-08-06T17:56:17.889Z"
+    },
+    {
+      "details": {
+        "runtime": "tauri"
+      },
+      "index": 1,
+      "level": "info",
+      "message": "bootstrapTauriRuntime:start",
+      "time": "2026-08-06T17:56:17.897Z"
+    },
+    {
+      "details": {
+        "userDataPath": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/.local/share/com.elephantnote.app"
+      },
+      "index": 2,
+      "level": "info",
+      "message": "bootstrapTauriRuntime:appDataDir",
+      "time": "2026-08-06T17:56:17.961Z"
+    },
+    {
+      "details": {
+        "env": {
+          "debug": false,
+          "paths": {
+            "_dataCenterPath": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/.local/share/com.elephantnote.app",
+            "_editorBufferStorePath": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/.local/share/com.elephantnote.app/editorStates",
+            "_electronUserDataPath": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/.local/share/com.elephantnote.app",
+            "_logPath": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/.local/share/com.elephantnote.app/logs/20268",
+            "_preferencesFilePath": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/.local/share/com.elephantnote.app/preference.json",
+            "_preferencesPath": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/.local/share/com.elephantnote.app",
+            "_ripgrepBinaryPath": "rg",
+            "_userDataPath": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/.local/share/com.elephantnote.app"
+          },
+          "type": "editor",
+          "windowId": 1
+        }
+      },
+      "index": 3,
+      "level": "info",
+      "message": "bootstrapRenderer:done",
+      "time": "2026-08-06T17:56:17.967Z"
+    },
+    {
+      "details": null,
+      "index": 4,
+      "level": "info",
+      "message": "renderer diagnostics installed",
+      "time": "2026-08-06T17:56:17.972Z"
+    },
+    {
+      "details": {
+        "runtime": "tauri"
+      },
+      "index": 5,
+      "level": "info",
+      "message": "renderer shell initialized",
+      "time": "2026-08-06T17:56:17.978Z"
+    },
+    {
+      "details": {
+        "hasPinia": true,
+        "hasTauriInvoke": true,
+        "runtime": "tauri"
+      },
+      "index": 6,
+      "level": "info",
+      "message": "[addons] install:start",
+      "time": "2026-08-06T17:56:17.978Z"
+    },
+    {
+      "details": {
+        "available": 0,
+        "count": 0,
+        "ids": []
+      },
+      "index": 7,
+      "level": "info",
+      "message": "[addons] register:start",
+      "time": "2026-08-06T17:56:17.979Z"
+    },
+    {
+      "details": {
+        "registered": 0
+      },
+      "index": 8,
+      "level": "info",
+      "message": "[addons] store:installed",
+      "time": "2026-08-06T17:56:17.982Z"
+    },
+    {
+      "details": null,
+      "index": 9,
+      "level": "info",
+      "message": "[addons] external-runtime:install:start",
+      "time": "2026-08-06T17:56:17.983Z"
+    },
+    {
+      "details": null,
+      "index": 10,
+      "level": "info",
+      "message": "[addons] external-runtime:install:done",
+      "time": "2026-08-06T17:56:17.985Z"
+    },
+    {
+      "details": {
+        "availableBuiltins": [],
+        "registered": [],
+        "resources": [
+          "addonManager",
+          "addons",
+          "document",
+          "elephantnote",
+          "fileUtils",
+          "marktext",
+          "pinia",
+          "router",
+          "runtime",
+          "services",
+          "tauri",
+          "vueApp",
+          "window"
+        ]
+      },
+      "index": 11,
+      "level": "info",
+      "message": "[addons] install:done",
+      "time": "2026-08-06T17:56:17.985Z"
+    },
+    {
+      "details": null,
+      "index": 12,
+      "level": "info",
+      "message": "[addons] community-trust-boundary:installed",
+      "time": "2026-08-06T17:56:17.985Z"
+    },
+    {
+      "details": {
+        "actions": [
+          "elephant.addon-packs.ensure-develop-parity",
+          "elephant.addon-packs.create",
+          "elephant.addon-packs.apply"
+        ],
+        "enabled": []
+      },
+      "index": 13,
+      "level": "info",
+      "message": "[addons] builtin-state:restored",
+      "time": "2026-08-06T17:56:17.987Z"
+    },
+    {
+      "details": {
+        "id": "core.addon-packs"
+      },
+      "index": 14,
+      "level": "info",
+      "message": "[core-feature] enabled",
+      "time": "2026-08-06T17:56:17.988Z"
+    },
+    {
+      "details": {
+        "id": "core.addon-packs"
+      },
+      "index": 15,
+      "level": "info",
+      "message": "[core-feature] ready",
+      "time": "2026-08-06T17:56:17.988Z"
+    },
+    {
+      "details": {
+        "hasPathExistsSync": true,
+        "hasReadFile": true,
+        "hasStat": true,
+        "vaultRoot": ""
+      },
+      "index": 16,
+      "level": "info",
+      "message": "[excalidraw-image] runtime fixes installed",
+      "time": "2026-08-06T17:56:17.992Z"
+    },
+    {
+      "details": {
+        "id": "core.excalidraw"
+      },
+      "index": 17,
+      "level": "info",
+      "message": "[core-feature] enabled",
+      "time": "2026-08-06T17:56:17.992Z"
+    },
+    {
+      "details": {
+        "id": "core.excalidraw"
+      },
+      "index": 18,
+      "level": "info",
+      "message": "[core-feature] ready",
+      "time": "2026-08-06T17:56:17.993Z"
+    },
+    {
+      "details": {
+        "hasVisibleShell": false,
+        "route": "/editor"
+      },
+      "index": 19,
+      "level": "info",
+      "message": "renderer Vue shell mounted",
+      "time": "2026-08-06T17:56:18.055Z"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": null,
+          "currentFilePath": null,
+          "currentMarkdownLength": 0,
+          "tabCount": 0,
+          "tabIds": []
+        },
+        "layout": {
+          "rightColumn": "files",
+          "showSideBar": false,
+          "showTabBar": false
+        },
+        "project": {
+          "activeItem": null,
+          "pendingTreeEvents": 0,
+          "root": null,
+          "rootName": null
+        }
+      },
+      "index": 20,
+      "level": "info",
+      "message": "store-diagnostics:installed",
+      "time": "2026-08-06T17:56:18.056Z"
+    },
+    {
+      "details": {
+        "error": "No active ElephantNote vault."
+      },
+      "index": 21,
+      "level": "warn",
+      "message": "external addon registry deferred until a vault is active",
+      "time": "2026-08-06T17:56:18.065Z"
+    },
+    {
+      "at": "2026-08-06T17:56:18.068Z",
+      "commands": [
+        "invokeTauri",
+        "readDom",
+        "click",
+        "fill",
+        "insertText",
+        "waitFor",
+        "waitUntilGone",
+        "executeCommand",
+        "press",
+        "selectText",
+        "contextClick",
+        "capabilities",
+        "addonState",
+        "enableAddon",
+        "disableAddon",
+        "runAddonAction",
+        "installOfficialAddon",
+        "invokeAddonResource",
+        "addonNativeStatus",
+        "addonNativeCall",
+        "listNotes",
+        "selectVault",
+        "readNote",
+        "createNote",
+        "openNote",
+        "setMarkdown",
+        "appendMarkdown",
+        "save",
+        "readDisplayed",
+        "openExcalidraw",
+        "closeExcalidraw",
+        "readExcalidraw",
+        "readState",
+        "queryAll",
+        "uiSnapshot",
+        "clearLogs",
+        "assertUi",
+        "assertLogs"
+      ],
+      "event": "installed",
+      "index": 22
+    },
+    {
+      "at": "2026-08-06T17:56:18.069Z",
+      "details": {},
+      "index": 23,
+      "level": "info",
+      "message": "[elephantnote:citation] runtime installed"
+    },
+    {
+      "at": "2026-08-06T17:56:18.108Z",
+      "event": "transport:ready",
+      "index": 24
+    },
+    {
+      "at": "2026-08-06T17:56:18.316Z",
+      "command": "tauri_vaults_select_path",
+      "event": "tauri:invoke:start",
+      "index": 25
+    },
+    {
+      "at": "2026-08-06T17:56:18.318Z",
+      "command": "tauri_vaults_select_path",
+      "event": "tauri:invoke:done",
+      "index": 26
+    },
+    {
+      "details": null,
+      "index": 27,
+      "level": "info",
+      "message": "external addon registry retrying after vault activation",
+      "time": "2026-08-06T17:56:18.319Z"
+    },
+    {
+      "at": "2026-08-06T17:56:18.319Z",
+      "event": "vault:select",
+      "index": 28,
+      "path": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/vault",
+      "vaultId": "vault"
+    },
+    {
+      "at": "2026-08-06T17:56:18.328Z",
+      "details": {
+        "hidden": [],
+        "order": [
+          "search",
+          "vault",
+          "sidebar-toggle"
+        ],
+        "visible": [
+          "search",
+          "vault",
+          "sidebar-toggle"
+        ]
+      },
+      "index": 29,
+      "level": "info",
+      "message": "[icon-rail] layout:resolved"
+    },
+    {
+      "at": "2026-08-06T17:56:18.352Z",
+      "details": {
+        "activeVaultId": "vault",
+        "isMac": false,
+        "sidebarVisible": true
+      },
+      "index": 30,
+      "level": "info",
+      "message": "[icon-rail] mounted"
+    },
+    {
+      "details": {
+        "noteDirectory": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/vault",
+        "vaultRoot": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/vault"
+      },
+      "index": 31,
+      "level": "info",
+      "message": "[excalidraw-addon] overlay mounted",
+      "time": "2026-08-06T17:56:18.353Z"
+    },
+    {
+      "at": "2026-08-06T17:56:18.446Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 3517,
+      "index": 32,
+      "selector": ".en-library-toolbar",
+      "textLength": 41
+    },
+    {
+      "at": "2026-08-06T17:56:18.446Z",
+      "event": "dom:wait:done",
+      "index": 33,
+      "selector": ".en-library-toolbar"
+    },
+    {
+      "at": "2026-08-06T17:56:18.453Z",
+      "event": "open:start",
+      "index": 34,
+      "path": "Feature.md"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": "mt-0",
+          "currentFilePath": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/vault/Feature.md",
+          "currentMarkdownLength": 25,
+          "tabCount": 1,
+          "tabIds": [
+            "mt-0"
+          ]
+        },
+        "type": "direct"
+      },
+      "index": 35,
+      "level": "info",
+      "message": "pinia:editor",
+      "time": "2026-08-06T17:56:18.466Z"
+    },
+    {
+      "at": "2026-08-06T17:56:18.470Z",
+      "details": {
+        "activeFileId": "mt-0",
+        "activeVaultId": "vault",
+        "currentFileId": "mt-0",
+        "notePath": "Feature.md",
+        "openedPath": "Feature.md",
+        "previous": {
+          "activeFileId": null,
+          "currentFileId": null,
+          "notePath": null,
+          "openedPath": null
+        },
+        "tabCount": 1
+      },
+      "index": 36,
+      "level": "info",
+      "message": "[elephantnote:editor] identity-change"
+    },
+    {
+      "at": "2026-08-06T17:56:18.470Z",
+      "details": {
+        "activeFileId": "mt-0",
+        "hasEditorDocument": true,
+        "markdownLength": 25,
+        "notePath": "Feature.md",
+        "visibleMarkdownLength": 14
+      },
+      "index": 37,
+      "level": "info",
+      "message": "[elephantnote:editor] input-state"
+    },
+    {
+      "at": "2026-08-06T17:56:18.532Z",
+      "details": {
+        "notePath": "Feature.md",
+        "vault": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/vault"
+      },
+      "index": 38,
+      "level": "info",
+      "message": "[elephantnote:editor] mounted"
+    },
+    {
+      "at": "2026-08-06T17:56:18.533Z",
+      "details": {
+        "isSaved": true,
+        "length": 25,
+        "notePath": "Feature.md",
+        "reason": "mount"
+      },
+      "index": 39,
+      "level": "info",
+      "message": "[elephantnote:save] observed active markdown"
+    },
+    {
+      "at": "2026-08-06T17:56:18.537Z",
+      "event": "open:done",
+      "index": 40,
+      "markdownLength": 25,
+      "path": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:56:18.537Z",
+      "event": "read:state",
+      "index": 41,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:56:18.573Z",
+      "event": "read:state",
+      "index": 42,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:56:18.601Z",
+      "event": "read:state",
+      "index": 43,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:56:18.607Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 1165,
+      "index": 44,
+      "selector": "[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]",
+      "textLength": 16
+    },
+    {
+      "at": "2026-08-06T17:56:18.607Z",
+      "event": "dom:wait:done",
+      "index": 45,
+      "selector": "[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]"
+    },
+    {
+      "at": "2026-08-06T17:56:18.611Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 1165,
+      "index": 46,
+      "selector": "[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]",
+      "textLength": 16
+    },
+    {
+      "at": "2026-08-06T17:56:18.616Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 1165,
+      "index": 47,
+      "selector": "[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]",
+      "textLength": 16
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": "mt-0",
+          "currentFilePath": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/vault/Feature.md",
+          "currentMarkdownLength": 148,
+          "tabCount": 1,
+          "tabIds": [
+            "mt-0"
+          ]
+        },
+        "type": "direct"
+      },
+      "index": 48,
+      "level": "info",
+      "message": "pinia:editor",
+      "time": "2026-08-06T17:56:18.632Z"
+    },
+    {
+      "at": "2026-08-06T17:56:18.633Z",
+      "details": {
+        "delay": 160,
+        "editDelta": 123,
+        "length": 148,
+        "notePath": "Feature.md",
+        "reason": "vue-watch"
+      },
+      "index": 49,
+      "level": "info",
+      "message": "[elephantnote:save] schedule"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": "mt-0",
+          "currentFilePath": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/vault/Feature.md",
+          "currentMarkdownLength": 150,
+          "tabCount": 1,
+          "tabIds": [
+            "mt-0"
+          ]
+        },
+        "type": "direct"
+      },
+      "index": 50,
+      "level": "info",
+      "message": "pinia:editor",
+      "time": "2026-08-06T17:56:18.644Z"
+    },
+    {
+      "at": "2026-08-06T17:56:18.644Z",
+      "details": {
+        "delay": 160,
+        "editDelta": 2,
+        "length": 150,
+        "notePath": "Feature.md",
+        "reason": "vue-watch"
+      },
+      "index": 51,
+      "level": "info",
+      "message": "[elephantnote:save] schedule"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": "mt-0",
+          "currentFilePath": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/vault/Feature.md",
+          "currentMarkdownLength": 151,
+          "tabCount": 1,
+          "tabIds": [
+            "mt-0"
+          ]
+        },
+        "type": "direct"
+      },
+      "index": 52,
+      "level": "info",
+      "message": "pinia:editor",
+      "time": "2026-08-06T17:56:18.653Z"
+    },
+    {
+      "at": "2026-08-06T17:56:18.653Z",
+      "details": {
+        "delay": 160,
+        "editDelta": 1,
+        "length": 151,
+        "notePath": "Feature.md",
+        "reason": "vue-watch"
+      },
+      "index": 53,
+      "level": "info",
+      "message": "[elephantnote:save] schedule"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": "mt-0",
+          "currentFilePath": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/vault/Feature.md",
+          "currentMarkdownLength": 152,
+          "tabCount": 1,
+          "tabIds": [
+            "mt-0"
+          ]
+        },
+        "type": "direct"
+      },
+      "index": 54,
+      "level": "info",
+      "message": "pinia:editor",
+      "time": "2026-08-06T17:56:18.662Z"
+    },
+    {
+      "at": "2026-08-06T17:56:18.662Z",
+      "details": {
+        "delay": 160,
+        "editDelta": 1,
+        "length": 152,
+        "notePath": "Feature.md",
+        "reason": "vue-watch"
+      },
+      "index": 55,
+      "level": "info",
+      "message": "[elephantnote:save] schedule"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": "mt-0",
+          "currentFilePath": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/vault/Feature.md",
+          "currentMarkdownLength": 153,
+          "tabCount": 1,
+          "tabIds": [
+            "mt-0"
+          ]
+        },
+        "type": "direct"
+      },
+      "index": 56,
+      "level": "info",
+      "message": "pinia:editor",
+      "time": "2026-08-06T17:56:18.671Z"
+    },
+    {
+      "at": "2026-08-06T17:56:18.671Z",
+      "details": {
+        "delay": 160,
+        "editDelta": 1,
+        "length": 153,
+        "notePath": "Feature.md",
+        "reason": "vue-watch"
+      },
+      "index": 57,
+      "level": "info",
+      "message": "[elephantnote:save] schedule"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": "mt-0",
+          "currentFilePath": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/vault/Feature.md",
+          "currentMarkdownLength": 154,
+          "tabCount": 1,
+          "tabIds": [
+            "mt-0"
+          ]
+        },
+        "type": "direct"
+      },
+      "index": 58,
+      "level": "info",
+      "message": "pinia:editor",
+      "time": "2026-08-06T17:56:18.680Z"
+    },
+    {
+      "at": "2026-08-06T17:56:18.681Z",
+      "details": {
+        "delay": 160,
+        "editDelta": 1,
+        "length": 154,
+        "notePath": "Feature.md",
+        "reason": "vue-watch"
+      },
+      "index": 59,
+      "level": "info",
+      "message": "[elephantnote:save] schedule"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": "mt-0",
+          "currentFilePath": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/vault/Feature.md",
+          "currentMarkdownLength": 155,
+          "tabCount": 1,
+          "tabIds": [
+            "mt-0"
+          ]
+        },
+        "type": "direct"
+      },
+      "index": 60,
+      "level": "info",
+      "message": "pinia:editor",
+      "time": "2026-08-06T17:56:18.689Z"
+    },
+    {
+      "at": "2026-08-06T17:56:18.689Z",
+      "details": {
+        "delay": 160,
+        "editDelta": 1,
+        "length": 155,
+        "notePath": "Feature.md",
+        "reason": "vue-watch"
+      },
+      "index": 61,
+      "level": "info",
+      "message": "[elephantnote:save] schedule"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": "mt-0",
+          "currentFilePath": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/vault/Feature.md",
+          "currentMarkdownLength": 156,
+          "tabCount": 1,
+          "tabIds": [
+            "mt-0"
+          ]
+        },
+        "type": "direct"
+      },
+      "index": 62,
+      "level": "info",
+      "message": "pinia:editor",
+      "time": "2026-08-06T17:56:18.698Z"
+    },
+    {
+      "at": "2026-08-06T17:56:18.698Z",
+      "details": {
+        "delay": 160,
+        "editDelta": 1,
+        "length": 156,
+        "notePath": "Feature.md",
+        "reason": "vue-watch"
+      },
+      "index": 63,
+      "level": "info",
+      "message": "[elephantnote:save] schedule"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": "mt-0",
+          "currentFilePath": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/vault/Feature.md",
+          "currentMarkdownLength": 157,
+          "tabCount": 1,
+          "tabIds": [
+            "mt-0"
+          ]
+        },
+        "type": "direct"
+      },
+      "index": 64,
+      "level": "info",
+      "message": "pinia:editor",
+      "time": "2026-08-06T17:56:18.707Z"
+    },
+    {
+      "at": "2026-08-06T17:56:18.708Z",
+      "details": {
+        "delay": 160,
+        "editDelta": 1,
+        "length": 157,
+        "notePath": "Feature.md",
+        "reason": "vue-watch"
+      },
+      "index": 65,
+      "level": "info",
+      "message": "[elephantnote:save] schedule"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": "mt-0",
+          "currentFilePath": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/vault/Feature.md",
+          "currentMarkdownLength": 158,
+          "tabCount": 1,
+          "tabIds": [
+            "mt-0"
+          ]
+        },
+        "type": "direct"
+      },
+      "index": 66,
+      "level": "info",
+      "message": "pinia:editor",
+      "time": "2026-08-06T17:56:18.716Z"
+    },
+    {
+      "at": "2026-08-06T17:56:18.716Z",
+      "details": {
+        "delay": 160,
+        "editDelta": 1,
+        "length": 158,
+        "notePath": "Feature.md",
+        "reason": "vue-watch"
+      },
+      "index": 67,
+      "level": "info",
+      "message": "[elephantnote:save] schedule"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": "mt-0",
+          "currentFilePath": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/vault/Feature.md",
+          "currentMarkdownLength": 159,
+          "tabCount": 1,
+          "tabIds": [
+            "mt-0"
+          ]
+        },
+        "type": "direct"
+      },
+      "index": 68,
+      "level": "info",
+      "message": "pinia:editor",
+      "time": "2026-08-06T17:56:18.726Z"
+    },
+    {
+      "at": "2026-08-06T17:56:18.726Z",
+      "details": {
+        "delay": 160,
+        "editDelta": 1,
+        "length": 159,
+        "notePath": "Feature.md",
+        "reason": "vue-watch"
+      },
+      "index": 69,
+      "level": "info",
+      "message": "[elephantnote:save] schedule"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": "mt-0",
+          "currentFilePath": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/vault/Feature.md",
+          "currentMarkdownLength": 160,
+          "tabCount": 1,
+          "tabIds": [
+            "mt-0"
+          ]
+        },
+        "type": "direct"
+      },
+      "index": 70,
+      "level": "info",
+      "message": "pinia:editor",
+      "time": "2026-08-06T17:56:18.734Z"
+    },
+    {
+      "at": "2026-08-06T17:56:18.735Z",
+      "details": {
+        "delay": 160,
+        "editDelta": 1,
+        "length": 160,
+        "notePath": "Feature.md",
+        "reason": "vue-watch"
+      },
+      "index": 71,
+      "level": "info",
+      "message": "[elephantnote:save] schedule"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": "mt-0",
+          "currentFilePath": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/vault/Feature.md",
+          "currentMarkdownLength": 161,
+          "tabCount": 1,
+          "tabIds": [
+            "mt-0"
+          ]
+        },
+        "type": "direct"
+      },
+      "index": 72,
+      "level": "info",
+      "message": "pinia:editor",
+      "time": "2026-08-06T17:56:18.743Z"
+    },
+    {
+      "at": "2026-08-06T17:56:18.744Z",
+      "details": {
+        "delay": 160,
+        "editDelta": 1,
+        "length": 161,
+        "notePath": "Feature.md",
+        "reason": "vue-watch"
+      },
+      "index": 73,
+      "level": "info",
+      "message": "[elephantnote:save] schedule"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": "mt-0",
+          "currentFilePath": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/vault/Feature.md",
+          "currentMarkdownLength": 162,
+          "tabCount": 1,
+          "tabIds": [
+            "mt-0"
+          ]
+        },
+        "type": "direct"
+      },
+      "index": 74,
+      "level": "info",
+      "message": "pinia:editor",
+      "time": "2026-08-06T17:56:18.756Z"
+    },
+    {
+      "at": "2026-08-06T17:56:18.757Z",
+      "details": {
+        "delay": 160,
+        "editDelta": 1,
+        "length": 162,
+        "notePath": "Feature.md",
+        "reason": "vue-watch"
+      },
+      "index": 75,
+      "level": "info",
+      "message": "[elephantnote:save] schedule"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": "mt-0",
+          "currentFilePath": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/vault/Feature.md",
+          "currentMarkdownLength": 163,
+          "tabCount": 1,
+          "tabIds": [
+            "mt-0"
+          ]
+        },
+        "type": "direct"
+      },
+      "index": 76,
+      "level": "info",
+      "message": "pinia:editor",
+      "time": "2026-08-06T17:56:18.765Z"
+    },
+    {
+      "at": "2026-08-06T17:56:18.766Z",
+      "details": {
+        "delay": 160,
+        "editDelta": 1,
+        "length": 163,
+        "notePath": "Feature.md",
+        "reason": "vue-watch"
+      },
+      "index": 77,
+      "level": "info",
+      "message": "[elephantnote:save] schedule"
+    },
+    {
+      "at": "2026-08-06T17:56:18.769Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 1180,
+      "index": 78,
+      "selector": "[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]",
+      "textLength": 31
+    },
+    {
+      "at": "2026-08-06T17:56:18.775Z",
+      "event": "read:state",
+      "index": 79,
+      "markdownLength": 163,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:56:18.779Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 1180,
+      "index": 80,
+      "selector": "[data-testid=\"muya-rust-runtime-editor\"]",
+      "textLength": 31
+    }
+  ],
+  "featureId": "note-visible-edit",
+  "appSha256": "011f2f1cf215881fd751e332ae006ed7b54bb6c2356e25038b33cfa9082dff72",
+  "evidence": {
+    "activeFile": {
+      "isSaved": false,
+      "markdownLength": 163,
+      "path": "Feature.md"
+    },
+    "activeVault": "/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/vault",
+    "codeMirrorPresent": false,
+    "displayedHtml": "<div data-v-ea2faec4=\"\" class=\"editor-with-tabs\" source-code=\"false\" style=\"max-width: 100vw;\"><div data-v-bb62f37a=\"\" data-v-ea2faec4=\"\" class=\"editor-tabs\" style=\"display: none;\"><div data-v-bb62f37a=\"\" class=\"scrollable-tabs\"><ul data-v-bb62f37a=\"\" class=\"tabs-container\"><li data-v-bb62f37a=\"\" title=\"/tmp/elephant-packaged-feature-note-visible-edit-XLV9gB/vault/Feature.md\" class=\"active unsaved\" data-id=\"mt-0\"><span data-v-bb62f37a=\"\">Feature.md</span><svg data-v-bb62f37a=\"\" class=\"close-icon icon\" aria-hidden=\"true\"><circle data-v-bb62f37a=\"\" id=\"unsaved-circle-icon\" cx=\"6\" cy=\"6\" r=\"3\"></circle><use data-v-bb62f37a=\"\" id=\"default-close-icon\" xlink:href=\"#icon-close-small\"></use></svg></li></ul></div><div data-v-bb62f37a=\"\" class=\"new-file\"><svg data-v-bb62f37a=\"\" class=\"icon\" aria-hidden=\"true\"><use data-v-bb62f37a=\"\" xlink:href=\"#icon-plus\"></use></svg></div></div><div data-v-ea2faec4=\"\" class=\"container\"><div data-v-dd311a9e=\"\" data-v-a709abe2=\"\" class=\"muya-rust-runtime-shell rust-editor-runtime\" data-muya-runtime-mode=\"rust\"><div data-v-dd311a9e=\"\" class=\"muya-rust-runtime-editor\" data-elephant-rust-editor-host=\"true\"><div class=\"muya-rust-runtime-mount ag-show-quick-insert-hint\" contenteditable=\"true\" autocorrect=\"false\" autocomplete=\"off\" spellcheck=\"false\" data-testid=\"muya-rust-runtime-editor\" data-elephant-rust-input-surface=\"true\"><div id=\"ag-editor-id\"><p id=\"ag-66\" class=\"ag-paragraph ag-active\"><a class=\"ag-front-icon\" contenteditable=\"false\"><i class=\"icon ag-front-icon-button\"><img class=\"icon-inner\" src=\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAYAAACM/rhtAAAAAXNSR0IArs4c6QAAAh1JREFUWAntl78vBEEUx9/b9aPRSDSC0n8gUR0SWolOpaSREwmncMgFp8AlCA1/gVKlkvhRiMQ/gJYoCIWLhNgZ81xmdvb2rIu922lmks2+mfdm3iffeTu7C2CbVcCsAhiVfmpuaZAxNsoB+oBDBwBviYqvhQ8R74E7E7uF5WNar6HSolOZhW7G4cDzvP5K/nqOcc47Edm+yNFFeUKA6cxiyuPsSCjWWk+Qatd29MCScmbh5BZLroCCtK3lyokJFwjOhtvUfL21ln2UEydnsqI0/bZXyFes52rj/JWClgKkByJcc85aW4u7mMvlWHBacj0FSE+rnpaUMw1HPKoGf44SjZC21aRyEkUBls45OQxANef3zFk+oDmGyMw+IMKDHul9fvTofVO2AhRnxLkOwYFlRA0qv+5L0lYAjuMc6onFKyf19OatmIZUgDvryyfiaDnTIQHY/HPx6zQ9uzQ8PZ9vD/qS6alzkNI5COMewJX+NiElOXgp9vEO4q1QokJ4FTGJNKUgZdvZWL1r4DACBBDVEvyQCAAS03Yhf+4i9oa3O4q4fr4QIKUiJXc3Vwdc1x0SoAeAeAOARYmBgC/Srvc9UIPlyejBEWN0hVr5V0oooEYDFRWs0do1WcYCxpXRKmgVjKtA3Pm2Bq2CcRWIO//fNSh+EW5lct2WY/Ku+3Rb+v+6/x/QbRwTXzqXP5ewf0uEVcb9Nt+OWwVMK/ANi5mZTElVwIAAAAAASUVORK5CYII=\"></i></a><span id=\"ag-67\" class=\"ag-paragraph ag-active ag-paragraph-content\"><span class=\"ag-plain-text\">Initial text. visible-marker</span></span></p></div></div></div><!----></div><div class=\"el-overlay el-modal-dialog\" style=\"z-index: 2008; display: none;\"><div role=\"dialog\" aria-modal=\"true\" aria-labelledby=\"el-id-9600-14\" aria-describedby=\"el-id-9600-15\" class=\"el-overlay-dialog\"></div></div><!----></div><!----></div>",
+    "displayedText": "\nInitial text. visible-marker\n\n",
+    "editorRuntime": {
+      "active": true,
+      "contentEditable": "true",
+      "contentEditableConnected": true,
+      "engine": "rust",
+      "pendingMutations": 0
+    },
+    "isSaved": false,
+    "markdown": "---\ntitle: \"Feature\"\ntype: \"note\"\ntags: []\ncreatedAt: \"2026-08-06T17:56:18.629Z\"\nupdatedAt: \"2026-08-06T17:56:18.629Z\"\n---\n\n# Feature\n\nInitial text. visible-marker",
+    "notePath": "Feature.md",
+    "rustEditorPresent": true,
+    "rustMirror": {
+      "active": true,
+      "canonicalMarkdownLength": 29,
+      "canonicalRevision": 15,
+      "error": null,
+      "markdownLength": 29,
+      "pending": 0,
+      "phase": "ready",
+      "renderedMarkdownLength": 29,
+      "renderedMatchesCanonical": true,
+      "revision": 15
+    },
+    "sourceCode": false
+  }
+}

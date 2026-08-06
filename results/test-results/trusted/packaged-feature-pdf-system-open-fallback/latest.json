@@ -1,0 +1,5805 @@
+{
+  "at": "2026-08-06T17:58:15.936Z",
+  "suite": "packaged-feature-pdf-system-open-fallback",
+  "status": "NOT PROVEN",
+  "runtime": "tauri",
+  "packagedApp": true,
+  "packagedAppRequired": true,
+  "packagedFormat": "linux-appimage",
+  "appPath": "/home/runner/work/ElephantNote/ElephantNote/repo/Elephant/backend/tauri/target/release/bundle/appimage/Elephant_0.18.9_amd64.AppImage",
+  "profileRoots": {
+    "home": "/tmp/elephant-packaged-feature-pdf-system-open-fallback-cVybA4",
+    "elephantConfig": "/tmp/elephant-packaged-feature-pdf-system-open-fallback-cVybA4/config",
+    "xdgConfig": "/tmp/elephant-packaged-feature-pdf-system-open-fallback-cVybA4/.config",
+    "xdgData": "/tmp/elephant-packaged-feature-pdf-system-open-fallback-cVybA4/.local/share",
+    "xdgCache": "/tmp/elephant-packaged-feature-pdf-system-open-fallback-cVybA4/.cache",
+    "xdgState": "/tmp/elephant-packaged-feature-pdf-system-open-fallback-cVybA4/.local/state",
+    "xdgRuntime": "/tmp/elephant-packaged-feature-pdf-system-open-fallback-cVybA4/.runtime"
+  },
+  "error": "Error: PDF system markdown: state timeout\n    at state (file:///home/runner/work/ElephantNote/ElephantNote/repo/build/scripts/run-packaged-feature-matrix.mjs:30:9)\n    at async pdf-system-open-fallback (file:///home/runner/work/ElephantNote/ElephantNote/repo/build/scripts/run-packaged-feature-matrix.mjs:375:5)\n    at async run (file:///home/runner/work/ElephantNote/ElephantNote/repo/build/scripts/run-packaged-feature-matrix.mjs:399:16)\n    at async file:///home/runner/work/ElephantNote/ElephantNote/repo/build/scripts/run-packaged-feature-matrix.mjs:421:3",
+  "scenarios": [],
+  "commandPolicy": {
+    "setupCommands": [
+      {
+        "at": "2026-08-06T17:57:54.350Z",
+        "command": "selectVault",
+        "argsCount": 1
+      },
+      {
+        "at": "2026-08-06T17:57:54.618Z",
+        "command": "openNote",
+        "argsCount": 1
+      },
+      {
+        "at": "2026-08-06T17:57:54.629Z",
+        "command": "clearFileOpenHistory",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:54.631Z",
+        "command": "removePdfViewerProbe",
+        "argsCount": 0
+      }
+    ],
+    "actionCommands": [
+      {
+        "at": "2026-08-06T17:57:54.479Z",
+        "layer": "user-journey",
+        "command": "waitFor",
+        "argsCount": 2
+      },
+      {
+        "at": "2026-08-06T17:57:54.626Z",
+        "layer": "user-journey",
+        "command": "waitFor",
+        "argsCount": 2
+      },
+      {
+        "at": "2026-08-06T17:57:54.642Z",
+        "layer": "user-journey",
+        "command": "dropFiles",
+        "argsCount": 3
+      },
+      {
+        "at": "2026-08-06T17:57:54.651Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:54.705Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:54.759Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:54.821Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:54.876Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:54.929Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:54.997Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:55.052Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:55.108Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:55.162Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:55.217Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:55.271Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:55.325Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:55.380Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:55.433Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:55.487Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:55.540Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:55.594Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:55.649Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:55.704Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:55.761Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:55.815Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:55.871Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:55.925Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:55.979Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:56.037Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:56.099Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:56.152Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:56.205Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:56.258Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:56.311Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:56.364Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:56.417Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:56.471Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:56.524Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:56.577Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:56.630Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:56.683Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:56.735Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:56.788Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:56.842Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:56.895Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:56.948Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:57.001Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:57.054Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:57.107Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:57.160Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:57.212Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:57.264Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:57.317Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:57.370Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:57.425Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:57.478Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:57.532Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:57.585Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:57.638Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:57.691Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:57.744Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:57.797Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:57.851Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:57.909Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:57.962Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:58.015Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:58.068Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:58.122Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:58.175Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:58.228Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:58.281Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:58.333Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:58.386Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:58.439Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:58.493Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:58.546Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:58.599Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:58.651Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:58.704Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:58.756Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:58.810Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:58.863Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:58.916Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:58.969Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:59.022Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:59.074Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:59.127Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:59.179Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:59.232Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:59.285Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:59.338Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:59.390Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:59.444Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:59.497Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:59.550Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:59.603Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:59.656Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:59.709Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:59.762Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:59.815Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:59.868Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:59.921Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:57:59.974Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:00.028Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:00.081Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:00.135Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:00.187Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:00.241Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:00.294Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:00.347Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:00.399Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:00.451Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:00.504Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:00.557Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:00.610Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:00.663Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:00.716Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:00.769Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:00.822Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:00.875Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:00.928Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:00.981Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:01.034Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:01.087Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:01.141Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:01.194Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:01.247Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:01.299Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:01.352Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:01.405Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:01.458Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:01.511Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:01.564Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:01.617Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:01.670Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:01.723Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:01.776Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:01.829Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:01.882Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:01.935Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:01.988Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:02.041Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:02.094Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:02.148Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:02.202Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:02.255Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:02.308Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:02.361Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:02.414Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:02.467Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:02.520Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:02.572Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:02.625Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:02.678Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:02.730Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:02.783Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:02.836Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:02.889Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:02.942Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:02.995Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:03.048Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:03.101Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:03.154Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:03.207Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:03.260Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:03.313Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:03.366Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:03.420Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:03.473Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:03.525Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:03.579Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:03.631Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:03.684Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:03.737Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:03.790Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:03.842Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:03.895Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:03.948Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:04.001Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:04.054Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:04.107Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:04.160Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:04.213Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:04.266Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:04.319Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:04.372Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:04.426Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:04.479Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:04.532Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:04.585Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:04.638Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:04.690Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:04.743Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:04.796Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:04.849Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:04.902Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:04.955Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:05.008Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:05.061Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:05.114Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:05.167Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:05.220Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:05.273Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:05.327Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:05.379Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:05.432Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:05.485Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:05.538Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:05.592Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:05.645Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:05.698Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:05.750Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:05.803Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:05.855Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:05.908Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:05.960Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:06.013Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:06.066Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:06.118Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:06.171Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:06.223Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:06.276Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:06.329Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:06.382Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:06.435Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:06.487Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:06.541Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:06.594Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:06.647Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:06.700Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:06.753Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:06.805Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:06.858Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:06.911Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:06.964Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:07.017Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:07.070Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:07.123Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:07.176Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:07.229Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:07.282Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:07.335Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:07.388Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:07.441Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:07.494Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:07.546Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:07.599Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:07.652Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:07.705Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:07.759Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:07.812Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:07.865Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:07.918Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:07.971Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:08.024Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:08.076Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:08.129Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:08.182Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:08.235Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:08.289Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:08.342Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:08.395Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:08.448Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:08.501Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:08.554Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:08.607Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:08.661Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:08.714Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:08.768Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:08.820Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:08.873Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:08.926Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:08.979Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:09.032Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:09.085Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:09.138Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:09.191Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:09.244Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:09.297Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:09.350Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:09.403Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:09.455Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:09.508Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:09.561Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:09.614Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:09.667Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:09.720Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:09.773Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:09.827Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:09.880Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:09.933Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:09.986Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:10.039Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:10.092Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:10.146Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:10.199Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:10.252Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:10.305Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:10.358Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:10.411Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:10.464Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:10.517Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:10.570Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:10.622Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:10.675Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:10.728Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:10.781Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:10.834Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:10.886Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:10.940Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:10.992Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:11.045Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:11.098Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:11.151Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:11.203Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:11.256Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:11.309Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:11.362Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:11.415Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:11.468Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:11.521Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:11.574Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:11.627Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:11.680Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:11.733Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:11.786Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:11.839Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:11.892Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:11.945Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:11.998Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:12.051Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:12.103Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:12.157Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:12.210Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:12.263Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:12.316Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:12.369Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:12.422Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:12.475Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:12.528Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:12.581Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:12.634Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:12.687Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:12.740Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:12.793Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:12.846Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:12.899Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:12.953Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:13.006Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:13.058Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:13.111Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:13.164Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:13.217Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:13.270Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:13.323Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:13.376Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:13.429Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:13.482Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:13.535Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:13.588Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:13.642Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:13.695Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:13.749Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:13.802Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:13.855Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:13.908Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:13.961Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:14.014Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:14.067Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:14.120Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:14.173Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:14.227Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:14.280Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:14.333Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:14.386Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:14.438Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:14.491Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:14.544Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:14.597Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:14.650Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:14.703Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:14.756Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:14.809Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:14.862Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:14.915Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:14.968Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:15.021Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:15.074Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:15.127Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:15.181Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:15.233Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:15.286Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:15.339Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:15.392Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:15.445Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:15.499Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:15.552Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:15.605Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:15.658Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:15.712Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:15.764Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:15.818Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      },
+      {
+        "at": "2026-08-06T17:58:15.871Z",
+        "layer": "user-journey",
+        "command": "readState",
+        "argsCount": 0
+      }
+    ],
+    "frontendAllowedActions": [
+      "click",
+      "contextClick",
+      "dropFiles",
+      "fill",
+      "insertText",
+      "pointerDrag",
+      "press",
+      "pressShortcut",
+      "selectText",
+      "waitFor",
+      "waitUntilGone"
+    ],
+    "frontendAllowedObservations": [
+      "logs",
+      "readDisplayed",
+      "readDom",
+      "readState"
+    ]
+  },
+  "logs": [
+    {
+      "details": null,
+      "index": 0,
+      "level": "info",
+      "message": "renderer diagnostics installed",
+      "time": "2026-08-06T17:57:54.016Z"
+    },
+    {
+      "details": {
+        "runtime": "tauri"
+      },
+      "index": 1,
+      "level": "info",
+      "message": "bootstrapTauriRuntime:start",
+      "time": "2026-08-06T17:57:54.024Z"
+    },
+    {
+      "details": {
+        "userDataPath": "/tmp/elephant-packaged-feature-pdf-system-open-fallback-cVybA4/.local/share/com.elephantnote.app"
+      },
+      "index": 2,
+      "level": "info",
+      "message": "bootstrapTauriRuntime:appDataDir",
+      "time": "2026-08-06T17:57:54.069Z"
+    },
+    {
+      "details": {
+        "env": {
+          "debug": false,
+          "paths": {
+            "_dataCenterPath": "/tmp/elephant-packaged-feature-pdf-system-open-fallback-cVybA4/.local/share/com.elephantnote.app",
+            "_editorBufferStorePath": "/tmp/elephant-packaged-feature-pdf-system-open-fallback-cVybA4/.local/share/com.elephantnote.app/editorStates",
+            "_electronUserDataPath": "/tmp/elephant-packaged-feature-pdf-system-open-fallback-cVybA4/.local/share/com.elephantnote.app",
+            "_logPath": "/tmp/elephant-packaged-feature-pdf-system-open-fallback-cVybA4/.local/share/com.elephantnote.app/logs/20268",
+            "_preferencesFilePath": "/tmp/elephant-packaged-feature-pdf-system-open-fallback-cVybA4/.local/share/com.elephantnote.app/preference.json",
+            "_preferencesPath": "/tmp/elephant-packaged-feature-pdf-system-open-fallback-cVybA4/.local/share/com.elephantnote.app",
+            "_ripgrepBinaryPath": "rg",
+            "_userDataPath": "/tmp/elephant-packaged-feature-pdf-system-open-fallback-cVybA4/.local/share/com.elephantnote.app"
+          },
+          "type": "editor",
+          "windowId": 1
+        }
+      },
+      "index": 3,
+      "level": "info",
+      "message": "bootstrapRenderer:done",
+      "time": "2026-08-06T17:57:54.073Z"
+    },
+    {
+      "details": null,
+      "index": 4,
+      "level": "info",
+      "message": "renderer diagnostics installed",
+      "time": "2026-08-06T17:57:54.077Z"
+    },
+    {
+      "details": {
+        "runtime": "tauri"
+      },
+      "index": 5,
+      "level": "info",
+      "message": "renderer shell initialized",
+      "time": "2026-08-06T17:57:54.082Z"
+    },
+    {
+      "details": {
+        "hasPinia": true,
+        "hasTauriInvoke": true,
+        "runtime": "tauri"
+      },
+      "index": 6,
+      "level": "info",
+      "message": "[addons] install:start",
+      "time": "2026-08-06T17:57:54.082Z"
+    },
+    {
+      "details": {
+        "available": 0,
+        "count": 0,
+        "ids": []
+      },
+      "index": 7,
+      "level": "info",
+      "message": "[addons] register:start",
+      "time": "2026-08-06T17:57:54.084Z"
+    },
+    {
+      "details": {
+        "registered": 0
+      },
+      "index": 8,
+      "level": "info",
+      "message": "[addons] store:installed",
+      "time": "2026-08-06T17:57:54.086Z"
+    },
+    {
+      "details": null,
+      "index": 9,
+      "level": "info",
+      "message": "[addons] external-runtime:install:start",
+      "time": "2026-08-06T17:57:54.087Z"
+    },
+    {
+      "details": null,
+      "index": 10,
+      "level": "info",
+      "message": "[addons] external-runtime:install:done",
+      "time": "2026-08-06T17:57:54.089Z"
+    },
+    {
+      "details": {
+        "availableBuiltins": [],
+        "registered": [],
+        "resources": [
+          "addonManager",
+          "addons",
+          "document",
+          "elephantnote",
+          "fileUtils",
+          "marktext",
+          "pinia",
+          "router",
+          "runtime",
+          "services",
+          "tauri",
+          "vueApp",
+          "window"
+        ]
+      },
+      "index": 11,
+      "level": "info",
+      "message": "[addons] install:done",
+      "time": "2026-08-06T17:57:54.089Z"
+    },
+    {
+      "details": null,
+      "index": 12,
+      "level": "info",
+      "message": "[addons] community-trust-boundary:installed",
+      "time": "2026-08-06T17:57:54.089Z"
+    },
+    {
+      "details": {
+        "actions": [
+          "elephant.addon-packs.ensure-develop-parity",
+          "elephant.addon-packs.create",
+          "elephant.addon-packs.apply"
+        ],
+        "enabled": []
+      },
+      "index": 13,
+      "level": "info",
+      "message": "[addons] builtin-state:restored",
+      "time": "2026-08-06T17:57:54.091Z"
+    },
+    {
+      "details": {
+        "id": "core.addon-packs"
+      },
+      "index": 14,
+      "level": "info",
+      "message": "[core-feature] enabled",
+      "time": "2026-08-06T17:57:54.092Z"
+    },
+    {
+      "details": {
+        "id": "core.addon-packs"
+      },
+      "index": 15,
+      "level": "info",
+      "message": "[core-feature] ready",
+      "time": "2026-08-06T17:57:54.092Z"
+    },
+    {
+      "details": {
+        "hasPathExistsSync": true,
+        "hasReadFile": true,
+        "hasStat": true,
+        "vaultRoot": ""
+      },
+      "index": 16,
+      "level": "info",
+      "message": "[excalidraw-image] runtime fixes installed",
+      "time": "2026-08-06T17:57:54.099Z"
+    },
+    {
+      "details": {
+        "id": "core.excalidraw"
+      },
+      "index": 17,
+      "level": "info",
+      "message": "[core-feature] enabled",
+      "time": "2026-08-06T17:57:54.099Z"
+    },
+    {
+      "details": {
+        "id": "core.excalidraw"
+      },
+      "index": 18,
+      "level": "info",
+      "message": "[core-feature] ready",
+      "time": "2026-08-06T17:57:54.100Z"
+    },
+    {
+      "details": {
+        "hasVisibleShell": false,
+        "route": "/editor"
+      },
+      "index": 19,
+      "level": "info",
+      "message": "renderer Vue shell mounted",
+      "time": "2026-08-06T17:57:54.148Z"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": null,
+          "currentFilePath": null,
+          "currentMarkdownLength": 0,
+          "tabCount": 0,
+          "tabIds": []
+        },
+        "layout": {
+          "rightColumn": "files",
+          "showSideBar": false,
+          "showTabBar": false
+        },
+        "project": {
+          "activeItem": null,
+          "pendingTreeEvents": 0,
+          "root": null,
+          "rootName": null
+        }
+      },
+      "index": 20,
+      "level": "info",
+      "message": "store-diagnostics:installed",
+      "time": "2026-08-06T17:57:54.149Z"
+    },
+    {
+      "details": {
+        "error": "No active ElephantNote vault."
+      },
+      "index": 21,
+      "level": "warn",
+      "message": "external addon registry deferred until a vault is active",
+      "time": "2026-08-06T17:57:54.157Z"
+    },
+    {
+      "at": "2026-08-06T17:57:54.160Z",
+      "commands": [
+        "invokeTauri",
+        "readDom",
+        "click",
+        "fill",
+        "insertText",
+        "waitFor",
+        "waitUntilGone",
+        "executeCommand",
+        "press",
+        "selectText",
+        "contextClick",
+        "capabilities",
+        "addonState",
+        "enableAddon",
+        "disableAddon",
+        "runAddonAction",
+        "installOfficialAddon",
+        "invokeAddonResource",
+        "addonNativeStatus",
+        "addonNativeCall",
+        "listNotes",
+        "selectVault",
+        "readNote",
+        "createNote",
+        "openNote",
+        "setMarkdown",
+        "appendMarkdown",
+        "save",
+        "readDisplayed",
+        "openExcalidraw",
+        "closeExcalidraw",
+        "readExcalidraw",
+        "readState",
+        "queryAll",
+        "uiSnapshot",
+        "clearLogs",
+        "assertUi",
+        "assertLogs"
+      ],
+      "event": "installed",
+      "index": 22
+    },
+    {
+      "at": "2026-08-06T17:57:54.161Z",
+      "details": {},
+      "index": 23,
+      "level": "info",
+      "message": "[elephantnote:citation] runtime installed"
+    },
+    {
+      "at": "2026-08-06T17:57:54.200Z",
+      "event": "transport:ready",
+      "index": 24
+    },
+    {
+      "at": "2026-08-06T17:57:54.293Z",
+      "command": "tauri_vaults_select_path",
+      "event": "tauri:invoke:start",
+      "index": 25
+    },
+    {
+      "at": "2026-08-06T17:57:54.296Z",
+      "command": "tauri_vaults_select_path",
+      "event": "tauri:invoke:done",
+      "index": 26
+    },
+    {
+      "details": null,
+      "index": 27,
+      "level": "info",
+      "message": "external addon registry retrying after vault activation",
+      "time": "2026-08-06T17:57:54.297Z"
+    },
+    {
+      "at": "2026-08-06T17:57:54.297Z",
+      "event": "vault:select",
+      "index": 28,
+      "path": "/tmp/elephant-packaged-feature-pdf-system-open-fallback-cVybA4/vault",
+      "vaultId": "vault"
+    },
+    {
+      "at": "2026-08-06T17:57:54.310Z",
+      "details": {
+        "hidden": [],
+        "order": [
+          "search",
+          "vault",
+          "sidebar-toggle"
+        ],
+        "visible": [
+          "search",
+          "vault",
+          "sidebar-toggle"
+        ]
+      },
+      "index": 29,
+      "level": "info",
+      "message": "[icon-rail] layout:resolved"
+    },
+    {
+      "at": "2026-08-06T17:57:54.341Z",
+      "details": {
+        "activeVaultId": "vault",
+        "isMac": false,
+        "sidebarVisible": true
+      },
+      "index": 30,
+      "level": "info",
+      "message": "[icon-rail] mounted"
+    },
+    {
+      "details": {
+        "noteDirectory": "/tmp/elephant-packaged-feature-pdf-system-open-fallback-cVybA4/vault",
+        "vaultRoot": "/tmp/elephant-packaged-feature-pdf-system-open-fallback-cVybA4/vault"
+      },
+      "index": 31,
+      "level": "info",
+      "message": "[excalidraw-addon] overlay mounted",
+      "time": "2026-08-06T17:57:54.342Z"
+    },
+    {
+      "at": "2026-08-06T17:57:54.474Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 3517,
+      "index": 32,
+      "selector": ".en-library-toolbar",
+      "textLength": 41
+    },
+    {
+      "at": "2026-08-06T17:57:54.475Z",
+      "event": "dom:wait:done",
+      "index": 33,
+      "selector": ".en-library-toolbar"
+    },
+    {
+      "at": "2026-08-06T17:57:54.483Z",
+      "event": "open:start",
+      "index": 34,
+      "path": "Feature.md"
+    },
+    {
+      "details": {
+        "editor": {
+          "currentFileId": "mt-0",
+          "currentFilePath": "/tmp/elephant-packaged-feature-pdf-system-open-fallback-cVybA4/vault/Feature.md",
+          "currentMarkdownLength": 25,
+          "tabCount": 1,
+          "tabIds": [
+            "mt-0"
+          ]
+        },
+        "type": "direct"
+      },
+      "index": 35,
+      "level": "info",
+      "message": "pinia:editor",
+      "time": "2026-08-06T17:57:54.498Z"
+    },
+    {
+      "at": "2026-08-06T17:57:54.502Z",
+      "details": {
+        "activeFileId": "mt-0",
+        "activeVaultId": "vault",
+        "currentFileId": "mt-0",
+        "notePath": "Feature.md",
+        "openedPath": "Feature.md",
+        "previous": {
+          "activeFileId": null,
+          "currentFileId": null,
+          "notePath": null,
+          "openedPath": null
+        },
+        "tabCount": 1
+      },
+      "index": 36,
+      "level": "info",
+      "message": "[elephantnote:editor] identity-change"
+    },
+    {
+      "at": "2026-08-06T17:57:54.503Z",
+      "details": {
+        "activeFileId": "mt-0",
+        "hasEditorDocument": true,
+        "markdownLength": 25,
+        "notePath": "Feature.md",
+        "visibleMarkdownLength": 14
+      },
+      "index": 37,
+      "level": "info",
+      "message": "[elephantnote:editor] input-state"
+    },
+    {
+      "at": "2026-08-06T17:57:54.585Z",
+      "details": {
+        "notePath": "Feature.md",
+        "vault": "/tmp/elephant-packaged-feature-pdf-system-open-fallback-cVybA4/vault"
+      },
+      "index": 38,
+      "level": "info",
+      "message": "[elephantnote:editor] mounted"
+    },
+    {
+      "at": "2026-08-06T17:57:54.586Z",
+      "details": {
+        "isSaved": true,
+        "length": 25,
+        "notePath": "Feature.md",
+        "reason": "mount"
+      },
+      "index": 39,
+      "level": "info",
+      "message": "[elephantnote:save] observed active markdown"
+    },
+    {
+      "at": "2026-08-06T17:57:54.590Z",
+      "event": "open:done",
+      "index": 40,
+      "markdownLength": 25,
+      "path": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:54.590Z",
+      "event": "read:state",
+      "index": 41,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:54.616Z",
+      "event": "read:state",
+      "index": 42,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:54.624Z",
+      "event": "dom:read",
+      "exists": true,
+      "htmlLength": 1165,
+      "index": 43,
+      "selector": "[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]",
+      "textLength": 16
+    },
+    {
+      "at": "2026-08-06T17:57:54.624Z",
+      "event": "dom:wait:done",
+      "index": 44,
+      "selector": "[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]"
+    },
+    {
+      "at": "2026-08-06T17:57:54.649Z",
+      "event": "read:state",
+      "index": 45,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:54.652Z",
+      "details": {
+        "markdownLength": 14,
+        "message": "Muya JS/Rust editor crashed.",
+        "name": "Error",
+        "revision": 0,
+        "selection": {
+          "anchor": 13,
+          "focus": 13
+        }
+      },
+      "index": 46,
+      "level": "error",
+      "message": "[elephantnote:rust-editor] runtime error"
+    },
+    {
+      "at": "2026-08-06T17:57:54.703Z",
+      "event": "read:state",
+      "index": 47,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:54.757Z",
+      "event": "read:state",
+      "index": 48,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:54.818Z",
+      "event": "read:state",
+      "index": 49,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:54.873Z",
+      "event": "read:state",
+      "index": 50,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:54.927Z",
+      "event": "read:state",
+      "index": 51,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:54.993Z",
+      "event": "read:state",
+      "index": 52,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:55.049Z",
+      "event": "read:state",
+      "index": 53,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:55.104Z",
+      "event": "read:state",
+      "index": 54,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:55.160Z",
+      "event": "read:state",
+      "index": 55,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:55.214Z",
+      "event": "read:state",
+      "index": 56,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:55.269Z",
+      "event": "read:state",
+      "index": 57,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:55.322Z",
+      "event": "read:state",
+      "index": 58,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:55.377Z",
+      "event": "read:state",
+      "index": 59,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:55.431Z",
+      "event": "read:state",
+      "index": 60,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:55.485Z",
+      "event": "read:state",
+      "index": 61,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:55.538Z",
+      "event": "read:state",
+      "index": 62,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:55.592Z",
+      "event": "read:state",
+      "index": 63,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:55.646Z",
+      "event": "read:state",
+      "index": 64,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:55.701Z",
+      "event": "read:state",
+      "index": 65,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:55.758Z",
+      "event": "read:state",
+      "index": 66,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:55.813Z",
+      "event": "read:state",
+      "index": 67,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:55.868Z",
+      "event": "read:state",
+      "index": 68,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:55.923Z",
+      "event": "read:state",
+      "index": 69,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:55.977Z",
+      "event": "read:state",
+      "index": 70,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:56.031Z",
+      "event": "read:state",
+      "index": 71,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:56.094Z",
+      "event": "read:state",
+      "index": 72,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:56.150Z",
+      "event": "read:state",
+      "index": 73,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:56.204Z",
+      "event": "read:state",
+      "index": 74,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:56.257Z",
+      "event": "read:state",
+      "index": 75,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:56.310Z",
+      "event": "read:state",
+      "index": 76,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:56.363Z",
+      "event": "read:state",
+      "index": 77,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:56.416Z",
+      "event": "read:state",
+      "index": 78,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:56.469Z",
+      "event": "read:state",
+      "index": 79,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:56.522Z",
+      "event": "read:state",
+      "index": 80,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:56.576Z",
+      "event": "read:state",
+      "index": 81,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:56.629Z",
+      "event": "read:state",
+      "index": 82,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:56.682Z",
+      "event": "read:state",
+      "index": 83,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:56.734Z",
+      "event": "read:state",
+      "index": 84,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:56.787Z",
+      "event": "read:state",
+      "index": 85,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:56.840Z",
+      "event": "read:state",
+      "index": 86,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:56.893Z",
+      "event": "read:state",
+      "index": 87,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:56.946Z",
+      "event": "read:state",
+      "index": 88,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:56.999Z",
+      "event": "read:state",
+      "index": 89,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:57.052Z",
+      "event": "read:state",
+      "index": 90,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:57.105Z",
+      "event": "read:state",
+      "index": 91,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:57.158Z",
+      "event": "read:state",
+      "index": 92,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:57.210Z",
+      "event": "read:state",
+      "index": 93,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:57.262Z",
+      "event": "read:state",
+      "index": 94,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:57.316Z",
+      "event": "read:state",
+      "index": 95,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:57.368Z",
+      "event": "read:state",
+      "index": 96,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:57.423Z",
+      "event": "read:state",
+      "index": 97,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:57.477Z",
+      "event": "read:state",
+      "index": 98,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:57.530Z",
+      "event": "read:state",
+      "index": 99,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:57.583Z",
+      "event": "read:state",
+      "index": 100,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:57.636Z",
+      "event": "read:state",
+      "index": 101,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:57.689Z",
+      "event": "read:state",
+      "index": 102,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:57.743Z",
+      "event": "read:state",
+      "index": 103,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:57.796Z",
+      "event": "read:state",
+      "index": 104,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:57.849Z",
+      "event": "read:state",
+      "index": 105,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:57.907Z",
+      "event": "read:state",
+      "index": 106,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:57.961Z",
+      "event": "read:state",
+      "index": 107,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:58.014Z",
+      "event": "read:state",
+      "index": 108,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:58.067Z",
+      "event": "read:state",
+      "index": 109,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:58.120Z",
+      "event": "read:state",
+      "index": 110,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:58.173Z",
+      "event": "read:state",
+      "index": 111,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:58.226Z",
+      "event": "read:state",
+      "index": 112,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:58.279Z",
+      "event": "read:state",
+      "index": 113,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:58.331Z",
+      "event": "read:state",
+      "index": 114,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:58.384Z",
+      "event": "read:state",
+      "index": 115,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:58.438Z",
+      "event": "read:state",
+      "index": 116,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:58.491Z",
+      "event": "read:state",
+      "index": 117,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:58.544Z",
+      "event": "read:state",
+      "index": 118,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:58.597Z",
+      "event": "read:state",
+      "index": 119,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:58.649Z",
+      "event": "read:state",
+      "index": 120,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:58.702Z",
+      "event": "read:state",
+      "index": 121,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:58.754Z",
+      "event": "read:state",
+      "index": 122,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:58.808Z",
+      "event": "read:state",
+      "index": 123,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:58.861Z",
+      "event": "read:state",
+      "index": 124,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:58.914Z",
+      "event": "read:state",
+      "index": 125,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:58.967Z",
+      "event": "read:state",
+      "index": 126,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:59.020Z",
+      "event": "read:state",
+      "index": 127,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:59.072Z",
+      "event": "read:state",
+      "index": 128,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:59.125Z",
+      "event": "read:state",
+      "index": 129,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:59.177Z",
+      "event": "read:state",
+      "index": 130,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:59.231Z",
+      "event": "read:state",
+      "index": 131,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:59.284Z",
+      "event": "read:state",
+      "index": 132,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:59.337Z",
+      "event": "read:state",
+      "index": 133,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:59.389Z",
+      "event": "read:state",
+      "index": 134,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:59.442Z",
+      "event": "read:state",
+      "index": 135,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:59.495Z",
+      "event": "read:state",
+      "index": 136,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:59.548Z",
+      "event": "read:state",
+      "index": 137,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:59.602Z",
+      "event": "read:state",
+      "index": 138,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:59.655Z",
+      "event": "read:state",
+      "index": 139,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:59.708Z",
+      "event": "read:state",
+      "index": 140,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:59.761Z",
+      "event": "read:state",
+      "index": 141,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:59.814Z",
+      "event": "read:state",
+      "index": 142,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:59.867Z",
+      "event": "read:state",
+      "index": 143,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:59.920Z",
+      "event": "read:state",
+      "index": 144,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:57:59.973Z",
+      "event": "read:state",
+      "index": 145,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:00.026Z",
+      "event": "read:state",
+      "index": 146,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:00.080Z",
+      "event": "read:state",
+      "index": 147,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:00.133Z",
+      "event": "read:state",
+      "index": 148,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:00.186Z",
+      "event": "read:state",
+      "index": 149,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:00.239Z",
+      "event": "read:state",
+      "index": 150,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:00.292Z",
+      "event": "read:state",
+      "index": 151,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:00.345Z",
+      "event": "read:state",
+      "index": 152,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:00.397Z",
+      "event": "read:state",
+      "index": 153,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:00.449Z",
+      "event": "read:state",
+      "index": 154,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:00.503Z",
+      "event": "read:state",
+      "index": 155,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:00.556Z",
+      "event": "read:state",
+      "index": 156,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:00.609Z",
+      "event": "read:state",
+      "index": 157,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:00.661Z",
+      "event": "read:state",
+      "index": 158,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:00.715Z",
+      "event": "read:state",
+      "index": 159,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:00.768Z",
+      "event": "read:state",
+      "index": 160,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:00.820Z",
+      "event": "read:state",
+      "index": 161,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:00.873Z",
+      "event": "read:state",
+      "index": 162,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:00.927Z",
+      "event": "read:state",
+      "index": 163,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:00.980Z",
+      "event": "read:state",
+      "index": 164,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:01.033Z",
+      "event": "read:state",
+      "index": 165,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:01.086Z",
+      "event": "read:state",
+      "index": 166,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:01.139Z",
+      "event": "read:state",
+      "index": 167,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:01.192Z",
+      "event": "read:state",
+      "index": 168,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:01.245Z",
+      "event": "read:state",
+      "index": 169,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:01.298Z",
+      "event": "read:state",
+      "index": 170,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:01.351Z",
+      "event": "read:state",
+      "index": 171,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:01.404Z",
+      "event": "read:state",
+      "index": 172,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:01.457Z",
+      "event": "read:state",
+      "index": 173,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:01.510Z",
+      "event": "read:state",
+      "index": 174,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:01.563Z",
+      "event": "read:state",
+      "index": 175,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:01.616Z",
+      "event": "read:state",
+      "index": 176,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:01.669Z",
+      "event": "read:state",
+      "index": 177,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:01.722Z",
+      "event": "read:state",
+      "index": 178,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:01.775Z",
+      "event": "read:state",
+      "index": 179,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:01.828Z",
+      "event": "read:state",
+      "index": 180,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:01.881Z",
+      "event": "read:state",
+      "index": 181,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:01.934Z",
+      "event": "read:state",
+      "index": 182,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:01.987Z",
+      "event": "read:state",
+      "index": 183,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:02.039Z",
+      "event": "read:state",
+      "index": 184,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:02.092Z",
+      "event": "read:state",
+      "index": 185,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:02.145Z",
+      "event": "read:state",
+      "index": 186,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:02.200Z",
+      "event": "read:state",
+      "index": 187,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:02.253Z",
+      "event": "read:state",
+      "index": 188,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:02.306Z",
+      "event": "read:state",
+      "index": 189,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:02.359Z",
+      "event": "read:state",
+      "index": 190,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:02.412Z",
+      "event": "read:state",
+      "index": 191,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:02.465Z",
+      "event": "read:state",
+      "index": 192,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:02.518Z",
+      "event": "read:state",
+      "index": 193,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:02.570Z",
+      "event": "read:state",
+      "index": 194,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:02.623Z",
+      "event": "read:state",
+      "index": 195,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:02.676Z",
+      "event": "read:state",
+      "index": 196,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:02.728Z",
+      "event": "read:state",
+      "index": 197,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:02.782Z",
+      "event": "read:state",
+      "index": 198,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:02.835Z",
+      "event": "read:state",
+      "index": 199,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:02.888Z",
+      "event": "read:state",
+      "index": 200,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:02.941Z",
+      "event": "read:state",
+      "index": 201,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:02.994Z",
+      "event": "read:state",
+      "index": 202,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:03.047Z",
+      "event": "read:state",
+      "index": 203,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:03.100Z",
+      "event": "read:state",
+      "index": 204,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:03.153Z",
+      "event": "read:state",
+      "index": 205,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:03.206Z",
+      "event": "read:state",
+      "index": 206,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:03.259Z",
+      "event": "read:state",
+      "index": 207,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:03.312Z",
+      "event": "read:state",
+      "index": 208,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:03.365Z",
+      "event": "read:state",
+      "index": 209,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:03.418Z",
+      "event": "read:state",
+      "index": 210,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:03.471Z",
+      "event": "read:state",
+      "index": 211,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:03.524Z",
+      "event": "read:state",
+      "index": 212,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:03.577Z",
+      "event": "read:state",
+      "index": 213,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:03.629Z",
+      "event": "read:state",
+      "index": 214,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:03.682Z",
+      "event": "read:state",
+      "index": 215,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:03.735Z",
+      "event": "read:state",
+      "index": 216,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:03.788Z",
+      "event": "read:state",
+      "index": 217,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:03.841Z",
+      "event": "read:state",
+      "index": 218,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:03.894Z",
+      "event": "read:state",
+      "index": 219,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:03.947Z",
+      "event": "read:state",
+      "index": 220,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:04.000Z",
+      "event": "read:state",
+      "index": 221,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:04.053Z",
+      "event": "read:state",
+      "index": 222,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:04.106Z",
+      "event": "read:state",
+      "index": 223,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:04.159Z",
+      "event": "read:state",
+      "index": 224,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:04.212Z",
+      "event": "read:state",
+      "index": 225,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:04.265Z",
+      "event": "read:state",
+      "index": 226,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:04.318Z",
+      "event": "read:state",
+      "index": 227,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:04.371Z",
+      "event": "read:state",
+      "index": 228,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:04.424Z",
+      "event": "read:state",
+      "index": 229,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:04.477Z",
+      "event": "read:state",
+      "index": 230,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:04.530Z",
+      "event": "read:state",
+      "index": 231,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:04.583Z",
+      "event": "read:state",
+      "index": 232,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:04.636Z",
+      "event": "read:state",
+      "index": 233,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:04.688Z",
+      "event": "read:state",
+      "index": 234,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:04.741Z",
+      "event": "read:state",
+      "index": 235,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:04.794Z",
+      "event": "read:state",
+      "index": 236,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:04.847Z",
+      "event": "read:state",
+      "index": 237,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:04.900Z",
+      "event": "read:state",
+      "index": 238,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:04.953Z",
+      "event": "read:state",
+      "index": 239,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:05.006Z",
+      "event": "read:state",
+      "index": 240,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:05.060Z",
+      "event": "read:state",
+      "index": 241,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:05.113Z",
+      "event": "read:state",
+      "index": 242,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:05.166Z",
+      "event": "read:state",
+      "index": 243,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:05.218Z",
+      "event": "read:state",
+      "index": 244,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:05.272Z",
+      "event": "read:state",
+      "index": 245,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:05.325Z",
+      "event": "read:state",
+      "index": 246,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:05.378Z",
+      "event": "read:state",
+      "index": 247,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:05.431Z",
+      "event": "read:state",
+      "index": 248,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:05.484Z",
+      "event": "read:state",
+      "index": 249,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:05.537Z",
+      "event": "read:state",
+      "index": 250,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:05.590Z",
+      "event": "read:state",
+      "index": 251,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:05.643Z",
+      "event": "read:state",
+      "index": 252,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:05.696Z",
+      "event": "read:state",
+      "index": 253,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:05.748Z",
+      "event": "read:state",
+      "index": 254,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:05.801Z",
+      "event": "read:state",
+      "index": 255,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:05.853Z",
+      "event": "read:state",
+      "index": 256,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:05.906Z",
+      "event": "read:state",
+      "index": 257,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:05.958Z",
+      "event": "read:state",
+      "index": 258,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:06.011Z",
+      "event": "read:state",
+      "index": 259,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:06.064Z",
+      "event": "read:state",
+      "index": 260,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:06.116Z",
+      "event": "read:state",
+      "index": 261,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:06.169Z",
+      "event": "read:state",
+      "index": 262,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:06.222Z",
+      "event": "read:state",
+      "index": 263,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:06.274Z",
+      "event": "read:state",
+      "index": 264,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:06.327Z",
+      "event": "read:state",
+      "index": 265,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:06.380Z",
+      "event": "read:state",
+      "index": 266,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:06.433Z",
+      "event": "read:state",
+      "index": 267,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:06.486Z",
+      "event": "read:state",
+      "index": 268,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:06.539Z",
+      "event": "read:state",
+      "index": 269,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:06.592Z",
+      "event": "read:state",
+      "index": 270,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:06.645Z",
+      "event": "read:state",
+      "index": 271,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:06.698Z",
+      "event": "read:state",
+      "index": 272,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:06.751Z",
+      "event": "read:state",
+      "index": 273,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:06.803Z",
+      "event": "read:state",
+      "index": 274,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:06.856Z",
+      "event": "read:state",
+      "index": 275,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:06.910Z",
+      "event": "read:state",
+      "index": 276,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:06.963Z",
+      "event": "read:state",
+      "index": 277,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:07.016Z",
+      "event": "read:state",
+      "index": 278,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:07.069Z",
+      "event": "read:state",
+      "index": 279,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:07.122Z",
+      "event": "read:state",
+      "index": 280,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:07.175Z",
+      "event": "read:state",
+      "index": 281,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:07.228Z",
+      "event": "read:state",
+      "index": 282,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:07.281Z",
+      "event": "read:state",
+      "index": 283,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:07.333Z",
+      "event": "read:state",
+      "index": 284,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:07.386Z",
+      "event": "read:state",
+      "index": 285,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:07.439Z",
+      "event": "read:state",
+      "index": 286,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:07.492Z",
+      "event": "read:state",
+      "index": 287,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:07.545Z",
+      "event": "read:state",
+      "index": 288,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:07.598Z",
+      "event": "read:state",
+      "index": 289,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:07.651Z",
+      "event": "read:state",
+      "index": 290,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:07.704Z",
+      "event": "read:state",
+      "index": 291,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:07.757Z",
+      "event": "read:state",
+      "index": 292,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:07.810Z",
+      "event": "read:state",
+      "index": 293,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:07.863Z",
+      "event": "read:state",
+      "index": 294,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:07.916Z",
+      "event": "read:state",
+      "index": 295,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:07.969Z",
+      "event": "read:state",
+      "index": 296,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:08.022Z",
+      "event": "read:state",
+      "index": 297,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:08.075Z",
+      "event": "read:state",
+      "index": 298,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:08.128Z",
+      "event": "read:state",
+      "index": 299,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:08.181Z",
+      "event": "read:state",
+      "index": 300,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:08.234Z",
+      "event": "read:state",
+      "index": 301,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:08.287Z",
+      "event": "read:state",
+      "index": 302,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:08.340Z",
+      "event": "read:state",
+      "index": 303,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:08.393Z",
+      "event": "read:state",
+      "index": 304,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:08.446Z",
+      "event": "read:state",
+      "index": 305,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:08.499Z",
+      "event": "read:state",
+      "index": 306,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:08.552Z",
+      "event": "read:state",
+      "index": 307,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:08.605Z",
+      "event": "read:state",
+      "index": 308,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:08.659Z",
+      "event": "read:state",
+      "index": 309,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:08.712Z",
+      "event": "read:state",
+      "index": 310,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:08.766Z",
+      "event": "read:state",
+      "index": 311,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:08.819Z",
+      "event": "read:state",
+      "index": 312,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:08.872Z",
+      "event": "read:state",
+      "index": 313,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:08.925Z",
+      "event": "read:state",
+      "index": 314,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:08.978Z",
+      "event": "read:state",
+      "index": 315,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:09.031Z",
+      "event": "read:state",
+      "index": 316,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:09.084Z",
+      "event": "read:state",
+      "index": 317,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:09.136Z",
+      "event": "read:state",
+      "index": 318,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:09.190Z",
+      "event": "read:state",
+      "index": 319,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:09.243Z",
+      "event": "read:state",
+      "index": 320,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:09.296Z",
+      "event": "read:state",
+      "index": 321,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:09.349Z",
+      "event": "read:state",
+      "index": 322,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:09.402Z",
+      "event": "read:state",
+      "index": 323,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:09.454Z",
+      "event": "read:state",
+      "index": 324,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:09.507Z",
+      "event": "read:state",
+      "index": 325,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:09.560Z",
+      "event": "read:state",
+      "index": 326,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:09.613Z",
+      "event": "read:state",
+      "index": 327,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:09.666Z",
+      "event": "read:state",
+      "index": 328,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:09.719Z",
+      "event": "read:state",
+      "index": 329,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:09.772Z",
+      "event": "read:state",
+      "index": 330,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:09.825Z",
+      "event": "read:state",
+      "index": 331,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:09.878Z",
+      "event": "read:state",
+      "index": 332,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:09.931Z",
+      "event": "read:state",
+      "index": 333,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:09.984Z",
+      "event": "read:state",
+      "index": 334,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:10.038Z",
+      "event": "read:state",
+      "index": 335,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:10.091Z",
+      "event": "read:state",
+      "index": 336,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:10.144Z",
+      "event": "read:state",
+      "index": 337,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:10.197Z",
+      "event": "read:state",
+      "index": 338,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:10.250Z",
+      "event": "read:state",
+      "index": 339,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:10.303Z",
+      "event": "read:state",
+      "index": 340,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:10.356Z",
+      "event": "read:state",
+      "index": 341,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:10.409Z",
+      "event": "read:state",
+      "index": 342,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:10.462Z",
+      "event": "read:state",
+      "index": 343,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:10.515Z",
+      "event": "read:state",
+      "index": 344,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:10.568Z",
+      "event": "read:state",
+      "index": 345,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:10.620Z",
+      "event": "read:state",
+      "index": 346,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:10.673Z",
+      "event": "read:state",
+      "index": 347,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:10.726Z",
+      "event": "read:state",
+      "index": 348,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:10.779Z",
+      "event": "read:state",
+      "index": 349,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:10.832Z",
+      "event": "read:state",
+      "index": 350,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:10.885Z",
+      "event": "read:state",
+      "index": 351,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:10.938Z",
+      "event": "read:state",
+      "index": 352,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:10.991Z",
+      "event": "read:state",
+      "index": 353,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:11.043Z",
+      "event": "read:state",
+      "index": 354,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:11.096Z",
+      "event": "read:state",
+      "index": 355,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:11.149Z",
+      "event": "read:state",
+      "index": 356,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:11.202Z",
+      "event": "read:state",
+      "index": 357,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:11.255Z",
+      "event": "read:state",
+      "index": 358,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:11.308Z",
+      "event": "read:state",
+      "index": 359,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:11.361Z",
+      "event": "read:state",
+      "index": 360,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:11.414Z",
+      "event": "read:state",
+      "index": 361,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:11.467Z",
+      "event": "read:state",
+      "index": 362,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:11.520Z",
+      "event": "read:state",
+      "index": 363,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:11.572Z",
+      "event": "read:state",
+      "index": 364,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:11.626Z",
+      "event": "read:state",
+      "index": 365,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:11.679Z",
+      "event": "read:state",
+      "index": 366,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:11.732Z",
+      "event": "read:state",
+      "index": 367,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:11.784Z",
+      "event": "read:state",
+      "index": 368,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:11.837Z",
+      "event": "read:state",
+      "index": 369,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:11.890Z",
+      "event": "read:state",
+      "index": 370,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:11.943Z",
+      "event": "read:state",
+      "index": 371,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:11.996Z",
+      "event": "read:state",
+      "index": 372,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:12.050Z",
+      "event": "read:state",
+      "index": 373,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:12.102Z",
+      "event": "read:state",
+      "index": 374,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:12.155Z",
+      "event": "read:state",
+      "index": 375,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:12.208Z",
+      "event": "read:state",
+      "index": 376,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:12.261Z",
+      "event": "read:state",
+      "index": 377,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:12.314Z",
+      "event": "read:state",
+      "index": 378,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:12.367Z",
+      "event": "read:state",
+      "index": 379,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:12.420Z",
+      "event": "read:state",
+      "index": 380,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:12.473Z",
+      "event": "read:state",
+      "index": 381,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:12.526Z",
+      "event": "read:state",
+      "index": 382,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:12.579Z",
+      "event": "read:state",
+      "index": 383,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:12.632Z",
+      "event": "read:state",
+      "index": 384,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:12.685Z",
+      "event": "read:state",
+      "index": 385,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:12.738Z",
+      "event": "read:state",
+      "index": 386,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:12.792Z",
+      "event": "read:state",
+      "index": 387,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:12.845Z",
+      "event": "read:state",
+      "index": 388,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:12.898Z",
+      "event": "read:state",
+      "index": 389,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:12.951Z",
+      "event": "read:state",
+      "index": 390,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:13.004Z",
+      "event": "read:state",
+      "index": 391,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:13.056Z",
+      "event": "read:state",
+      "index": 392,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:13.110Z",
+      "event": "read:state",
+      "index": 393,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:13.163Z",
+      "event": "read:state",
+      "index": 394,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:13.216Z",
+      "event": "read:state",
+      "index": 395,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:13.269Z",
+      "event": "read:state",
+      "index": 396,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:13.322Z",
+      "event": "read:state",
+      "index": 397,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:13.375Z",
+      "event": "read:state",
+      "index": 398,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:13.428Z",
+      "event": "read:state",
+      "index": 399,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:13.481Z",
+      "event": "read:state",
+      "index": 400,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:13.534Z",
+      "event": "read:state",
+      "index": 401,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:13.587Z",
+      "event": "read:state",
+      "index": 402,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:13.640Z",
+      "event": "read:state",
+      "index": 403,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:13.693Z",
+      "event": "read:state",
+      "index": 404,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:13.748Z",
+      "event": "read:state",
+      "index": 405,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:13.801Z",
+      "event": "read:state",
+      "index": 406,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:13.854Z",
+      "event": "read:state",
+      "index": 407,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:13.907Z",
+      "event": "read:state",
+      "index": 408,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:13.960Z",
+      "event": "read:state",
+      "index": 409,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:14.013Z",
+      "event": "read:state",
+      "index": 410,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:14.066Z",
+      "event": "read:state",
+      "index": 411,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:14.119Z",
+      "event": "read:state",
+      "index": 412,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:14.172Z",
+      "event": "read:state",
+      "index": 413,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:14.225Z",
+      "event": "read:state",
+      "index": 414,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:14.278Z",
+      "event": "read:state",
+      "index": 415,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:14.331Z",
+      "event": "read:state",
+      "index": 416,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:14.384Z",
+      "event": "read:state",
+      "index": 417,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:14.437Z",
+      "event": "read:state",
+      "index": 418,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:14.490Z",
+      "event": "read:state",
+      "index": 419,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:14.543Z",
+      "event": "read:state",
+      "index": 420,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:14.596Z",
+      "event": "read:state",
+      "index": 421,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:14.649Z",
+      "event": "read:state",
+      "index": 422,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:14.702Z",
+      "event": "read:state",
+      "index": 423,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:14.755Z",
+      "event": "read:state",
+      "index": 424,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:14.808Z",
+      "event": "read:state",
+      "index": 425,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:14.861Z",
+      "event": "read:state",
+      "index": 426,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:14.914Z",
+      "event": "read:state",
+      "index": 427,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:14.967Z",
+      "event": "read:state",
+      "index": 428,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:15.020Z",
+      "event": "read:state",
+      "index": 429,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:15.073Z",
+      "event": "read:state",
+      "index": 430,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:15.126Z",
+      "event": "read:state",
+      "index": 431,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:15.179Z",
+      "event": "read:state",
+      "index": 432,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:15.231Z",
+      "event": "read:state",
+      "index": 433,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:15.285Z",
+      "event": "read:state",
+      "index": 434,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:15.338Z",
+      "event": "read:state",
+      "index": 435,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:15.391Z",
+      "event": "read:state",
+      "index": 436,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:15.444Z",
+      "event": "read:state",
+      "index": 437,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:15.497Z",
+      "event": "read:state",
+      "index": 438,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:15.550Z",
+      "event": "read:state",
+      "index": 439,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:15.603Z",
+      "event": "read:state",
+      "index": 440,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:15.657Z",
+      "event": "read:state",
+      "index": 441,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:15.710Z",
+      "event": "read:state",
+      "index": 442,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:15.763Z",
+      "event": "read:state",
+      "index": 443,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:15.816Z",
+      "event": "read:state",
+      "index": 444,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    },
+    {
+      "at": "2026-08-06T17:58:15.869Z",
+      "event": "read:state",
+      "index": 445,
+      "markdownLength": 25,
+      "notePath": "Feature.md"
+    }
+  ],
+  "featureId": "pdf-system-open-fallback",
+  "appSha256": "011f2f1cf215881fd751e332ae006ed7b54bb6c2356e25038b33cfa9082dff72"
+}

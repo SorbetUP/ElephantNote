@@ -1,0 +1,272 @@
+libEGL warning: DRI3 error: Could not get DRI3 device
+libEGL warning: Ensure your X server supports DRI3 to get accelerated rendering
+ELEPHANT_AUTOMATION_PORT=44181
+ELEPHANT_ACCEPTANCE_TAURI_PORT=44181
+[automation-api] listening on http://127.0.0.1:44181/v1
+[32m[1786038983067][info][renderer][0m renderer diagnostics installed 
+[32m[1786038983071][info][tauri:file-utils][0m [tauri:file-utils] Rust-owned vault filesystem bridge installed 
+[32m[1786038983072][info][search][0m [search] runtime-guards:installed 
+[32m[1786038983072][info][search][0m [search] concepts:fallback:installed 
+[32m[1786038983072][info][tauri:marktext-save][0m [tauri:marktext-save] bridge:installed [{"atomic":true,"latestRevisionAcknowledgement":true,"serialized":true}]
+[32m[1786038983072][info][tauri:local-ipc][0m [tauri:local-ipc] bridge:installed 
+[32m[1786038983072][info][slash-menu][0m [slash-menu] diagnostics:installed 
+[32m[1786038983072][info][writing-command][0m [writing-command] installed 
+[32m[1786038983072][info][renderer][0m bootstrapTauriRuntime:start {"runtime":"tauri"}
+[32m[1786038983118][info][renderer][0m bootstrapTauriRuntime:appDataDir {"userDataPath":"/tmp/elephant-packaged-feature-note-read-stability-uWTbyL/.local/share/com.elephantnote.app"}
+[32m[1786038983122][info][renderer][0m bootstrapRenderer:done {"env":{"debug":false,"paths":{"_dataCenterPath":"/tmp/elephant-packaged-feature-note-read-stability-uWTbyL/.local/share/com.elephantnote.app","_editorBufferStorePath":"/tmp/elephant-packaged-feature-note-read-stability-uWTbyL/.local/share/com.elephantnote.app/editorStates","_electronUserDataPath":"/tmp/elephant-packaged-feature-note-read-stability-uWTbyL/.local/share/com.elephantnote.app","_logPath":"/tmp/elephant-packaged-feature-note-read-stability-uWTbyL/.local/share/com.elephantnote.app/logs/20268","_preferencesFilePath":"/tmp/elephant-packaged-feature-note-read-stability-uWTbyL/.local/share/com.elephantnote.app/preference.json","_preferencesPath":"/tmp/elephant-packaged-feature-note-read-stability-uWTbyL/.local/share/com.elephantnote.app","_ripgrepBinaryPath":"rg","_userDataPath":"/tmp/elephant-packaged-feature-note-read-stability-uWTbyL/.local/share/com.elephantnote.app"},"type":"editor","windowId":1}}
+[32m[1786038983126][info][renderer][0m renderer diagnostics installed 
+[32m[1786038983131][info][renderer][0m renderer shell initialized {"runtime":"tauri"}
+[32m[1786038983132][info][addons][0m [addons] install:start {"hasPinia":true,"hasTauriInvoke":true,"runtime":"tauri"}
+[32m[1786038983133][info][addons][0m [addons] register:start {"available":0,"count":0,"ids":[]}
+[32m[1786038983135][info][addons][0m [addons] store:installed {"registered":0}
+[32m[1786038983137][info][addons][0m [addons] external-runtime:install:start 
+[32m[1786038983139][info][addons][0m [addons] external-runtime:install:done 
+[32m[1786038983140][info][addons][0m [addons] install:done {"availableBuiltins":[],"registered":[],"resources":["addonManager","addons","document","elephantnote","fileUtils","marktext","pinia","router","runtime","services","tauri","vueApp","window"]}
+[32m[1786038983140][info][addons][0m [addons] community-trust-boundary:installed 
+[32m[1786038983142][info][addons][0m [addons] builtin-state:restored {"actions":["elephant.addon-packs.ensure-develop-parity","elephant.addon-packs.create","elephant.addon-packs.apply"],"enabled":[]}
+[32m[1786038983143][info][core-feature][0m [core-feature] enabled {"id":"core.addon-packs"}
+[32m[1786038983143][info][core-feature][0m [core-feature] ready {"id":"core.addon-packs"}
+[32m[1786038983148][info][excalidraw-cleanup][0m [excalidraw-cleanup] installed 
+[32m[1786038983149][info][excalidraw-image][0m [excalidraw-image] runtime fixes installed [{"hasPathExistsSync":true,"hasReadFile":true,"hasStat":true,"vaultRoot":""}]
+[32m[1786038983152][info][core-feature][0m [core-feature] enabled {"id":"core.excalidraw"}
+[32m[1786038983152][info][core-feature][0m [core-feature] ready {"id":"core.excalidraw"}
+[32m[1786038983200][info][renderer][0m renderer Vue shell mounted {"hasVisibleShell":false,"route":"/editor"}
+[32m[1786038983201][info][renderer][0m store-diagnostics:installed {"editor":{"currentFileId":null,"currentFilePath":null,"currentMarkdownLength":0,"tabCount":0,"tabIds":[]},"layout":{"rightColumn":"files","showSideBar":false,"showTabBar":false},"project":{"activeItem":null,"pendingTreeEvents":0,"root":null,"rootName":null}}
+[32m[1786038983208][info][tauri:marktext-save][0m [tauri:marktext-save] saved state reconciliation installed 
+[33;1m[1786038983211][warn][renderer][0m external addon registry deferred until a vault is active {"error":"No active ElephantNote vault."}
+[32m[1786038983215][info][automation-api][0m [automation-api] renderer inspection surface ready 
+[32m[1786038983216][info][acceptance-test][0m [acceptance-test] installed {"commands":["invokeTauri","readDom","click","fill","insertText","waitFor","waitUntilGone","executeCommand","press","selectText","contextClick","capabilities"]} 
+[32m[1786038983216][info][elephantnote:citation][0m [elephantnote:citation] runtime installed [{}]
+[32m[1786038983272][info][automation-api][0m [automation-api] renderer inspection surface ready 
+[automation-api] renderer:ready
+[32m[1786038983274][info][automation-api][0m [automation-api] canonical Rust input surface publisher installed 
+[32m[1786038983275][info][acceptance-test][0m [acceptance-test] transport:ready {} 
+[automation-api] command:start request_id=automation-0 command=selectVault args=1
+[32m[1786038983337][info][acceptance-test][0m [acceptance-test] tauri:invoke:start {"command":"tauri_vaults_select_path"} 
+[32m[1786038983340][info][acceptance-test][0m [acceptance-test] tauri:invoke:done {"command":"tauri_vaults_select_path"} 
+[32m[1786038983342][info][renderer][0m external addon registry retrying after vault activation 
+[32m[1786038983343][info][acceptance-test][0m [acceptance-test] vault:select {"path":"/tmp/elephant-packaged-feature-note-read-stability-uWTbyL/vault","vaultId":"vault"} 
+[32m[1786038983355][info][icon-rail][0m [icon-rail] layout:resolved [{"hidden":[],"order":["search","vault","sidebar-toggle"],"visible":["search","vault","sidebar-toggle"]}]
+[32m[1786038983377][info][icon-rail][0m [icon-rail] mounted [{"activeVaultId":"vault","isMac":false,"sidebarVisible":true}]
+[32m[1786038983378][info][excalidraw-addon][0m [excalidraw-addon] overlay mounted [{"noteDirectory":"/tmp/elephant-packaged-feature-note-read-stability-uWTbyL/vault","vaultRoot":"/tmp/elephant-packaged-feature-note-read-stability-uWTbyL/vault"}]
+[32m[1786038983380][info][search][0m [search] ensureActiveVault:init:start [{"previousVaultPath":"","vaultPath":"/tmp/elephant-packaged-feature-note-read-stability-uWTbyL/vault"}]
+[automation-api] command:done request_id=automation-0 command=selectVault
+[official-addon-catalog] source=bundled root=/tmp/appimage_extracted_f7abf4311611ee8e3dea01fe4ee9589e/usr/lib/Elephant/resources/official-addons
+[automation-api] command:start request_id=automation-1 command=waitFor args=2
+[32m[1786038983464][info][acceptance-test][0m [acceptance-test] dom:read {"selector":".en-library-toolbar","exists":true,"textLength":41,"htmlLength":3517} 
+[32m[1786038983465][info][acceptance-test][0m [acceptance-test] dom:wait:done {"selector":".en-library-toolbar"} 
+[32m[1786038983465][info][search][0m [search] bridge:status:done [{"indexedDocuments":0,"realEmbedding":false,"semantic":false,"status":"","vaultPath":"/tmp/elephant-packaged-feature-note-read-stability-uWTbyL/vault"}]
+[32m[1786038983466][info][search][0m [search] ensureActiveVault:init:done [{"indexedDocuments":0,"status":"ready","vaultPath":"/tmp/elephant-packaged-feature-note-read-stability-uWTbyL/vault"}]
+[32m[1786038983466][info][search][0m [search] status:start [{"vaultPath":"/tmp/elephant-packaged-feature-note-read-stability-uWTbyL/vault"}]
+[automation-api] command:done request_id=automation-1 command=waitFor
+[32m[1786038983469][info][search][0m [search] bridge:status:done [{"indexedDocuments":0,"realEmbedding":false,"semantic":false,"status":"","vaultPath":"/tmp/elephant-packaged-feature-note-read-stability-uWTbyL/vault"}]
+[32m[1786038983469][info][search][0m [search] status:done [{"indexedDocuments":0,"message":"","status":""}]
+[automation-api] command:start request_id=automation-2 command=openNote args=1
+[32m[1786038983472][info][acceptance-test][0m [acceptance-test] open:start {"path":"Long.md"} 
+[32m[1786038983479][info][tauri:local-ipc][0m [tauri:local-ipc] open-file via notes.read [{"channel":"mt::open-file","length":1697,"relativePath":"Long.md"}]
+[32m[1786038983480][info][elephantnote:editor][0m [elephantnote:editor] NEW_TAB_WITH_CONTENT:start [{"currentFileId":null,"currentFilePath":null,"filename":"Long.md","markdownLength":1697,"pathname":"/tmp/elephant-packaged-feature-note-read-stability-uWTbyL/vault/Long.md","selected":true,"tabCount":0}]
+[32m[1786038983483][info][elephantnote:editor][0m [elephantnote:editor] NEW_TAB_WITH_CONTENT:done [{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-note-read-stability-uWTbyL/vault/Long.md","id":"mt-0","pathname":"/tmp/elephant-packaged-feature-note-read-stability-uWTbyL/vault/Long.md","selected":true,"tabCount":1}]
+[32m[1786038983484][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-note-read-stability-uWTbyL/vault/Long.md","currentMarkdownLength":1697,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038983488][info][elephantnote:editor][0m [elephantnote:editor] identity-change [{"activeFileId":"mt-0","activeVaultId":"vault","currentFileId":"mt-0","notePath":"Long.md","openedPath":"Long.md","previous":{"activeFileId":null,"currentFileId":null,"notePath":null,"openedPath":null},"tabCount":1}]
+[32m[1786038983489][info][elephantnote:editor][0m [elephantnote:editor] input-state [{"activeFileId":"mt-0","hasEditorDocument":true,"markdownLength":1697,"notePath":"Long.md","visibleMarkdownLength":1689}]
+[32m[1786038983499][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] component:mounted [{"markdownLength":1689,"mode":"rust"}]
+[32m[1786038983500][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] mount:start [{"generation":1,"hasFactory":false,"markdownLength":1689,"mode":"rust"}]
+[32m[1786038983573][info][elephantnote:muya-rust][0m [elephantnote:muya-rust] using official Tauri core invoke 
+[32m[1786038983574][info][elephantnote:editor][0m [elephantnote:editor] real Muya UI with Rust-owned core active [{"engine":"rust","sessionId":"muya:1786038983572:1","surface":"muya"}]
+[32m[1786038983576][info][elephantnote:editor][0m [elephantnote:editor] mounted [{"notePath":"Long.md","vault":"/tmp/elephant-packaged-feature-note-read-stability-uWTbyL/vault"}]
+[32m[1786038983576][info][elephantnote:save][0m [elephantnote:save] observed active markdown [{"isSaved":true,"length":1697,"notePath":"Long.md","reason":"mount"}]
+[32m[1786038983577][info][elephantnote:muya-rust][0m [elephantnote:muya-rust] initial session:create:start [{"markdownLength":1689,"sessionId":"muya:1786038983572:1"}]
+[32m[1786038983579][info][automation-api][0m [automation-api] installed command error observability 
+[32m[1786038983582][info][acceptance-test][0m [acceptance-test] open:done {"path":"Long.md","markdownLength":1697} 
+[32m[1786038983583][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[32m[1786038983588][info][elephantnote:muya-rust][0m [elephantnote:muya-rust] initial session:create:done [{"markdownLength":1689,"revision":0,"sessionId":"muya:1786038983572:1"}]
+[32m[1786038983593][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] mount:ready [{"contentEditable":"true","generation":1,"hasDomContainer":true,"markdownLength":1689,"revision":0}]
+[32m[1786038983596][info][automation-api][0m [automation-api] published canonical Rust input surface [{"connected":true,"contentEditable":"true","revision":0}]
+[32m[1786038983608][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-2 command=openNote
+[automation-api] command:start request_id=automation-3 command=waitFor args=2
+[32m[1786038983613][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[32m[1786038983614][info][acceptance-test][0m [acceptance-test] dom:wait:done {"selector":"[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]"} 
+[automation-api] command:done request_id=automation-3 command=waitFor
+[automation-api] command:start request_id=automation-4 command=readState args=0
+[32m[1786038983618][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-4 command=readState
+[automation-api] command:start request_id=automation-5 command=readDom args=1
+[32m[1786038983623][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-5 command=readDom
+[automation-api] command:start request_id=automation-6 command=readState args=0
+[32m[1786038983628][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-6 command=readState
+[automation-api] command:start request_id=automation-7 command=readDom args=1
+[32m[1786038983631][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-7 command=readDom
+[automation-api] command:start request_id=automation-8 command=readState args=0
+[32m[1786038983635][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-8 command=readState
+[automation-api] command:start request_id=automation-9 command=readDom args=1
+[32m[1786038983639][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-9 command=readDom
+[automation-api] command:start request_id=automation-10 command=readState args=0
+[32m[1786038983644][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-10 command=readState
+[automation-api] command:start request_id=automation-11 command=readDom args=1
+[32m[1786038983649][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-11 command=readDom
+[automation-api] command:start request_id=automation-12 command=readState args=0
+[32m[1786038983653][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-12 command=readState
+[automation-api] command:start request_id=automation-13 command=readDom args=1
+[32m[1786038983657][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-13 command=readDom
+[automation-api] command:start request_id=automation-14 command=readState args=0
+[32m[1786038983662][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-14 command=readState
+[automation-api] command:start request_id=automation-15 command=readDom args=1
+[32m[1786038983665][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-15 command=readDom
+[automation-api] command:start request_id=automation-16 command=readState args=0
+[32m[1786038983670][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-16 command=readState
+[automation-api] command:start request_id=automation-17 command=readDom args=1
+[32m[1786038983674][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-17 command=readDom
+[automation-api] command:start request_id=automation-18 command=readState args=0
+[32m[1786038983679][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-18 command=readState
+[automation-api] command:start request_id=automation-19 command=readDom args=1
+[32m[1786038983683][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-19 command=readDom
+[automation-api] command:start request_id=automation-20 command=readState args=0
+[32m[1786038983686][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-20 command=readState
+[automation-api] command:start request_id=automation-21 command=readDom args=1
+[32m[1786038983695][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-21 command=readDom
+[automation-api] command:start request_id=automation-22 command=readState args=0
+[32m[1786038983699][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-22 command=readState
+[automation-api] command:start request_id=automation-23 command=readDom args=1
+[32m[1786038983704][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-23 command=readDom
+[automation-api] command:start request_id=automation-24 command=readState args=0
+[32m[1786038983709][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-24 command=readState
+[automation-api] command:start request_id=automation-25 command=readDom args=1
+[32m[1786038983714][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-25 command=readDom
+[automation-api] command:start request_id=automation-26 command=readState args=0
+[32m[1786038983720][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-26 command=readState
+[automation-api] command:start request_id=automation-27 command=readDom args=1
+[32m[1786038983724][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-27 command=readDom
+[automation-api] command:start request_id=automation-28 command=readState args=0
+[32m[1786038983727][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-28 command=readState
+[automation-api] command:start request_id=automation-29 command=readDom args=1
+[32m[1786038983734][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-29 command=readDom
+[automation-api] command:start request_id=automation-30 command=readState args=0
+[32m[1786038983737][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-30 command=readState
+[automation-api] command:start request_id=automation-31 command=readDom args=1
+[32m[1786038983741][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-31 command=readDom
+[automation-api] command:start request_id=automation-32 command=readState args=0
+[32m[1786038983745][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-32 command=readState
+[automation-api] command:start request_id=automation-33 command=readDom args=1
+[32m[1786038983749][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-33 command=readDom
+[automation-api] command:start request_id=automation-34 command=readState args=0
+[32m[1786038983752][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-34 command=readState
+[automation-api] command:start request_id=automation-35 command=readDom args=1
+[32m[1786038983755][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-35 command=readDom
+[automation-api] command:start request_id=automation-36 command=readState args=0
+[32m[1786038983760][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-36 command=readState
+[automation-api] command:start request_id=automation-37 command=readDom args=1
+[32m[1786038983766][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-37 command=readDom
+[automation-api] command:start request_id=automation-38 command=readState args=0
+[32m[1786038983769][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-38 command=readState
+[automation-api] command:start request_id=automation-39 command=readDom args=1
+[32m[1786038983773][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-39 command=readDom
+[automation-api] command:start request_id=automation-40 command=readState args=0
+[32m[1786038983776][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-40 command=readState
+[automation-api] command:start request_id=automation-41 command=readDom args=1
+[32m[1786038983780][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-41 command=readDom
+[automation-api] command:start request_id=automation-42 command=readState args=0
+[32m[1786038983783][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-42 command=readState
+[automation-api] command:start request_id=automation-43 command=readDom args=1
+[32m[1786038983786][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-43 command=readDom
+[automation-api] command:start request_id=automation-44 command=readState args=0
+[32m[1786038983789][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-44 command=readState
+[automation-api] command:start request_id=automation-45 command=readDom args=1
+[32m[1786038983793][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-45 command=readDom
+[automation-api] command:start request_id=automation-46 command=readState args=0
+[32m[1786038983797][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-46 command=readState
+[automation-api] command:start request_id=automation-47 command=readDom args=1
+[32m[1786038983800][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-47 command=readDom
+[automation-api] command:start request_id=automation-48 command=readState args=0
+[32m[1786038983803][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-48 command=readState
+[automation-api] command:start request_id=automation-49 command=readDom args=1
+[32m[1786038983806][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-49 command=readDom
+[automation-api] command:start request_id=automation-50 command=readState args=0
+[32m[1786038983809][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-50 command=readState
+[automation-api] command:start request_id=automation-51 command=readDom args=1
+[32m[1786038983813][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-51 command=readDom
+[automation-api] command:start request_id=automation-52 command=readState args=0
+[32m[1786038983816][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-52 command=readState
+[automation-api] command:start request_id=automation-53 command=readDom args=1
+[32m[1786038983819][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-53 command=readDom
+[automation-api] command:start request_id=automation-54 command=readState args=0
+[32m[1786038983823][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-54 command=readState
+[automation-api] command:start request_id=automation-55 command=readDom args=1
+[32m[1786038983833][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-55 command=readDom
+[automation-api] command:start request_id=automation-56 command=readState args=0
+[32m[1786038983839][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-56 command=readState
+[automation-api] command:start request_id=automation-57 command=readDom args=1
+[32m[1786038983842][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-57 command=readDom
+[automation-api] command:start request_id=automation-58 command=readState args=0
+[32m[1786038983846][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-58 command=readState
+[automation-api] command:start request_id=automation-59 command=readDom args=1
+[32m[1786038983849][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-59 command=readDom
+[automation-api] command:start request_id=automation-60 command=readState args=0
+[32m[1786038983852][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-60 command=readState
+[automation-api] command:start request_id=automation-61 command=readDom args=1
+[32m[1786038983856][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-61 command=readDom
+[automation-api] command:start request_id=automation-62 command=readState args=0
+[32m[1786038983858][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Long.md","markdownLength":1697} 
+[automation-api] command:done request_id=automation-62 command=readState
+[automation-api] command:start request_id=automation-63 command=readDom args=1
+[32m[1786038983862][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":1692,"htmlLength":17766} 
+[automation-api] command:done request_id=automation-63 command=readDom
+[automation-api] command:start request_id=automation-64 command=logs args=0
+[automation-api] command:done request_id=automation-64 command=logs

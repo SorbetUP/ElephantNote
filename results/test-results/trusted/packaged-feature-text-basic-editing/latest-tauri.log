@@ -1,0 +1,198 @@
+libEGL warning: DRI3 error: Could not get DRI3 device
+libEGL warning: Ensure your X server supports DRI3 to get accelerated rendering
+ELEPHANT_AUTOMATION_PORT=36331
+ELEPHANT_ACCEPTANCE_TAURI_PORT=36331
+[automation-api] listening on http://127.0.0.1:36331/v1
+[32m[1786038988500][info][renderer][0m renderer diagnostics installed 
+[32m[1786038988500][info][tauri:file-utils][0m [tauri:file-utils] Rust-owned vault filesystem bridge installed 
+[32m[1786038988501][info][search][0m [search] runtime-guards:installed 
+[32m[1786038988501][info][search][0m [search] concepts:fallback:installed 
+[32m[1786038988501][info][tauri:marktext-save][0m [tauri:marktext-save] bridge:installed [{"atomic":true,"latestRevisionAcknowledgement":true,"serialized":true}]
+[32m[1786038988501][info][tauri:local-ipc][0m [tauri:local-ipc] bridge:installed 
+[32m[1786038988501][info][slash-menu][0m [slash-menu] diagnostics:installed 
+[32m[1786038988501][info][writing-command][0m [writing-command] installed 
+[32m[1786038988502][info][renderer][0m bootstrapTauriRuntime:start {"runtime":"tauri"}
+[32m[1786038988567][info][renderer][0m bootstrapTauriRuntime:appDataDir {"userDataPath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/.local/share/com.elephantnote.app"}
+[32m[1786038988572][info][renderer][0m bootstrapRenderer:done {"env":{"debug":false,"paths":{"_dataCenterPath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/.local/share/com.elephantnote.app","_editorBufferStorePath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/.local/share/com.elephantnote.app/editorStates","_electronUserDataPath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/.local/share/com.elephantnote.app","_logPath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/.local/share/com.elephantnote.app/logs/20268","_preferencesFilePath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/.local/share/com.elephantnote.app/preference.json","_preferencesPath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/.local/share/com.elephantnote.app","_ripgrepBinaryPath":"rg","_userDataPath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/.local/share/com.elephantnote.app"},"type":"editor","windowId":1}}
+[32m[1786038988577][info][renderer][0m renderer diagnostics installed 
+[32m[1786038988583][info][renderer][0m renderer shell initialized {"runtime":"tauri"}
+[32m[1786038988584][info][addons][0m [addons] install:start {"hasPinia":true,"hasTauriInvoke":true,"runtime":"tauri"}
+[32m[1786038988584][info][addons][0m [addons] register:start {"available":0,"count":0,"ids":[]}
+[32m[1786038988587][info][addons][0m [addons] store:installed {"registered":0}
+[32m[1786038988589][info][addons][0m [addons] external-runtime:install:start 
+[32m[1786038988590][info][addons][0m [addons] external-runtime:install:done 
+[32m[1786038988590][info][addons][0m [addons] install:done {"availableBuiltins":[],"registered":[],"resources":["addonManager","addons","document","elephantnote","fileUtils","marktext","pinia","router","runtime","services","tauri","vueApp","window"]}
+[32m[1786038988590][info][addons][0m [addons] community-trust-boundary:installed 
+[32m[1786038988592][info][addons][0m [addons] builtin-state:restored {"actions":["elephant.addon-packs.ensure-develop-parity","elephant.addon-packs.create","elephant.addon-packs.apply"],"enabled":[]}
+[32m[1786038988593][info][core-feature][0m [core-feature] enabled {"id":"core.addon-packs"}
+[32m[1786038988593][info][core-feature][0m [core-feature] ready {"id":"core.addon-packs"}
+[32m[1786038988599][info][excalidraw-cleanup][0m [excalidraw-cleanup] installed 
+[32m[1786038988599][info][excalidraw-image][0m [excalidraw-image] runtime fixes installed [{"hasPathExistsSync":true,"hasReadFile":true,"hasStat":true,"vaultRoot":""}]
+[32m[1786038988600][info][core-feature][0m [core-feature] enabled {"id":"core.excalidraw"}
+[32m[1786038988601][info][core-feature][0m [core-feature] ready {"id":"core.excalidraw"}
+[32m[1786038988660][info][renderer][0m renderer Vue shell mounted {"hasVisibleShell":false,"route":"/editor"}
+[32m[1786038988664][info][renderer][0m store-diagnostics:installed {"editor":{"currentFileId":null,"currentFilePath":null,"currentMarkdownLength":0,"tabCount":0,"tabIds":[]},"layout":{"rightColumn":"files","showSideBar":false,"showTabBar":false},"project":{"activeItem":null,"pendingTreeEvents":0,"root":null,"rootName":null}}
+[32m[1786038988671][info][tauri:marktext-save][0m [tauri:marktext-save] saved state reconciliation installed 
+[33;1m[1786038988674][warn][renderer][0m external addon registry deferred until a vault is active {"error":"No active ElephantNote vault."}
+[32m[1786038988677][info][automation-api][0m [automation-api] renderer inspection surface ready 
+[32m[1786038988678][info][acceptance-test][0m [acceptance-test] installed {"commands":["invokeTauri","readDom","click","fill","insertText","waitFor","waitUntilGone","executeCommand","press","selectText","contextClick","capabilities"]} 
+[32m[1786038988679][info][elephantnote:citation][0m [elephantnote:citation] runtime installed [{}]
+[32m[1786038988735][info][automation-api][0m [automation-api] renderer inspection surface ready 
+[automation-api] renderer:ready
+[32m[1786038988737][info][automation-api][0m [automation-api] canonical Rust input surface publisher installed 
+[32m[1786038988737][info][acceptance-test][0m [acceptance-test] transport:ready {} 
+[automation-api] command:start request_id=automation-0 command=selectVault args=1
+[32m[1786038988908][info][acceptance-test][0m [acceptance-test] tauri:invoke:start {"command":"tauri_vaults_select_path"} 
+[32m[1786038988910][info][acceptance-test][0m [acceptance-test] tauri:invoke:done {"command":"tauri_vaults_select_path"} 
+[32m[1786038988911][info][renderer][0m external addon registry retrying after vault activation 
+[32m[1786038988912][info][acceptance-test][0m [acceptance-test] vault:select {"path":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault","vaultId":"vault"} 
+[32m[1786038988923][info][icon-rail][0m [icon-rail] layout:resolved [{"hidden":[],"order":["search","vault","sidebar-toggle"],"visible":["search","vault","sidebar-toggle"]}]
+[32m[1786038988949][info][icon-rail][0m [icon-rail] mounted [{"activeVaultId":"vault","isMac":false,"sidebarVisible":true}]
+[32m[1786038988950][info][excalidraw-addon][0m [excalidraw-addon] overlay mounted [{"noteDirectory":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault","vaultRoot":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault"}]
+[32m[1786038988950][info][search][0m [search] ensureActiveVault:init:start [{"previousVaultPath":"","vaultPath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault"}]
+[automation-api] command:done request_id=automation-0 command=selectVault
+[official-addon-catalog] source=bundled root=/tmp/appimage_extracted_f7abf4311611ee8e3dea01fe4ee9589e/usr/lib/Elephant/resources/official-addons
+[automation-api] command:start request_id=automation-1 command=waitFor args=2
+[32m[1786038989034][info][acceptance-test][0m [acceptance-test] dom:read {"selector":".en-library-toolbar","exists":true,"textLength":41,"htmlLength":3517} 
+[32m[1786038989035][info][acceptance-test][0m [acceptance-test] dom:wait:done {"selector":".en-library-toolbar"} 
+[automation-api] command:done request_id=automation-1 command=waitFor
+[32m[1786038989036][info][search][0m [search] bridge:status:done [{"indexedDocuments":0,"realEmbedding":false,"semantic":false,"status":"","vaultPath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault"}]
+[32m[1786038989036][info][search][0m [search] ensureActiveVault:init:done [{"indexedDocuments":0,"status":"ready","vaultPath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault"}]
+[32m[1786038989037][info][search][0m [search] status:start [{"vaultPath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault"}]
+[32m[1786038989040][info][search][0m [search] bridge:status:done [{"indexedDocuments":0,"realEmbedding":false,"semantic":false,"status":"","vaultPath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault"}]
+[automation-api] command:start request_id=automation-2 command=openNote args=1
+[32m[1786038989041][info][search][0m [search] status:done [{"indexedDocuments":0,"message":"","status":""}]
+[32m[1786038989042][info][acceptance-test][0m [acceptance-test] open:start {"path":"Feature.md"} 
+[32m[1786038989049][info][tauri:local-ipc][0m [tauri:local-ipc] open-file via notes.read [{"channel":"mt::open-file","length":25,"relativePath":"Feature.md"}]
+[32m[1786038989050][info][elephantnote:editor][0m [elephantnote:editor] NEW_TAB_WITH_CONTENT:start [{"currentFileId":null,"currentFilePath":null,"filename":"Feature.md","markdownLength":25,"pathname":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault/Feature.md","selected":true,"tabCount":0}]
+[32m[1786038989052][info][elephantnote:editor][0m [elephantnote:editor] NEW_TAB_WITH_CONTENT:done [{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault/Feature.md","id":"mt-0","pathname":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault/Feature.md","selected":true,"tabCount":1}]
+[32m[1786038989054][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault/Feature.md","currentMarkdownLength":25,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038989058][info][elephantnote:editor][0m [elephantnote:editor] identity-change [{"activeFileId":"mt-0","activeVaultId":"vault","currentFileId":"mt-0","notePath":"Feature.md","openedPath":"Feature.md","previous":{"activeFileId":null,"currentFileId":null,"notePath":null,"openedPath":null},"tabCount":1}]
+[32m[1786038989058][info][elephantnote:editor][0m [elephantnote:editor] input-state [{"activeFileId":"mt-0","hasEditorDocument":true,"markdownLength":25,"notePath":"Feature.md","visibleMarkdownLength":14}]
+[32m[1786038989068][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] component:mounted [{"markdownLength":14,"mode":"rust"}]
+[32m[1786038989069][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] mount:start [{"generation":1,"hasFactory":false,"markdownLength":14,"mode":"rust"}]
+[32m[1786038989118][info][elephantnote:muya-rust][0m [elephantnote:muya-rust] using official Tauri core invoke 
+[32m[1786038989119][info][elephantnote:editor][0m [elephantnote:editor] real Muya UI with Rust-owned core active [{"engine":"rust","sessionId":"muya:1786038989117:1","surface":"muya"}]
+[32m[1786038989120][info][elephantnote:editor][0m [elephantnote:editor] mounted [{"notePath":"Feature.md","vault":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault"}]
+[32m[1786038989121][info][elephantnote:save][0m [elephantnote:save] observed active markdown [{"isSaved":true,"length":25,"notePath":"Feature.md","reason":"mount"}]
+[32m[1786038989122][info][elephantnote:muya-rust][0m [elephantnote:muya-rust] initial session:create:start [{"markdownLength":14,"sessionId":"muya:1786038989117:1"}]
+[32m[1786038989123][info][automation-api][0m [automation-api] installed command error observability 
+[32m[1786038989126][info][acceptance-test][0m [acceptance-test] open:done {"path":"Feature.md","markdownLength":25} 
+[32m[1786038989127][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[32m[1786038989145][info][elephantnote:muya-rust][0m [elephantnote:muya-rust] initial session:create:done [{"markdownLength":14,"revision":0,"sessionId":"muya:1786038989117:1"}]
+[32m[1786038989166][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[32m[1786038989170][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] mount:ready [{"contentEditable":"true","generation":1,"hasDomContainer":true,"markdownLength":14,"revision":0}]
+[32m[1786038989173][info][automation-api][0m [automation-api] published canonical Rust input surface [{"connected":true,"contentEditable":"true","revision":0}]
+[32m[1786038989191][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":25} 
+[automation-api] command:done request_id=automation-2 command=openNote
+[automation-api] command:start request_id=automation-3 command=waitFor args=2
+[32m[1786038989197][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]","exists":true,"textLength":16,"htmlLength":1165} 
+[32m[1786038989197][info][acceptance-test][0m [acceptance-test] dom:wait:done {"selector":"[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]"} 
+[automation-api] command:done request_id=automation-3 command=waitFor
+[automation-api] command:start request_id=automation-4 command=readDom args=1
+[32m[1786038989204][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"] .ag-paragraph-content","exists":true,"textLength":13,"htmlLength":48} 
+[automation-api] command:done request_id=automation-4 command=readDom
+[automation-api] command:start request_id=automation-5 command=selectText args=3
+[32m[1786038989211][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"] .ag-paragraph-content","exists":true,"textLength":13,"htmlLength":48} 
+[automation-api] command:done request_id=automation-5 command=selectText
+[automation-api] command:start request_id=automation-6 command=insertText args=2
+[32m[1786038989217][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] user-mutation-boundary:opened [{"reason":"beforeinput:insertText"}]
+[32m[1786038989231][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault/Feature.md","currentMarkdownLength":136,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038989232][info][elephantnote:save][0m [elephantnote:save] schedule [{"delay":160,"editDelta":111,"length":136,"notePath":"Feature.md","reason":"vue-watch"}]
+[32m[1786038989235][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":2,"previousLength":14,"revision":1,"runtimeLength":2}]
+[32m[1786038989235][info][elephantnote:recovery][0m [elephantnote:recovery] checkpoint:persisted [{"currentFileId":"mt-0","revision":1,"tabCount":1}]
+[32m[1786038989244][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault/Feature.md","currentMarkdownLength":137,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038989245][info][elephantnote:save][0m [elephantnote:save] schedule [{"delay":160,"editDelta":1,"length":137,"notePath":"Feature.md","reason":"vue-watch"}]
+[32m[1786038989247][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":3,"previousLength":2,"revision":2,"runtimeLength":3}]
+[32m[1786038989247][info][elephantnote:recovery][0m [elephantnote:recovery] checkpoint:persisted [{"currentFileId":"mt-0","revision":2,"tabCount":1}]
+[32m[1786038989254][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault/Feature.md","currentMarkdownLength":138,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038989255][info][elephantnote:save][0m [elephantnote:save] schedule [{"delay":160,"editDelta":1,"length":138,"notePath":"Feature.md","reason":"vue-watch"}]
+[32m[1786038989257][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":4,"previousLength":3,"revision":3,"runtimeLength":4}]
+[32m[1786038989257][info][elephantnote:recovery][0m [elephantnote:recovery] checkpoint:persisted [{"currentFileId":"mt-0","revision":3,"tabCount":1}]
+[32m[1786038989264][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault/Feature.md","currentMarkdownLength":139,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038989265][info][elephantnote:save][0m [elephantnote:save] schedule [{"delay":160,"editDelta":1,"length":139,"notePath":"Feature.md","reason":"vue-watch"}]
+[32m[1786038989266][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":5,"previousLength":4,"revision":4,"runtimeLength":5}]
+[32m[1786038989266][info][elephantnote:recovery][0m [elephantnote:recovery] checkpoint:persisted [{"currentFileId":"mt-0","revision":4,"tabCount":1}]
+[32m[1786038989277][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault/Feature.md","currentMarkdownLength":140,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038989278][info][elephantnote:save][0m [elephantnote:save] schedule [{"delay":160,"editDelta":1,"length":140,"notePath":"Feature.md","reason":"vue-watch"}]
+[32m[1786038989278][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":6,"previousLength":5,"revision":5,"runtimeLength":6}]
+[32m[1786038989278][info][elephantnote:recovery][0m [elephantnote:recovery] checkpoint:persisted [{"currentFileId":"mt-0","revision":5,"tabCount":1}]
+[32m[1786038989285][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault/Feature.md","currentMarkdownLength":141,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038989286][info][elephantnote:save][0m [elephantnote:save] schedule [{"delay":160,"editDelta":1,"length":141,"notePath":"Feature.md","reason":"vue-watch"}]
+[32m[1786038989286][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":7,"previousLength":6,"revision":6,"runtimeLength":7}]
+[32m[1786038989286][info][elephantnote:recovery][0m [elephantnote:recovery] checkpoint:persisted [{"currentFileId":"mt-0","revision":6,"tabCount":1}]
+[32m[1786038989291][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":8,"previousLength":7,"revision":7,"runtimeLength":8}]
+[32m[1786038989297][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault/Feature.md","currentMarkdownLength":143,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038989298][info][elephantnote:save][0m [elephantnote:save] schedule [{"delay":160,"editDelta":2,"length":143,"notePath":"Feature.md","reason":"vue-watch"}]
+[32m[1786038989299][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":9,"previousLength":8,"revision":8,"runtimeLength":9}]
+[32m[1786038989299][info][elephantnote:recovery][0m [elephantnote:recovery] checkpoint:persisted [{"currentFileId":"mt-0","revision":7,"tabCount":1}]
+[32m[1786038989305][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault/Feature.md","currentMarkdownLength":144,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038989306][info][elephantnote:save][0m [elephantnote:save] schedule [{"delay":160,"editDelta":1,"length":144,"notePath":"Feature.md","reason":"vue-watch"}]
+[32m[1786038989307][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":10,"previousLength":9,"revision":9,"runtimeLength":10}]
+[32m[1786038989309][info][elephantnote:recovery][0m [elephantnote:recovery] checkpoint:persisted [{"currentFileId":"mt-0","revision":8,"tabCount":1}]
+[32m[1786038989317][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault/Feature.md","currentMarkdownLength":145,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038989317][info][elephantnote:save][0m [elephantnote:save] schedule [{"delay":160,"editDelta":1,"length":145,"notePath":"Feature.md","reason":"vue-watch"}]
+[32m[1786038989319][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":11,"previousLength":10,"revision":10,"runtimeLength":11}]
+[32m[1786038989319][info][elephantnote:recovery][0m [elephantnote:recovery] checkpoint:persisted [{"currentFileId":"mt-0","revision":9,"tabCount":1}]
+[32m[1786038989329][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault/Feature.md","currentMarkdownLength":146,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038989329][info][elephantnote:save][0m [elephantnote:save] schedule [{"delay":160,"editDelta":1,"length":146,"notePath":"Feature.md","reason":"vue-watch"}]
+[32m[1786038989329][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":12,"previousLength":11,"revision":11,"runtimeLength":12}]
+[32m[1786038989329][info][elephantnote:recovery][0m [elephantnote:recovery] checkpoint:persisted [{"currentFileId":"mt-0","revision":10,"tabCount":1}]
+[32m[1786038989332][info][automation-api][0m [automation-api] dispatched trusted text input [{"characterCount":11,"rustMutationCompleted":true,"selector":"[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]","valueLength":11}]
+[32m[1786038989332][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]","exists":true,"textLength":14,"htmlLength":1163} 
+[automation-api] command:done request_id=automation-6 command=insertText
+[automation-api] command:start request_id=automation-7 command=press args=2
+[32m[1786038989349][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":14,"previousLength":12,"revision":12,"runtimeLength":14}]
+[32m[1786038989361][info][automation-api][0m [automation-api] completed Enter on the current visible Rust generation [{"key":"Enter","markdownLength":14,"revision":12,"selector":"[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]"}]
+[32m[1786038989363][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]","exists":true,"textLength":15,"htmlLength":2231} 
+[automation-api] command:done request_id=automation-7 command=press
+[automation-api] command:start request_id=automation-8 command=insertText args=2
+[32m[1786038989371][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault/Feature.md","currentMarkdownLength":149,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038989372][info][elephantnote:save][0m [elephantnote:save] schedule [{"delay":160,"editDelta":3,"length":149,"notePath":"Feature.md","reason":"vue-watch"}]
+[32m[1786038989374][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":15,"previousLength":14,"revision":13,"runtimeLength":15}]
+[32m[1786038989375][info][elephantnote:recovery][0m [elephantnote:recovery] checkpoint:persisted [{"currentFileId":"mt-0","revision":11,"tabCount":1}]
+[32m[1786038989380][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault/Feature.md","currentMarkdownLength":150,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038989383][info][elephantnote:save][0m [elephantnote:save] schedule [{"delay":160,"editDelta":1,"length":150,"notePath":"Feature.md","reason":"vue-watch"}]
+[32m[1786038989383][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":16,"previousLength":15,"revision":14,"runtimeLength":16}]
+[32m[1786038989383][info][elephantnote:recovery][0m [elephantnote:recovery] checkpoint:persisted [{"currentFileId":"mt-0","revision":12,"tabCount":1}]
+[32m[1786038989389][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault/Feature.md","currentMarkdownLength":151,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038989392][info][elephantnote:save][0m [elephantnote:save] schedule [{"delay":160,"editDelta":1,"length":151,"notePath":"Feature.md","reason":"vue-watch"}]
+[32m[1786038989392][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":17,"previousLength":16,"revision":15,"runtimeLength":17}]
+[32m[1786038989394][info][elephantnote:recovery][0m [elephantnote:recovery] checkpoint:persisted [{"currentFileId":"mt-0","revision":13,"tabCount":1}]
+[32m[1786038989401][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault/Feature.md","currentMarkdownLength":152,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038989403][info][elephantnote:save][0m [elephantnote:save] schedule [{"delay":160,"editDelta":1,"length":152,"notePath":"Feature.md","reason":"vue-watch"}]
+[32m[1786038989404][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":18,"previousLength":17,"revision":16,"runtimeLength":18}]
+[32m[1786038989404][info][elephantnote:recovery][0m [elephantnote:recovery] checkpoint:persisted [{"currentFileId":"mt-0","revision":14,"tabCount":1}]
+[32m[1786038989410][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault/Feature.md","currentMarkdownLength":153,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038989410][info][elephantnote:save][0m [elephantnote:save] schedule [{"delay":160,"editDelta":1,"length":153,"notePath":"Feature.md","reason":"vue-watch"}]
+[32m[1786038989410][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":19,"previousLength":18,"revision":17,"runtimeLength":19}]
+[32m[1786038989410][info][elephantnote:recovery][0m [elephantnote:recovery] checkpoint:persisted [{"currentFileId":"mt-0","revision":15,"tabCount":1}]
+[32m[1786038989416][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault/Feature.md","currentMarkdownLength":154,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038989417][info][elephantnote:save][0m [elephantnote:save] schedule [{"delay":160,"editDelta":1,"length":154,"notePath":"Feature.md","reason":"vue-watch"}]
+[32m[1786038989419][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":20,"previousLength":19,"revision":18,"runtimeLength":20}]
+[32m[1786038989421][info][elephantnote:recovery][0m [elephantnote:recovery] checkpoint:persisted [{"currentFileId":"mt-0","revision":16,"tabCount":1}]
+[32m[1786038989428][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":21,"previousLength":20,"revision":19,"runtimeLength":21}]
+[32m[1786038989433][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault/Feature.md","currentMarkdownLength":156,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038989433][info][elephantnote:save][0m [elephantnote:save] schedule [{"delay":160,"editDelta":2,"length":156,"notePath":"Feature.md","reason":"vue-watch"}]
+[32m[1786038989434][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":22,"previousLength":21,"revision":20,"runtimeLength":22}]
+[32m[1786038989434][info][elephantnote:recovery][0m [elephantnote:recovery] checkpoint:persisted [{"currentFileId":"mt-0","revision":17,"tabCount":1}]
+[32m[1786038989442][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault/Feature.md","currentMarkdownLength":157,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038989442][info][elephantnote:save][0m [elephantnote:save] schedule [{"delay":160,"editDelta":1,"length":157,"notePath":"Feature.md","reason":"vue-watch"}]
+[32m[1786038989442][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":23,"previousLength":22,"revision":21,"runtimeLength":23}]
+[32m[1786038989442][info][elephantnote:recovery][0m [elephantnote:recovery] checkpoint:persisted [{"currentFileId":"mt-0","revision":18,"tabCount":1}]
+[32m[1786038989447][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault/Feature.md","currentMarkdownLength":158,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038989449][info][elephantnote:save][0m [elephantnote:save] schedule [{"delay":160,"editDelta":1,"length":158,"notePath":"Feature.md","reason":"vue-watch"}]
+[32m[1786038989449][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":24,"previousLength":23,"revision":22,"runtimeLength":24}]
+[32m[1786038989449][info][elephantnote:recovery][0m [elephantnote:recovery] checkpoint:persisted [{"currentFileId":"mt-0","revision":19,"tabCount":1}]
+[32m[1786038989454][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-text-basic-editing-5HtgdX/vault/Feature.md","currentMarkdownLength":159,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038989454][info][elephantnote:save][0m [elephantnote:save] schedule [{"delay":160,"editDelta":1,"length":159,"notePath":"Feature.md","reason":"vue-watch"}]
+[32m[1786038989455][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":25,"previousLength":24,"revision":23,"runtimeLength":25}]
+[32m[1786038989456][info][elephantnote:recovery][0m [elephantnote:recovery] checkpoint:persisted [{"currentFileId":"mt-0","revision":20,"tabCount":1}]
+[32m[1786038989456][info][automation-api][0m [automation-api] dispatched trusted text input [{"characterCount":11,"rustMutationCompleted":true,"selector":"[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]","valueLength":11}]
+[32m[1786038989456][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]","exists":true,"textLength":27,"htmlLength":2281} 
+[automation-api] command:done request_id=automation-8 command=insertText
+[automation-api] command:start request_id=automation-9 command=readState args=0
+[32m[1786038989460][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Feature.md","markdownLength":159} 
+[automation-api] command:done request_id=automation-9 command=readState
+[automation-api] command:start request_id=automation-10 command=logs args=0
+[automation-api] command:done request_id=automation-10 command=logs

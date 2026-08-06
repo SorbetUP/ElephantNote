@@ -1,0 +1,73 @@
+libEGL warning: DRI3 error: Could not get DRI3 device
+libEGL warning: Ensure your X server supports DRI3 to get accelerated rendering
+ELEPHANT_AUTOMATION_PORT=34365
+ELEPHANT_ACCEPTANCE_TAURI_PORT=34365
+[automation-api] listening on http://127.0.0.1:34365/v1
+[32m[1786038966107][info][renderer][0m renderer diagnostics installed 
+[32m[1786038966109][info][tauri:file-utils][0m [tauri:file-utils] Rust-owned vault filesystem bridge installed 
+[32m[1786038966118][info][search][0m [search] runtime-guards:installed 
+[32m[1786038966118][info][search][0m [search] concepts:fallback:installed 
+[32m[1786038966118][info][tauri:marktext-save][0m [tauri:marktext-save] bridge:installed [{"atomic":true,"latestRevisionAcknowledgement":true,"serialized":true}]
+[32m[1786038966118][info][tauri:local-ipc][0m [tauri:local-ipc] bridge:installed 
+[32m[1786038966118][info][slash-menu][0m [slash-menu] diagnostics:installed 
+[32m[1786038966118][info][writing-command][0m [writing-command] installed 
+[32m[1786038966119][info][renderer][0m bootstrapTauriRuntime:start {"runtime":"tauri"}
+[32m[1786038966160][info][renderer][0m bootstrapTauriRuntime:appDataDir {"userDataPath":"/tmp/elephant-packaged-feature-vault-selection-iVK5Rf/.local/share/com.elephantnote.app"}
+[32m[1786038966165][info][renderer][0m bootstrapRenderer:done {"env":{"debug":false,"paths":{"_dataCenterPath":"/tmp/elephant-packaged-feature-vault-selection-iVK5Rf/.local/share/com.elephantnote.app","_editorBufferStorePath":"/tmp/elephant-packaged-feature-vault-selection-iVK5Rf/.local/share/com.elephantnote.app/editorStates","_electronUserDataPath":"/tmp/elephant-packaged-feature-vault-selection-iVK5Rf/.local/share/com.elephantnote.app","_logPath":"/tmp/elephant-packaged-feature-vault-selection-iVK5Rf/.local/share/com.elephantnote.app/logs/20268","_preferencesFilePath":"/tmp/elephant-packaged-feature-vault-selection-iVK5Rf/.local/share/com.elephantnote.app/preference.json","_preferencesPath":"/tmp/elephant-packaged-feature-vault-selection-iVK5Rf/.local/share/com.elephantnote.app","_ripgrepBinaryPath":"rg","_userDataPath":"/tmp/elephant-packaged-feature-vault-selection-iVK5Rf/.local/share/com.elephantnote.app"},"type":"editor","windowId":1}}
+[32m[1786038966168][info][renderer][0m renderer diagnostics installed 
+[32m[1786038966173][info][renderer][0m renderer shell initialized {"runtime":"tauri"}
+[32m[1786038966174][info][addons][0m [addons] install:start {"hasPinia":true,"hasTauriInvoke":true,"runtime":"tauri"}
+[32m[1786038966175][info][addons][0m [addons] register:start {"available":0,"count":0,"ids":[]}
+[32m[1786038966177][info][addons][0m [addons] store:installed {"registered":0}
+[32m[1786038966179][info][addons][0m [addons] external-runtime:install:start 
+[32m[1786038966182][info][addons][0m [addons] external-runtime:install:done 
+[32m[1786038966182][info][addons][0m [addons] install:done {"availableBuiltins":[],"registered":[],"resources":["addonManager","addons","document","elephantnote","fileUtils","marktext","pinia","router","runtime","services","tauri","vueApp","window"]}
+[32m[1786038966183][info][addons][0m [addons] community-trust-boundary:installed 
+[32m[1786038966184][info][addons][0m [addons] builtin-state:restored {"actions":["elephant.addon-packs.ensure-develop-parity","elephant.addon-packs.create","elephant.addon-packs.apply"],"enabled":[]}
+[32m[1786038966187][info][core-feature][0m [core-feature] enabled {"id":"core.addon-packs"}
+[32m[1786038966187][info][core-feature][0m [core-feature] ready {"id":"core.addon-packs"}
+[32m[1786038966190][info][excalidraw-cleanup][0m [excalidraw-cleanup] installed 
+[32m[1786038966190][info][excalidraw-image][0m [excalidraw-image] runtime fixes installed [{"hasPathExistsSync":true,"hasReadFile":true,"hasStat":true,"vaultRoot":""}]
+[32m[1786038966191][info][core-feature][0m [core-feature] enabled {"id":"core.excalidraw"}
+[32m[1786038966191][info][core-feature][0m [core-feature] ready {"id":"core.excalidraw"}
+[32m[1786038966241][info][renderer][0m renderer Vue shell mounted {"hasVisibleShell":false,"route":"/editor"}
+[32m[1786038966242][info][renderer][0m store-diagnostics:installed {"editor":{"currentFileId":null,"currentFilePath":null,"currentMarkdownLength":0,"tabCount":0,"tabIds":[]},"layout":{"rightColumn":"files","showSideBar":false,"showTabBar":false},"project":{"activeItem":null,"pendingTreeEvents":0,"root":null,"rootName":null}}
+[32m[1786038966251][info][tauri:marktext-save][0m [tauri:marktext-save] saved state reconciliation installed 
+[33;1m[1786038966254][warn][renderer][0m external addon registry deferred until a vault is active {"error":"No active ElephantNote vault."}
+[32m[1786038966257][info][automation-api][0m [automation-api] renderer inspection surface ready 
+[32m[1786038966258][info][acceptance-test][0m [acceptance-test] installed {"commands":["invokeTauri","readDom","click","fill","insertText","waitFor","waitUntilGone","executeCommand","press","selectText","contextClick","capabilities"]} 
+[32m[1786038966260][info][elephantnote:citation][0m [elephantnote:citation] runtime installed [{}]
+[32m[1786038966297][info][automation-api][0m [automation-api] renderer inspection surface ready 
+[automation-api] renderer:ready
+[32m[1786038966299][info][automation-api][0m [automation-api] canonical Rust input surface publisher installed 
+[32m[1786038966300][info][acceptance-test][0m [acceptance-test] transport:ready {} 
+[automation-api] command:start request_id=automation-0 command=readDom args=1
+[32m[1786038966379][info][acceptance-test][0m [acceptance-test] dom:read {"selector":".en-empty-card","exists":true,"textLength":186,"htmlLength":776} 
+[automation-api] command:done request_id=automation-0 command=readDom
+[automation-api] command:start request_id=automation-1 command=click args=1
+[32m[1786038966385][info][acceptance-test][0m [acceptance-test] dom:click {"selector":".en-primary-button"} 
+[32m[1786038966386][info][acceptance-test][0m [acceptance-test] dom:read {"selector":".en-primary-button","exists":true,"textLength":51,"htmlLength":117} 
+[automation-api] command:done request_id=automation-1 command=click
+[automation-api] command:start request_id=automation-2 command=readState args=0
+[32m[1786038966394][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"","markdownLength":0} 
+[32m[1786038966395][info][renderer][0m external addon registry retrying after vault activation 
+[automation-api] command:done request_id=automation-2 command=readState
+[32m[1786038966406][info][icon-rail][0m [icon-rail] layout:resolved [{"hidden":[],"order":["search","vault","sidebar-toggle"],"visible":["search","vault","sidebar-toggle"]}]
+[32m[1786038966431][info][icon-rail][0m [icon-rail] mounted [{"activeVaultId":"personal","isMac":false,"sidebarVisible":true}]
+[32m[1786038966431][info][excalidraw-addon][0m [excalidraw-addon] overlay mounted [{"noteDirectory":"/tmp/elephant-packaged-feature-vault-selection-iVK5Rf/.local/share/com.elephantnote.app/vaults/Personal","vaultRoot":"/tmp/elephant-packaged-feature-vault-selection-iVK5Rf/.local/share/com.elephantnote.app/vaults/Personal"}]
+[32m[1786038966431][info][search][0m [search] ensureActiveVault:init:start [{"previousVaultPath":"","vaultPath":"/tmp/elephant-packaged-feature-vault-selection-iVK5Rf/.local/share/com.elephantnote.app/vaults/Personal"}]
+[automation-api] command:start request_id=automation-3 command=readState args=0
+[32m[1786038966557][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"","markdownLength":0} 
+[automation-api] command:done request_id=automation-3 command=readState
+[official-addon-catalog] source=bundled root=/tmp/appimage_extracted_f7abf4311611ee8e3dea01fe4ee9589e/usr/lib/Elephant/resources/official-addons
+[32m[1786038966559][info][search][0m [search] bridge:status:done [{"indexedDocuments":0,"realEmbedding":false,"semantic":false,"status":"","vaultPath":"/tmp/elephant-packaged-feature-vault-selection-iVK5Rf/.local/share/com.elephantnote.app/vaults/Personal"}]
+[32m[1786038966559][info][search][0m [search] ensureActiveVault:init:done [{"indexedDocuments":0,"status":"ready","vaultPath":"/tmp/elephant-packaged-feature-vault-selection-iVK5Rf/.local/share/com.elephantnote.app/vaults/Personal"}]
+[32m[1786038966559][info][search][0m [search] status:start [{"vaultPath":"/tmp/elephant-packaged-feature-vault-selection-iVK5Rf/.local/share/com.elephantnote.app/vaults/Personal"}]
+[32m[1786038966563][info][search][0m [search] bridge:status:done [{"indexedDocuments":0,"realEmbedding":false,"semantic":false,"status":"","vaultPath":"/tmp/elephant-packaged-feature-vault-selection-iVK5Rf/.local/share/com.elephantnote.app/vaults/Personal"}]
+[32m[1786038966563][info][search][0m [search] status:done [{"indexedDocuments":0,"message":"","status":""}]
+[automation-api] command:start request_id=automation-4 command=waitFor args=2
+[32m[1786038966566][info][acceptance-test][0m [acceptance-test] dom:read {"selector":".en-library-toolbar","exists":true,"textLength":41,"htmlLength":3517} 
+[32m[1786038966567][info][acceptance-test][0m [acceptance-test] dom:wait:done {"selector":".en-library-toolbar"} 
+[automation-api] command:done request_id=automation-4 command=waitFor
+[automation-api] command:start request_id=automation-5 command=logs args=0
+[automation-api] command:done request_id=automation-5 command=logs

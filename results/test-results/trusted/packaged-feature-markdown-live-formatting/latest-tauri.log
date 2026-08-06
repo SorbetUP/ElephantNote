@@ -1,0 +1,137 @@
+libEGL warning: DRI3 error: Could not get DRI3 device
+libEGL warning: Ensure your X server supports DRI3 to get accelerated rendering
+ELEPHANT_AUTOMATION_PORT=42317
+ELEPHANT_ACCEPTANCE_TAURI_PORT=42317
+[automation-api] listening on http://127.0.0.1:42317/v1
+[32m[1786038991093][info][renderer][0m renderer diagnostics installed 
+[32m[1786038991094][info][tauri:file-utils][0m [tauri:file-utils] Rust-owned vault filesystem bridge installed 
+[32m[1786038991106][info][search][0m [search] runtime-guards:installed 
+[32m[1786038991106][info][search][0m [search] concepts:fallback:installed 
+[32m[1786038991106][info][tauri:marktext-save][0m [tauri:marktext-save] bridge:installed [{"atomic":true,"latestRevisionAcknowledgement":true,"serialized":true}]
+[32m[1786038991107][info][tauri:local-ipc][0m [tauri:local-ipc] bridge:installed 
+[32m[1786038991107][info][slash-menu][0m [slash-menu] diagnostics:installed 
+[32m[1786038991107][info][writing-command][0m [writing-command] installed 
+[32m[1786038991107][info][renderer][0m bootstrapTauriRuntime:start {"runtime":"tauri"}
+[32m[1786038991159][info][renderer][0m bootstrapTauriRuntime:appDataDir {"userDataPath":"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/.local/share/com.elephantnote.app"}
+[32m[1786038991165][info][renderer][0m bootstrapRenderer:done {"env":{"debug":false,"paths":{"_dataCenterPath":"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/.local/share/com.elephantnote.app","_editorBufferStorePath":"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/.local/share/com.elephantnote.app/editorStates","_electronUserDataPath":"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/.local/share/com.elephantnote.app","_logPath":"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/.local/share/com.elephantnote.app/logs/20268","_preferencesFilePath":"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/.local/share/com.elephantnote.app/preference.json","_preferencesPath":"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/.local/share/com.elephantnote.app","_ripgrepBinaryPath":"rg","_userDataPath":"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/.local/share/com.elephantnote.app"},"type":"editor","windowId":1}}
+[32m[1786038991170][info][renderer][0m renderer diagnostics installed 
+[32m[1786038991177][info][renderer][0m renderer shell initialized {"runtime":"tauri"}
+[32m[1786038991178][info][addons][0m [addons] install:start {"hasPinia":true,"hasTauriInvoke":true,"runtime":"tauri"}
+[32m[1786038991179][info][addons][0m [addons] register:start {"available":0,"count":0,"ids":[]}
+[32m[1786038991181][info][addons][0m [addons] store:installed {"registered":0}
+[32m[1786038991183][info][addons][0m [addons] external-runtime:install:start 
+[32m[1786038991184][info][addons][0m [addons] external-runtime:install:done 
+[32m[1786038991184][info][addons][0m [addons] install:done {"availableBuiltins":[],"registered":[],"resources":["addonManager","addons","document","elephantnote","fileUtils","marktext","pinia","router","runtime","services","tauri","vueApp","window"]}
+[32m[1786038991185][info][addons][0m [addons] community-trust-boundary:installed 
+[32m[1786038991186][info][addons][0m [addons] builtin-state:restored {"actions":["elephant.addon-packs.ensure-develop-parity","elephant.addon-packs.create","elephant.addon-packs.apply"],"enabled":[]}
+[32m[1786038991188][info][core-feature][0m [core-feature] enabled {"id":"core.addon-packs"}
+[32m[1786038991188][info][core-feature][0m [core-feature] ready {"id":"core.addon-packs"}
+[32m[1786038991192][info][excalidraw-cleanup][0m [excalidraw-cleanup] installed 
+[32m[1786038991192][info][excalidraw-image][0m [excalidraw-image] runtime fixes installed [{"hasPathExistsSync":true,"hasReadFile":true,"hasStat":true,"vaultRoot":""}]
+[32m[1786038991195][info][core-feature][0m [core-feature] enabled {"id":"core.excalidraw"}
+[32m[1786038991195][info][core-feature][0m [core-feature] ready {"id":"core.excalidraw"}
+[32m[1786038991257][info][renderer][0m renderer Vue shell mounted {"hasVisibleShell":false,"route":"/editor"}
+[32m[1786038991260][info][renderer][0m store-diagnostics:installed {"editor":{"currentFileId":null,"currentFilePath":null,"currentMarkdownLength":0,"tabCount":0,"tabIds":[]},"layout":{"rightColumn":"files","showSideBar":false,"showTabBar":false},"project":{"activeItem":null,"pendingTreeEvents":0,"root":null,"rootName":null}}
+[32m[1786038991265][info][tauri:marktext-save][0m [tauri:marktext-save] saved state reconciliation installed 
+[33;1m[1786038991268][warn][renderer][0m external addon registry deferred until a vault is active {"error":"No active ElephantNote vault."}
+[32m[1786038991272][info][automation-api][0m [automation-api] renderer inspection surface ready 
+[32m[1786038991273][info][acceptance-test][0m [acceptance-test] installed {"commands":["invokeTauri","readDom","click","fill","insertText","waitFor","waitUntilGone","executeCommand","press","selectText","contextClick","capabilities"]} 
+[32m[1786038991274][info][elephantnote:citation][0m [elephantnote:citation] runtime installed [{}]
+[32m[1786038991330][info][automation-api][0m [automation-api] renderer inspection surface ready 
+[automation-api] renderer:ready
+[32m[1786038991331][info][automation-api][0m [automation-api] canonical Rust input surface publisher installed 
+[32m[1786038991332][info][acceptance-test][0m [acceptance-test] transport:ready {} 
+[automation-api] command:start request_id=automation-0 command=selectVault args=1
+[32m[1786038991519][info][acceptance-test][0m [acceptance-test] tauri:invoke:start {"command":"tauri_vaults_select_path"} 
+[32m[1786038991521][info][acceptance-test][0m [acceptance-test] tauri:invoke:done {"command":"tauri_vaults_select_path"} 
+[32m[1786038991522][info][renderer][0m external addon registry retrying after vault activation 
+[32m[1786038991523][info][acceptance-test][0m [acceptance-test] vault:select {"path":"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault","vaultId":"vault"} 
+[32m[1786038991533][info][icon-rail][0m [icon-rail] layout:resolved [{"hidden":[],"order":["search","vault","sidebar-toggle"],"visible":["search","vault","sidebar-toggle"]}]
+[32m[1786038991558][info][icon-rail][0m [icon-rail] mounted [{"activeVaultId":"vault","isMac":false,"sidebarVisible":true}]
+[32m[1786038991559][info][excalidraw-addon][0m [excalidraw-addon] overlay mounted [{"noteDirectory":"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault","vaultRoot":"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault"}]
+[32m[1786038991560][info][search][0m [search] ensureActiveVault:init:start [{"previousVaultPath":"","vaultPath":"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault"}]
+[automation-api] command:done request_id=automation-0 command=selectVault
+[official-addon-catalog] source=bundled root=/tmp/appimage_extracted_f7abf4311611ee8e3dea01fe4ee9589e/usr/lib/Elephant/resources/official-addons
+[automation-api] command:start request_id=automation-1 command=waitFor args=2
+[32m[1786038991652][info][acceptance-test][0m [acceptance-test] dom:read {"selector":".en-library-toolbar","exists":true,"textLength":41,"htmlLength":3517} 
+[32m[1786038991653][info][acceptance-test][0m [acceptance-test] dom:wait:done {"selector":".en-library-toolbar"} 
+[automation-api] command:done request_id=automation-1 command=waitFor
+[32m[1786038991654][info][search][0m [search] bridge:status:done [{"indexedDocuments":0,"realEmbedding":false,"semantic":false,"status":"","vaultPath":"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault"}]
+[32m[1786038991655][info][search][0m [search] ensureActiveVault:init:done [{"indexedDocuments":0,"status":"ready","vaultPath":"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault"}]
+[32m[1786038991655][info][search][0m [search] status:start [{"vaultPath":"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault"}]
+[automation-api] command:start request_id=automation-2 command=openNote args=1
+[32m[1786038991658][info][search][0m [search] bridge:status:done [{"indexedDocuments":0,"realEmbedding":false,"semantic":false,"status":"","vaultPath":"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault"}]
+[32m[1786038991658][info][search][0m [search] status:done [{"indexedDocuments":0,"message":"","status":""}]
+[32m[1786038991659][info][acceptance-test][0m [acceptance-test] open:start {"path":"Formatting.md"} 
+[32m[1786038991669][info][tauri:local-ipc][0m [tauri:local-ipc] open-file via notes.read [{"channel":"mt::open-file","length":47,"relativePath":"Formatting.md"}]
+[32m[1786038991670][info][elephantnote:editor][0m [elephantnote:editor] NEW_TAB_WITH_CONTENT:start [{"currentFileId":null,"currentFilePath":null,"filename":"Formatting.md","markdownLength":47,"pathname":"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault/Formatting.md","selected":true,"tabCount":0}]
+[32m[1786038991672][info][elephantnote:editor][0m [elephantnote:editor] NEW_TAB_WITH_CONTENT:done [{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault/Formatting.md","id":"mt-0","pathname":"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault/Formatting.md","selected":true,"tabCount":1}]
+[32m[1786038991673][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault/Formatting.md","currentMarkdownLength":47,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038991678][info][elephantnote:editor][0m [elephantnote:editor] identity-change [{"activeFileId":"mt-0","activeVaultId":"vault","currentFileId":"mt-0","notePath":"Formatting.md","openedPath":"Formatting.md","previous":{"activeFileId":null,"currentFileId":null,"notePath":null,"openedPath":null},"tabCount":1}]
+[32m[1786038991678][info][elephantnote:editor][0m [elephantnote:editor] input-state [{"activeFileId":"mt-0","hasEditorDocument":true,"markdownLength":47,"notePath":"Formatting.md","visibleMarkdownLength":33}]
+[32m[1786038991688][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] component:mounted [{"markdownLength":33,"mode":"rust"}]
+[32m[1786038991688][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] mount:start [{"generation":1,"hasFactory":false,"markdownLength":33,"mode":"rust"}]
+[32m[1786038991770][info][elephantnote:muya-rust][0m [elephantnote:muya-rust] using official Tauri core invoke 
+[32m[1786038991770][info][elephantnote:editor][0m [elephantnote:editor] real Muya UI with Rust-owned core active [{"engine":"rust","sessionId":"muya:1786038991769:1","surface":"muya"}]
+[32m[1786038991772][info][elephantnote:editor][0m [elephantnote:editor] mounted [{"notePath":"Formatting.md","vault":"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault"}]
+[32m[1786038991772][info][elephantnote:save][0m [elephantnote:save] observed active markdown [{"isSaved":true,"length":47,"notePath":"Formatting.md","reason":"mount"}]
+[32m[1786038991774][info][elephantnote:muya-rust][0m [elephantnote:muya-rust] initial session:create:start [{"markdownLength":33,"sessionId":"muya:1786038991769:1"}]
+[32m[1786038991774][info][automation-api][0m [automation-api] installed command error observability 
+[32m[1786038991776][info][acceptance-test][0m [acceptance-test] open:done {"path":"Formatting.md","markdownLength":47} 
+[32m[1786038991777][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Formatting.md","markdownLength":47} 
+[32m[1786038991804][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Formatting.md","markdownLength":47} 
+[32m[1786038991805][info][elephantnote:muya-rust][0m [elephantnote:muya-rust] initial session:create:done [{"markdownLength":33,"revision":0,"sessionId":"muya:1786038991769:1"}]
+[32m[1786038991831][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] mount:ready [{"contentEditable":"true","generation":1,"hasDomContainer":true,"markdownLength":33,"revision":0}]
+[32m[1786038991834][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Formatting.md","markdownLength":47} 
+[automation-api] command:done request_id=automation-2 command=openNote
+[automation-api] command:start request_id=automation-3 command=waitFor args=2
+[32m[1786038991837][info][automation-api][0m [automation-api] published canonical Rust input surface [{"connected":true,"contentEditable":"true","revision":0}]
+[32m[1786038991839][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]","exists":true,"textLength":29,"htmlLength":1650} 
+[32m[1786038991839][info][acceptance-test][0m [acceptance-test] dom:wait:done {"selector":"[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]"} 
+[automation-api] command:done request_id=automation-3 command=waitFor
+[automation-api] command:start request_id=automation-4 command=readDom args=1
+[32m[1786038991842][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":29,"htmlLength":1650} 
+[automation-api] command:done request_id=automation-4 command=readDom
+[automation-api] command:start request_id=automation-5 command=readDom args=1
+[32m[1786038991846][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"] strong","exists":true,"textLength":4,"htmlLength":39} 
+[automation-api] command:done request_id=automation-5 command=readDom
+[automation-api] command:start request_id=automation-6 command=selectText args=3
+[32m[1786038991854][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"] strong","exists":true,"textLength":4,"htmlLength":39} 
+[automation-api] command:done request_id=automation-6 command=selectText
+[automation-api] command:start request_id=automation-7 command=insertText args=2
+[32m[1786038991862][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] user-mutation-boundary:opened [{"reason":"beforeinput:insertText"}]
+[32m[1786038991877][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault/Formatting.md","currentMarkdownLength":170,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038991879][info][elephantnote:save][0m [elephantnote:save] schedule [{"delay":160,"editDelta":123,"length":170,"notePath":"Formatting.md","reason":"vue-watch"}]
+[32m[1786038991881][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":30,"previousLength":33,"revision":1,"runtimeLength":30}]
+[32m[1786038991883][info][elephantnote:recovery][0m [elephantnote:recovery] checkpoint:persisted [{"currentFileId":"mt-0","revision":1,"tabCount":1}]
+[32m[1786038991895][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault/Formatting.md","currentMarkdownLength":171,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038991896][info][elephantnote:save][0m [elephantnote:save] schedule [{"delay":160,"editDelta":1,"length":171,"notePath":"Formatting.md","reason":"vue-watch"}]
+[32m[1786038991897][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":31,"previousLength":30,"revision":2,"runtimeLength":31}]
+[32m[1786038991897][info][elephantnote:recovery][0m [elephantnote:recovery] checkpoint:persisted [{"currentFileId":"mt-0","revision":2,"tabCount":1}]
+[32m[1786038991905][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault/Formatting.md","currentMarkdownLength":172,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038991905][info][elephantnote:save][0m [elephantnote:save] schedule [{"delay":160,"editDelta":1,"length":172,"notePath":"Formatting.md","reason":"vue-watch"}]
+[32m[1786038991908][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":32,"previousLength":31,"revision":3,"runtimeLength":32}]
+[32m[1786038991908][info][elephantnote:recovery][0m [elephantnote:recovery] checkpoint:persisted [{"currentFileId":"mt-0","revision":3,"tabCount":1}]
+[32m[1786038991915][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault/Formatting.md","currentMarkdownLength":173,"tabCount":1,"tabIds":["mt-0"]},"type":"direct"}
+[32m[1786038991915][info][elephantnote:save][0m [elephantnote:save] schedule [{"delay":160,"editDelta":1,"length":173,"notePath":"Formatting.md","reason":"vue-watch"}]
+[32m[1786038991918][info][elephantnote:rust-editor][0m [elephantnote:rust-editor] model-value-change [{"generation":1,"nextLength":33,"previousLength":32,"revision":4,"runtimeLength":33}]
+[32m[1786038991918][info][elephantnote:recovery][0m [elephantnote:recovery] checkpoint:persisted [{"currentFileId":"mt-0","revision":4,"tabCount":1}]
+[32m[1786038991918][info][automation-api][0m [automation-api] dispatched trusted text input [{"characterCount":4,"rustMutationCompleted":true,"selector":"[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]","valueLength":4}]
+[32m[1786038991918][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"][contenteditable=\"true\"], [data-testid=\"muya-rust-runtime-editor\"] [contenteditable=\"true\"]","exists":true,"textLength":31,"htmlLength":1650} 
+[automation-api] command:done request_id=automation-7 command=insertText
+[automation-api] command:start request_id=automation-8 command=readState args=0
+[32m[1786038991926][info][acceptance-test][0m [acceptance-test] read:state {"notePath":"Formatting.md","markdownLength":173} 
+[automation-api] command:done request_id=automation-8 command=readState
+[automation-api] command:start request_id=automation-9 command=readDom args=1
+[32m[1786038991931][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"] strong","exists":true,"textLength":4,"htmlLength":39} 
+[automation-api] command:done request_id=automation-9 command=readDom
+[automation-api] command:start request_id=automation-10 command=readDom args=1
+[32m[1786038991936][info][acceptance-test][0m [acceptance-test] dom:read {"selector":"[data-testid=\"muya-rust-runtime-editor\"]","exists":true,"textLength":31,"htmlLength":1650} 
+[automation-api] command:done request_id=automation-10 command=readDom
+[32m[1786038992077][info][elephantnote:save][0m [elephantnote:save] write:start [{"length":173,"notePath":"Formatting.md","reason":"vue-watch"}]
+[32m[1786038992086][info][tauri:local-ipc][0m [tauri:local-ipc] dispatch [{"channel":"mt::tab-saved"}]
+[32m[1786038992087][info][renderer][0m pinia:editor {"editor":{"currentFileId":"mt-0","currentFilePath":"/tmp/elephant-packaged-feature-markdown-live-formatting-t0KUQ1/vault/Formatting.md","currentMarkdownLength":173,"tabCount":1,"tabIds":["mt-0"]},"type":"patch function"}
+[32m[1786038992087][info][tauri:marktext-save][0m [tauri:marktext-save] saved state reconciled [{"currentFileId":"mt-0","currentFileSaved":true,"reconciled":true,"tabId":"mt-0"}]
+[32m[1786038992088][info][elephantnote:save][0m [elephantnote:save] write:done [{"length":173,"notePath":"Formatting.md","via":"notes.write"}]
+[automation-api] command:start request_id=automation-11 command=logs args=0
+[automation-api] command:done request_id=automation-11 command=logs

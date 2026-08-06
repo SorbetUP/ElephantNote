@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const repository = 'https://github.com/SorbetUP/Elephant-Addons.git'
-const pinnedRef = process.env.ELEPHANT_ADDONS_REF || '7f75c12e8002082489745605209b8a3f21f44184'
+const pinnedRef = process.env.ELEPHANT_ADDONS_REF || '2ada7a22d4e98663911648746da47b5f31b04775'
 const cacheRoot = path.join(root, '.cache', 'elephant-addons')
 
 const runGit = (args, cwd = root) => execFileSync('git', args, { cwd, stdio: 'inherit' })
@@ -58,17 +58,13 @@ const ensureLink = (linkName, target) => {
     fs.rmSync(linkPath, { recursive: true, force: true })
     fs.symlinkSync(target, linkPath, process.platform === 'win32' ? 'junction' : 'dir')
   } catch (error) {
-    // Another concurrent addons:sync may have created the correct link between
-    // rmSync and symlinkSync. Treat that race as success; surface all other
-    // filesystem failures with their original error and path.
     if (error?.code === 'EEXIST' && pointsToTarget()) return
     throw error
   }
 }
 
 const materializeNativeServices = () => {
-  const skippedExplicitly = process.env.ELEPHANT_SKIP_NATIVE_ADDON_BUILD === '1'
-  if (skippedExplicitly) {
+  if (process.env.ELEPHANT_SKIP_NATIVE_ADDON_BUILD === '1') {
     console.log('[addons] native service materialization skipped explicitly')
     return
   }

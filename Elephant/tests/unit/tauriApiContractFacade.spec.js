@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ELEPHANTNOTE_API_ACTIONS as API, ELEPHANTNOTE_API_VERSION } from 'common/elephantnote/apiActions'
+import { ELEPHANTNOTE_API_ACTIONS as API, ELEPHANTNOTE_API_VERSION } from 'common/elephantnote/apiContractsV2'
 import { installTauriApiContractFacade } from '../../../src/renderer/src/platform/tauriApiContractFacade'
 
 const targetWithBridge = () => {
@@ -14,9 +14,7 @@ const targetWithBridge = () => {
         searchHuggingFace: vi.fn(async(payload) => ({ results: [payload.query] })),
         onDownloadProgress: vi.fn(() => vi.fn())
       },
-      calendar: {},
-      search: {},
-      atomicFeatures: {}
+      calendar: {}, search: {}, atomicFeatures: {}
     }
   }
   return { target, originalCall }
@@ -26,7 +24,6 @@ describe('Tauri API contract facade', () => {
   it('advertises the complete versioned contract', async() => {
     const { target } = targetWithBridge()
     expect(installTauriApiContractFacade(target)).toBe(true)
-
     const description = await target.elephantnote.api.describe()
     expect(description.version).toBe(ELEPHANTNOTE_API_VERSION)
     expect(description.backendVersion).toBe('legacy')
@@ -38,21 +35,15 @@ describe('Tauri API contract facade', () => {
   it('executes canonical provider actions through the platform adapter', async() => {
     const { target, originalCall } = targetWithBridge()
     installTauriApiContractFacade(target)
-
     await expect(target.elephantnote.api.call(API.MODELS_SEARCH, {
-      provider: 'huggingface',
-      query: 'tiny'
-    })).resolves.toMatchObject({
-      ok: true,
-      data: { results: ['tiny'] }
-    })
+      provider: 'huggingface', query: 'tiny'
+    })).resolves.toMatchObject({ ok: true, data: { results: ['tiny'] } })
     expect(originalCall).not.toHaveBeenCalled()
   })
 
   it('delegates ordinary API actions to the original Tauri bridge', async() => {
     const { target, originalCall } = targetWithBridge()
     installTauriApiContractFacade(target)
-
     await target.elephantnote.api.call(API.VAULTS_GET, {})
     expect(originalCall).toHaveBeenCalledWith(API.VAULTS_GET, {})
   })
@@ -60,10 +51,7 @@ describe('Tauri API contract facade', () => {
   it('returns typed envelopes instead of leaking platform exceptions', async() => {
     const { target } = targetWithBridge()
     installTauriApiContractFacade(target)
-
-    const response = await target.elephantnote.api.call(API.CALENDAR_SYNC, {
-      provider: 'google'
-    })
+    const response = await target.elephantnote.api.call(API.CALENDAR_SYNC, { provider: 'google' })
     expect(response.ok).toBe(false)
     expect(response.error.code).toBe('ELEPHANTNOTE_COMPATIBILITY_METHOD_UNAVAILABLE')
   })

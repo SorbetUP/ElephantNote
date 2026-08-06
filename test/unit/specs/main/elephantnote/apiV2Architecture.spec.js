@@ -89,6 +89,23 @@ describe('ElephantNote API v2 architecture', () => {
       .toMatchObject({ repoId: 'org/model' })
   })
 
+  it('accepts the exact download and removal payloads emitted by ModelsView', () => {
+    const download = {
+      id: 'model.gguf',
+      provider: 'tauri-rust',
+      source: 'remote',
+      uri: 'hf:org/model/model.gguf',
+      fileName: 'model.gguf',
+      filename: 'model.gguf',
+      sizeBytes: 1024,
+      originalRepoId: 'org/model'
+    }
+    expect(validateApiPayload(API.MODELS_ACQUIRE, download)).toEqual(download)
+    expect(validateApiPayload(API.MODELS_DELETE, {
+      modelRef: '/vault/.models/model.gguf'
+    })).toEqual({ modelRef: '/vault/.models/model.gguf' })
+  })
+
   it('routes every public domain through call and subscribe abstractions', async() => {
     const call = vi.fn(async() => ({}))
     const subscribe = vi.fn(() => vi.fn())

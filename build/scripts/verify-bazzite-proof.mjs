@@ -56,6 +56,7 @@ const validate = ({ runnerSource, journeySource, workflowSource, proofManifest }
   assert(workflowSource.includes('proof-status:'), 'Bazzite workflow must aggregate proof availability in a proof-status job.')
   assert(workflowSource.includes('needs: [contract, production-proof]'), 'Bazzite status must depend on contract and hardware proof jobs.')
   assert(workflowSource.includes('if: always()'), 'Bazzite status must execute even after a failure, cancellation or skip.')
+  assert(workflowSource.includes('github.event.pull_request.head.sha || github.sha'), 'Bazzite status must record the exact PR head SHA instead of only the synthetic merge SHA.')
   for (const status of ['NOT PROVEN', 'MISSING', 'SKIPPED', 'BLOCKED']) {
     assert(workflowSource.includes(status), `Bazzite status must expose ${status}.`)
   }
@@ -73,6 +74,7 @@ const mutations = [
   ['missing-wayland-check', { ...valid, runnerSource: runner.replace('XDG_SESSION_TYPE', 'REMOVED_SESSION_TYPE') }],
   ['x11-regression', { ...valid, journeySource: `${journey}\n// xdotool regression` }],
   ['missing-sha-contract', { ...valid, workflowSource: workflow.replaceAll('expected_sha256', 'removed_hash_input') }],
+  ['wrong-pr-sha', { ...valid, workflowSource: workflow.replace('github.event.pull_request.head.sha || github.sha', 'github.sha') }],
   ['missing-scenario', { ...valid, journeySource: journey.replace(manifest.requiredJourneyScenarios[0], 'removed-scenario') }],
   ['missing-fail-closed-status', { ...valid, workflowSource: workflow.replace('proof-status:', 'removed-proof-status:').replaceAll('NOT PROVEN', 'REMOVED_STATUS') }]
 ]
@@ -86,4 +88,4 @@ if (errors.length) {
   process.exit(1)
 }
 
-console.log('[bazzite-proof] Bazzite Wayland production-proof contract, fail-closed availability and mutation sensitivity passed')
+console.log('[bazzite-proof] Bazzite Wayland production-proof contract, exact PR SHA, fail-closed availability and mutation sensitivity passed')

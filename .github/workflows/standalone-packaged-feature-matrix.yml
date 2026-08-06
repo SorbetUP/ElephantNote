@@ -1,0 +1,181 @@
+name: Standalone exact AppImage proof
+
+on:
+  push:
+    branches:
+      - agent/standalone-final-five-proof
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: standalone-appimage-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  exact-appimage:
+    name: Build and run twenty isolated features without external actions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      CARGO_TERM_COLOR: always
+      FORCE_COLOR: '1'
+    steps:
+      - name: Clone exact commit without actions checkout
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          git clone --filter=blob:none --no-checkout \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" repo
+          cd repo
+          git fetch --depth 1 origin "$GITHUB_SHA"
+          git checkout --detach "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: Verify independent feature contract
+        working-directory: repo
+        run: node build/scripts/verify-packaged-feature-matrix.mjs
+
+      - name: Install native Linux dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            libx11-dev libxkbfile-dev libsecret-1-dev libfontconfig-dev \
+            xvfb libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
+            libdrm2 libgtk-3-0 libgbm1 libasound2t64 unzip \
+            libayatana-appindicator3-dev librsvg2-dev libwebkit2gtk-4.1-dev \
+            patchelf xdg-utils
+
+      - name: Install pinned Rust and Tauri CLI without external actions
+        working-directory: repo
+        shell: bash
+        run: |
+          set -euxo pipefail
+          rustup toolchain install 1.91.0 --profile minimal --target wasm32-unknown-unknown
+          rustup default 1.91.0
+          if ! cargo tauri --version 2>/dev/null | grep -Fq '2.11.2'; then
+            cargo install tauri-cli --version 2.11.2 --locked
+          fi
+          cargo tauri --version | grep -F '2.11.2'
+
+      - name: Install locked JavaScript and WASM dependencies
+        working-directory: repo
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          npm_config_user_agent: pnpm
+          USE_ELECTRON_CLANG: '0'
+        run: |
+          set -euxo pipefail
+          node --version
+          corepack enable
+          corepack prepare pnpm@10.33.4 --activate
+          pnpm --version
+          node build/scripts/install-wasm-bindgen-cli.mjs
+          pnpm install --frozen-lockfile --ignore-scripts
+          git diff --exit-code -- package.json pnpm-lock.yaml
+          node build/scripts/sync-elephant-addons.mjs
+          node build/scripts/postinstall.js
+
+      - name: Build exact AppImage
+        id: build
+        working-directory: repo
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          pnpm build:linux 2>&1 | tee packaged-feature-build.log
+          BUILD_EXIT=${PIPESTATUS[0]}
+          set -e
+          echo "build_exit=$BUILD_EXIT" >> "$GITHUB_OUTPUT"
+          if [ "$BUILD_EXIT" -eq 0 ]; then
+            APPIMAGE_PATH="$(find Elephant/backend/tauri/target/release/bundle/appimage -maxdepth 1 -type f -name '*.AppImage' -print -quit)"
+            test -f "$APPIMAGE_PATH"
+            chmod +x "$APPIMAGE_PATH"
+            APPIMAGE_PATH="$(realpath "$APPIMAGE_PATH")"
+            echo "$APPIMAGE_PATH" > packaged-feature-appimage.path
+            sha256sum "$APPIMAGE_PATH" | tee packaged-feature-appimage.sha256
+          fi
+          exit 0
+
+      - name: Run twenty isolated features on exact AppImage
+        id: matrix
+        if: ${{ steps.build.outputs.build_exit == '0' }}
+        working-directory: repo
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          APPIMAGE_PATH="$(cat packaged-feature-appimage.path)"
+          xvfb-run --auto-servernum env \
+            APPIMAGE_EXTRACT_AND_RUN=1 \
+            ELEPHANT_PACKAGED_FORMAT=linux-appimage \
+            ELEPHANT_ACCEPTANCE_APP_PATH="$APPIMAGE_PATH" \
+            ELEPHANT_PACKAGED_APP="$APPIMAGE_PATH" \
+            ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
+            node build/scripts/run-packaged-feature-matrix.mjs \
+            2>&1 | tee packaged-feature-matrix.log
+          MATRIX_EXIT=${PIPESTATUS[0]}
+          set -e
+          echo "matrix_exit=$MATRIX_EXIT" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Publish proof files through Git without upload-artifact
+        if: ${{ always() }}
+        working-directory: repo
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_EXIT: ${{ steps.build.outputs.build_exit }}
+          MATRIX_EXIT: ${{ steps.matrix.outputs.matrix_exit }}
+        run: |
+          set -euxo pipefail
+          PROOF_BRANCH="proof/standalone-${GITHUB_SHA:0:12}"
+          PROOF_DIR="$(mktemp -d)"
+          mkdir -p "$PROOF_DIR/results"
+          for file in \
+            packaged-feature-build.log \
+            packaged-feature-appimage.sha256 \
+            packaged-feature-matrix.log; do
+            if [ -f "$file" ]; then cp "$file" "$PROOF_DIR/results/"; fi
+          done
+          if [ -d test-results/trusted ]; then
+            mkdir -p "$PROOF_DIR/results/test-results"
+            cp -a test-results/trusted "$PROOF_DIR/results/test-results/"
+          fi
+          python - <<'PY' > "$PROOF_DIR/results/proof-meta.json"
+          import json, os
+          print(json.dumps({
+              "testedCommit": os.environ["GITHUB_SHA"],
+              "workflowRun": os.environ["GITHUB_RUN_ID"],
+              "buildExit": int(os.environ.get("BUILD_EXIT") or -1),
+              "matrixExit": int(os.environ.get("MATRIX_EXIT") or -1),
+              "proofBranch": f"proof/standalone-{os.environ['GITHUB_SHA'][:12]}",
+          }, indent=2))
+          PY
+          cd "$PROOF_DIR"
+          git init
+          git checkout -b "$PROOF_BRANCH"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add results
+          git commit -m "proof: exact AppImage matrix for ${GITHUB_SHA}"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force origin HEAD:"refs/heads/$PROOF_BRANCH"
+          echo "PROOF_BRANCH=$PROOF_BRANCH"
+
+      - name: Enforce build and matrix verdict
+        if: ${{ always() }}
+        shell: bash
+        env:
+          BUILD_EXIT: ${{ steps.build.outputs.build_exit }}
+          MATRIX_EXIT: ${{ steps.matrix.outputs.matrix_exit }}
+        run: |
+          set -euxo pipefail
+          test "${BUILD_EXIT:-1}" -eq 0
+          test "${MATRIX_EXIT:-1}" -eq 0

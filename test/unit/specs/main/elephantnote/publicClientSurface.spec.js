@@ -6,6 +6,8 @@ describe('public ElephantNote client surface', () => {
     for (const domain of [
       'vaults',
       'notes',
+      'attachments',
+      'drawings',
       'calendar',
       'search',
       'models',

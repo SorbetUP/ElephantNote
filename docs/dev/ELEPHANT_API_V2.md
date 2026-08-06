@@ -15,6 +15,7 @@ Every request uses a canonical action and a plain-object payload. Errors use the
 ## Domains
 
 - `vaults`, `directory`, `notes`, `folders`, `sidebar`, `entries`
+- `attachments`, `drawings`
 - `calendar`, `sources`, `wiki`, `search`, `rag`
 - `ai`, `models`, `atomic`, `atomicFeatures`
 - `markdown`, `editorEngine` (`muya` remains a compatibility alias)
@@ -50,6 +51,20 @@ The contract covers parsing, rendering, frontmatter, links, clipboard operations
 cursor navigation, input rules, tables, image selection, composition and editor snapshots.
 The UI host may render the legacy editor component, but domain code must use these contract
 methods for cross-platform behavior.
+
+## Attachments and drawings
+
+Vault assets use the same API boundary:
+
+```js
+await elephantnoteClient.attachments.writeText('imports/readme.txt', content)
+const drawing = await elephantnoteClient.drawings.create('Architecture')
+await elephantnoteClient.drawings.write(drawing.relativePath, scene)
+```
+
+Paths and scene payloads are validated before transport. The platform adapter maps these actions
+to the existing Tauri attachment and drawing commands without exposing those command names to UI
+components.
 
 ## Compatibility policy
 

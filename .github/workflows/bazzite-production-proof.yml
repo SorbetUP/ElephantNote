@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - '.github/workflows/bazzite-production-proof.yml'
+      - 'build/scripts/bazzite-native-vault-picker.py'
       - 'build/scripts/run-bazzite-packaged-user-journey.mjs'
       - 'build/scripts/run-bazzite-production-proof.mjs'
       - 'build/scripts/run-packaged-feature-matrix.mjs'
@@ -14,6 +15,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/bazzite-production-proof.yml'
+      - 'build/scripts/bazzite-native-vault-picker.py'
       - 'build/scripts/run-bazzite-packaged-user-journey.mjs'
       - 'build/scripts/run-bazzite-production-proof.mjs'
       - 'build/scripts/run-packaged-feature-matrix.mjs'

@@ -1,0 +1,34 @@
+name: Apply Bazzite drop proof hardening
+
+on:
+  push:
+    branches: [agent/addon-runtime-stabilization]
+    paths:
+      - .github/workflows/agent-apply-bazzite-drop-proofs.yml
+      - build/scripts/agent_fix_bazzite_drop_proofs.py
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/addon-runtime-stabilization
+          fetch-depth: 0
+      - name: Apply proof hardening
+        run: python build/scripts/agent_fix_bazzite_drop_proofs.py
+      - name: Commit final patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/agent-apply-bazzite-drop-proofs.yml
+          rm build/scripts/agent_fix_bazzite_drop_proofs.py
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m 'fix: harden physical drop and Excalidraw proofs'
+          git push origin HEAD:agent/addon-runtime-stabilization

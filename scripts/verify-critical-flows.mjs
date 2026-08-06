@@ -71,9 +71,9 @@ for (const file of [
   'src-tauri/src/tauri_extra_commands.rs',
   'src-tauri/src/vault/sync.rs',
   'src-tauri/src/sync_contract_tests.rs',
-  'web/sync/WebGitSyncEngine.mjs',
   'Elephant/shared/apiContracts.js',
   'Elephant/shared/apiContractsRuntime.js',
+  'Elephant/shared/apiContractsV2.js',
   'Elephant/shared/sync.js',
   'Elephant/front/app/components/editor/NoteEditorHost.vue',
   'Elephant/front/app/components/editor/ExcalidrawDialog.vue',
@@ -88,7 +88,6 @@ for (const file of [
   'test/unit/specs/main/elephantnote/tauriElephantNoteBridge.spec.js',
   'test/unit/specs/main/elephantnote/tauriLocalIpcBridge.spec.js',
   'test/unit/specs/main/elephantnote/tauriOnlyRuntime.spec.js',
-  'test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js',
   'test/unit/realComponentImportSmoke.spec.js',
   'test/unit/specs/main/elephantnote/agentSkills.spec.js',
   'vitest.config.js'
@@ -158,11 +157,20 @@ ordered('src/renderer/src/platform/tauriMarkTextSaveBridge.js', ['const writeVia
 has('src-tauri/src/lib_min.rs', 'tauri_extra_commands::tauri_marktext_write_file', 'registered MarkText backend writer')
 ordered('src-tauri/src/tauri_extra_commands.rs', ['fn writable_path_inside_root(root: &Path, candidate: &Path) -> R<PathBuf> {', 'pub fn tauri_marktext_write_file(app: AppHandle, pathname: String, content: String) -> R<Value> {', 'let path = writable_path_inside_root(Path::new(&root), Path::new(&pathname))?;', 'let changed = write_text_if_changed(&path, &content)?;'], 'guarded Rust save command')
 
-ordered('Elephant/shared/apiContracts.js', ["const textString = (value) => typeof value === 'string'", 'const optionalSyncOperationArray =', 'operations: optionalSyncOperationArray', "action('NOTES_READ', 'notes.read'", "action('NOTES_WRITE', 'notes.write'", "action('SYNC_PLAN', 'sync.plan', syncRunPayload)"], 'base API contract shape')
+for (const [needle, description] of [
+  ["const textString = (value) => typeof value === 'string'", 'text payload validator'],
+  ['const optionalSyncOperationArray =', 'sync operation array validator'],
+  ['operations: optionalSyncOperationArray', 'sync operations payload field'],
+  ["action('NOTES_READ', 'notes.read'", 'note read action'],
+  ["'NOTES_WRITE',", 'note write action key'],
+  ["'notes.write',", 'note write action name'],
+  ["action('SYNC_PLAN', 'sync.plan', syncRunPayload)", 'sync plan action']
+]) has('Elephant/shared/apiContracts.js', needle, description)
 ordered('Elephant/shared/apiContractsRuntime.js', ["import * as baseContracts from './apiContracts.js'", "const runtimeField = ['local', 'Runtime'].join('')", "actionName === 'ai.config.set'", 'baseContracts.validateApiPayload(actionName, validatedByBaseContract)', 'return payload'], 'runtime-aware API contract wrapper')
 has('vitest.config.js', "'common/elephantnote/apiContracts': apiContractsRuntime", 'Vitest alias for runtime-aware API contracts')
 ordered('test/unit/specs/main/elephantnote/apiContracts.spec.js', ['accepts explicit valid sync.plan operations', 'rejects unknown sync.plan operations instead of falling back to the default plan', 'rejects non-array sync.plan operations', 'accepts local runtime AI config payloads used by the Tauri bridge'], 'API contract regression tests')
-ordered('Elephant/front/app/services/elephantnoteClient/apiRuntime.js', ["import { validateApiPayload } from 'common/elephantnote/apiContracts'", 'const validatedPayload = validateApiPayload(action, plainPayload)', 'requireElephantNoteApi().call(action, validatedPayload)', 'return localFallbackCall(validatedPayload)'], 'renderer API validation path')
+ordered('Elephant/front/app/services/elephantnoteClient/apiRuntime.js', ["import { validateApiRequest, validateApiResponse } from '../../../../../shared/apiContractsV2.js'", 'const validatedPayload = validateApiRequest(action, payload)', 'const response = await requestApi(action, validatedPayload)', 'return validateApiResponse(action, response)'], 'renderer API v2 validation path')
+for (const needle of ['UNKNOWN_API_ACTION', 'UNKNOWN_API_METHOD', 'UNAVAILABLE_API_ACTION', "if (canFallback(error) && typeof fallback === 'function')"]) has('Elephant/front/app/services/elephantnoteClient/apiRuntime.js', needle, `API v2 fallback invariant ${needle}`)
 ordered('Elephant/front/app/services/elephantnoteClient/domainClients.js', ['const CHAT_REBUILD_COOLDOWN_MS', 'const searchVaultInitializedForChat', 'const shouldRebuildChatSearch', 'notes: {', 'read: (relativePath) => call(API.NOTES_READ', 'write: (payload = {}) => call(API.NOTES_WRITE, payload)'], 'front client note methods and chat search throttling')
 has('test/unit/elephantnote/domainClients.spec.js', 'does not rebuild chat search when the model already produced an answer', 'chat search rebuild throttling test')
 
@@ -177,8 +185,6 @@ for (const needle of ['desktopRclone": false', 'mobileRcloneBinary": false', 'mo
 for (const needle of ['sync_push_copies_visible_vault_files_to_local_target', 'sync_pull_copies_target_files_back_to_vault', 'sync_preserves_both_versions_on_conflict', 'sync_run_reports_actionable_missing_target_error']) has('src-tauri/src/vault/sync.rs', needle, `Tauri embedded sync unit test ${needle}`)
 has('src-tauri/src/sync_contract_tests.rs', 'tauri_sync_runtime_is_embedded_local_and_external_free', 'Tauri local sync runtime contract test')
 has('test/unit/specs/main/elephantnote/syncPlan.spec.js', 'can pull into a second device without creating a local snapshot first', 'sync plan pull regression test')
-has('test/unit/specs/main/elephantnote/webGitSyncEngine.spec.js', 'compacts completed queue items so periodic auto-sync cannot grow memory forever', 'web sync queue compaction test')
-ordered('web/sync/WebGitSyncEngine.mjs', ['normalizeQueueInput', 'readMetadataJson', 'ALL_LOCAL_METADATA_FILES', 'untrackSyncMetadata', 'compactQueue()', 'backend: SYNC_BACKENDS.GIT', 'ensureGitExclude()'], 'web sync engine local metadata handling')
 ordered('scripts/sync-two-docker-smoke.mjs', ['assertPeerIdentity', 'stopDevice(deviceB)', 'device B reconnect auto-pull', "await assertNoTrackedSyncMetadata(deviceB, 'device B reconnect auto-pull')", 'assertResourceBudget', 'local sync metadata files stay untracked in each container git repository'], 'Docker pair sync smoke invariants')
 has('.github/workflows/sync-docker.yml', 'node scripts/sync-two-docker-smoke.mjs', 'Docker pair sync workflow')
 

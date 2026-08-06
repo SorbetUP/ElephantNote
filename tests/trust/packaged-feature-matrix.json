@@ -11,7 +11,7 @@
       "visible-pointer-draw",
       "scene-written-to-disk",
       "png-preview-written-to-disk",
-      "saved-drawing-reopened-from-library"
+      "saved-drawing-reopened-from-note"
     ],
     "sidebar-hide-full-shortcut": [
       "physical-keyboard-shortcut"

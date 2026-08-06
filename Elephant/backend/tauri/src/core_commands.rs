@@ -368,14 +368,47 @@ pub fn tauri_drawings_read(app: AppHandle, relative_path: String) -> R<Value> {
 }
 
 #[tauri::command]
-pub fn tauri_drawings_write(app: AppHandle, relative_path: String, scene: Value) -> R<Value> {
+pub fn tauri_drawings_write(
+    app: AppHandle,
+    relative_path: String,
+    scene: Option<Value>,
+    scene_blob: Option<String>,
+    image_blob: Option<Vec<u8>>,
+) -> R<Value> {
     let root = active_vault_root(&app)?;
-    let path = writable_relative_path(&root, &relative_path)?;
-    write_json(path.clone(), &scene)?;
+    let scene_path = writable_relative_path(&root, &relative_path)?;
+    let scene = match scene {
+        Some(scene) => scene,
+        None => {
+            let raw = scene_blob
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| "A drawing scene is required.".to_string())?;
+            serde_json::from_str::<Value>(&raw)
+                .map_err(|error| format!("Invalid Excalidraw scene JSON: {error}"))?
+        }
+    };
+    write_json(scene_path.clone(), &scene)?;
+
+    let preview_path = if let Some(bytes) = image_blob.filter(|bytes| !bytes.is_empty()) {
+        let path = scene_path.with_extension("png");
+        fs::write(&path, bytes).map_err(|error| error.to_string())?;
+        Some(path)
+    } else {
+        None
+    };
+
+    let public_path = |path: &Path| {
+        path.strip_prefix(&root)
+            .unwrap_or(path)
+            .to_string_lossy()
+            .replace('\\', "/")
+    };
     Ok(json!({
       "ok": true,
-      "path": normalize_relative_path(&relative_path),
-      "fullPath": path.to_string_lossy()
+      "path": public_path(&scene_path),
+      "fullPath": scene_path.to_string_lossy(),
+      "previewPath": preview_path.as_deref().map(public_path),
+      "previewFullPath": preview_path.as_ref().map(|path| path.to_string_lossy().to_string())
     }))
 }
 

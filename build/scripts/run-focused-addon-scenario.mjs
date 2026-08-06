@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   appPath, assert, cleanup, command, createFixture, ensureVault, installEnable,
-  markdownDigest, relativeFiles, resultRoot, startApplication, waitNative, writeResult
+  markdownDigest, relativeFiles, startApplication, waitNative, writeResult
 } from './addon-acceptance-harness.mjs'
 
 const scenarioId = String(process.env.ELEPHANT_FOCUSED_ADDON || 'dashboard').trim()

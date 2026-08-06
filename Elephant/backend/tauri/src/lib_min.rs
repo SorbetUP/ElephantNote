@@ -29,6 +29,7 @@ mod debug_commands;
 mod acceptance_server;
 #[cfg(mobile)]
 mod embedded_addon_services;
+mod external_file_import;
 mod official_addon_catalog;
 #[path = "core_commands.rs"]
 mod tauri_extra_commands;
@@ -184,6 +185,7 @@ pub fn run() {
             vault::commands::tauri_sidebar_detach,
             vault::commands::tauri_entries_rename,
             vault::commands::tauri_entries_move,
+            external_file_import::tauri_entries_import_external_file,
             vault::commands::tauri_entries_delete,
             vault::commands::tauri_sources_list,
             vault::commands::tauri_search_query,

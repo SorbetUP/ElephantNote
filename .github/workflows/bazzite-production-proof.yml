@@ -81,3 +81,71 @@ jobs:
           if-no-files-found: error
           retention-days: 7
           compression-level: 9
+
+  proof-status:
+    name: Bazzite proof status (fail closed)
+    needs: [contract, production-proof]
+    if: always()
+    runs-on: ubuntu-24.04
+    env:
+      CONTRACT_RESULT: ${{ needs.contract.result }}
+      PRODUCTION_RESULT: ${{ needs.production-proof.result }}
+      PROOF_HEAD_SHA: ${{ github.sha }}
+    steps:
+      - name: Write explicit Bazzite proof availability
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test-results/trusted/bazzite-production
+          node <<'NODE'
+          const fs = require('fs')
+          const path = 'test-results/trusted/bazzite-production/workflow-status.json'
+          const resultEntry = (id, result) => ({
+            id,
+            result,
+            availability: result === 'skipped'
+              ? 'SKIPPED'
+              : result === 'cancelled'
+                ? 'BLOCKED'
+                : result ? 'PRESENT' : 'MISSING',
+            status: result === 'success' ? 'PROVEN' : 'NOT PROVEN'
+          })
+          const contract = resultEntry('contract', process.env.CONTRACT_RESULT)
+          const production = resultEntry('production-proof', process.env.PRODUCTION_RESULT)
+          const proven = contract.status === 'PROVEN' && production.status === 'PROVEN'
+          const evidence = {
+            at: new Date().toISOString(),
+            status: proven ? 'PROVEN' : 'NOT PROVEN',
+            headSha: process.env.PROOF_HEAD_SHA || null,
+            categories: [contract, production],
+            reason: proven
+              ? null
+              : `Real Bazzite Wayland proof unavailable: ${production.availability}/${production.result || 'missing'}`
+          }
+          fs.writeFileSync(path, `${JSON.stringify(evidence, null, 2)}\n`)
+          console.log(`[bazzite-proof-status] ${evidence.status}: ${evidence.reason || 'all required jobs passed'}`)
+          NODE
+
+      - name: Upload explicit Bazzite workflow status
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bazzite-wayland-proof-status
+          path: test-results/trusted/bazzite-production/workflow-status.json
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 9
+
+      - name: Reject missing, skipped, blocked or failed hardware proof
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs')
+          const path = 'test-results/trusted/bazzite-production/workflow-status.json'
+          if (!fs.existsSync(path)) throw new Error('Bazzite workflow status is MISSING')
+          const evidence = JSON.parse(fs.readFileSync(path, 'utf8'))
+          if (evidence.status !== 'PROVEN') {
+            console.error(JSON.stringify(evidence, null, 2))
+            process.exit(1)
+          }
+          NODE

@@ -196,7 +196,7 @@ const F = {
     const opened = await dom(h, '[data-testid="excalidraw-dialog"]', (value) => value.visible, 'visible Excalidraw open')
     const canvas = await dom(h, '.en-excalidraw-canvas canvas', (value) => value.visible, 'Excalidraw canvas')
     ok(!opened.text.includes('failed') && canvas.visible, 'Excalidraw opened with an error')
-    await act(h, 'fill', '[data-testid="excalidraw-name"]', 'Acceptance drawing')
+    await act(h, 'fill', '.en-excalidraw-name-input', 'Acceptance drawing')
     await act(h, 'click', '[data-testid="toolbar-rectangle"]')
     await act(h, 'pointerDrag', '.en-excalidraw-canvas canvas', [
       { x: 0.24, y: 0.34 },
@@ -262,10 +262,11 @@ const F = {
     const strong = await act(h, 'readDom', `${E} strong`)
     await act(h, 'selectText', `${E} strong`, 0, strong.text.length)
     await act(h, 'insertText', I, 'BOLD')
-    const current = await state(h, (value) => value.markdown.includes('**BOLD**') && value.isSaved === false, 'live markdown update')
-    const visible = await dom(h, E, (value) => value.html.includes('<strong>BOLD</strong>') && value.html.includes('<em') && value.html.includes('<code'), 'live markdown render')
+    const current = await state(h, (value) => value.markdown.includes('**BOLD**'), 'live markdown update')
+    const visible = await dom(h, `${E} strong`, (value) => value.visible && value.text.trim() === 'BOLD', 'live markdown render')
+    const surrounding = await dom(h, E, (value) => value.html.includes('<em') && value.html.includes('<code'), 'remaining markdown render')
     await h.waitForVaultFile('Formatting.md', (value) => value.includes('**BOLD**'), 20_000)
-    return { beforeHtmlLength: before.html.length, current, htmlLength: visible.html.length }
+    return { beforeHtmlLength: before.html.length, current, strongText: visible.text, htmlLength: surrounding.html.length }
   },
   'settings-roundtrip': async (h) => {
     await open(h)

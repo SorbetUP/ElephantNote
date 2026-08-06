@@ -4,6 +4,7 @@ import {
   isElephantNoteApiAvailable,
   subscribeApiEvent
 } from './elephantnoteClient/apiRuntime'
+import { createAssetClients } from './elephantnoteClient/assetClients'
 import { createDomainClients } from './elephantnoteClient/domainClients'
 import { createEditorEngineClients } from './elephantnoteClient/editorEngineClients'
 
@@ -16,5 +17,6 @@ export const elephantnoteClient = {
   call,
   subscribe: subscribeApiEvent,
   ...createDomainClients(call, subscribeApiEvent),
-  ...createEditorEngineClients(call)
+  ...createEditorEngineClients(call),
+  ...createAssetClients(call)
 }

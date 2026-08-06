@@ -124,6 +124,22 @@ const textPointAt = (target, element, requestedOffset) => {
   return { node: element, offset: 0 }
 }
 
+const synchronizeMuyaSelection = (target, element) => {
+  element.ownerDocument.dispatchEvent(new target.Event('selectionchange', { bubbles: true }))
+  element.dispatchEvent(new target.MouseEvent('mouseup', { bubbles: true, button: 0 }))
+  const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__
+  if (!activeMuya?.contentState) return
+  const selectionChanges = activeMuya.contentState.selectionChange()
+  if (selectionChanges?.start && selectionChanges?.end) {
+    activeMuya.contentState.cursor = {
+      start: { ...selectionChanges.start },
+      end: { ...selectionChanges.end },
+      isEdit: true
+    }
+  }
+  activeMuya.dispatchSelectionChange?.(activeMuya.contentState.cursor)
+}
+
 const installSelectionOverride = (target, api) => {
   if (api.__elephantNestedTextSelection === true) return
   api.selectText = (selector, startOffset, endOffset = startOffset) => {
@@ -137,6 +153,7 @@ const installSelectionOverride = (target, api) => {
     range.setEnd(end.node, end.offset)
     selection.removeAllRanges()
     selection.addRange(range)
+    synchronizeMuyaSelection(target, element)
     return api.readDom(selector)
   }
   Object.defineProperty(api, '__elephantNestedTextSelection', {

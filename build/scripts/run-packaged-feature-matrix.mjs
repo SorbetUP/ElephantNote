@@ -196,7 +196,7 @@ const F = {
     const opened = await dom(h, '[data-testid="excalidraw-dialog"]', (value) => value.visible, 'visible Excalidraw open')
     const canvas = await dom(h, '.en-excalidraw-canvas canvas', (value) => value.visible, 'Excalidraw canvas')
     ok(!opened.text.includes('failed') && canvas.visible, 'Excalidraw opened with an error')
-    await act(h, 'fill', '.en-excalidraw-name-input', 'Acceptance drawing')
+    await act(h, 'fill', '[data-testid="excalidraw-name"]', 'Acceptance drawing')
     await act(h, 'click', '[data-testid="toolbar-rectangle"]')
     await act(h, 'pointerDrag', '.en-excalidraw-canvas canvas', [
       { x: 0.24, y: 0.34 },
@@ -210,29 +210,34 @@ const F = {
     let added = []
     for (let attempt = 0; attempt < 200; attempt += 1) {
       added = walkVaultFiles(h.vaultRoot).filter((entry) => !before.has(entry.relativePath))
-      if (added.some((entry) => /[.]png$/i.test(entry.relativePath)) && added.some((entry) => !/[.]png$/i.test(entry.relativePath))) break
+      if (
+        added.some((entry) => /[.]png$/i.test(entry.relativePath)) &&
+        added.some((entry) => /[.]excalidraw$/i.test(entry.relativePath)) &&
+        added.some((entry) => /[.]md$/i.test(entry.relativePath))
+      ) break
       await z(50)
     }
-    const preview = added.find((entry) => /[.]excalidraw[.]png$/i.test(entry.relativePath)) || added.find((entry) => /[.]png$/i.test(entry.relativePath))
-    let scene = null
-    let sceneFile = null
-    for (const entry of added.filter((candidate) => !/[.]png$/i.test(candidate.relativePath))) {
-      try {
-        const parsed = JSON.parse(readFileSync(entry.absolutePath, 'utf8'))
-        if (Array.isArray(parsed?.elements)) {
-          scene = parsed
-          sceneFile = entry
-          break
-        }
-      } catch {}
-    }
+    const preview = added.find((entry) => /[.]assets[/]excalidraw-acceptance-drawing[.]png$/i.test(entry.relativePath))
+    const sceneFile = added.find((entry) => /[.]assets[/]excalidraw-acceptance-drawing[.]excalidraw$/i.test(entry.relativePath))
+    const wrapper = added.find((entry) => /acceptance-drawing[.]md$/i.test(entry.relativePath))
+    const scene = sceneFile ? JSON.parse(readFileSync(sceneFile.absolutePath, 'utf8')) : null
+    const wrapperMarkdown = wrapper ? readFileSync(wrapper.absolutePath, 'utf8') : ''
     ok(preview?.bytes > 0, `Excalidraw PNG preview missing or empty: ${JSON.stringify(added)}`)
     ok(sceneFile?.bytes > 0 && scene?.elements?.length > 0, `Excalidraw scene missing drawn elements: ${JSON.stringify(added)}`)
+    const expectedPreviewLink = `](${preview.relativePath})`
+    ok(
+      wrapper?.bytes > 0 &&
+      wrapperMarkdown.includes(expectedPreviewLink) &&
+      !wrapperMarkdown.includes('../.assets/'),
+      `Excalidraw wrapper note has an invalid preview link: ${wrapperMarkdown}`
+    )
 
-    const cardSelector = `[data-entry-path="${escapeCssAttribute(preview.relativePath)}"]`
-    await act(h, 'waitFor', cardSelector, 20_000)
-    await act(h, 'click', cardSelector)
-    const reopened = await dom(h, '[data-testid="excalidraw-dialog"]', (value) => value.visible, 'saved Excalidraw reopen')
+    await act(h, 'waitFor', editorInputSelector, 20_000)
+    const renderedImage = await dom(h, `${editorSelector} img`, (value) => value.visible, 'saved Excalidraw preview in wrapper note')
+    ok(renderedImage.visible, 'saved Excalidraw preview is not visible in its note')
+    await act(h, 'waitFor', '.en-excalidraw-edit-button', 20_000)
+    await act(h, 'click', '.en-excalidraw-edit-button')
+    const reopened = await dom(h, '[data-testid="excalidraw-dialog"]', (value) => value.visible, 'saved Excalidraw reopen from note')
     const reopenedCanvas = await dom(h, '.en-excalidraw-canvas canvas', (value) => value.visible, 'reopened Excalidraw canvas')
     ok(!reopened.text.includes('failed') && reopenedCanvas.visible, 'saved Excalidraw could not be reopened')
     await act(h, 'click', '[data-testid="excalidraw-close"]')
@@ -242,7 +247,8 @@ const F = {
       drawnElements: scene.elements.length,
       preview: preview.relativePath,
       scene: sceneFile.relativePath,
-      reopened: true,
+      wrapper: wrapper.relativePath,
+      reopenedFromVisibleNote: true,
       closed: true
     }
   },

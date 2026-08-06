@@ -89,6 +89,7 @@
 import { computed, ref } from 'vue'
 import { FilePlus2, FolderPlus, Grid3x3, List, PenTool } from '@lucide/vue'
 import { useVaultStore } from '../../stores/vaultStore'
+import { elephantnoteClient } from '../../services/elephantnoteClient'
 import ExcalidrawDialog from '../editor/ExcalidrawDialog.vue'
 
 const store = useVaultStore()
@@ -114,19 +115,61 @@ const runCreateAction = async (action, callback) => {
 
 const createNote = () => runCreateAction('note', () => store.createNote())
 const createFolder = () => runCreateAction('folder', () => store.createFolder())
+const drawingSlug = (value = '') => {
+  const normalized = String(value || 'drawing')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return normalized || 'drawing'
+}
+
+const markdownText = (value = '') => String(value || '').replace(/[\\\]]/g, '\\$&')
+
+const relativeAssetLink = (notePath, assetPath) => {
+  const normalizedAssetPath = String(assetPath || '').replace(/\\/g, '/')
+  const noteParent = window.path.dirname(notePath)
+  if (!noteParent || noteParent === '.') return normalizedAssetPath
+  return window.path.relative(noteParent, assetPath).replace(/\\/g, '/')
+}
+
 const handleExcalidrawSave = async (payload) => {
-  if (!payload?.imageBlob || !store.activeVault?.path) return
+  if (!payload?.imageBlob || !payload?.sceneBlob || !store.activeVault?.path) return
   actionError.value = ''
   try {
-    const created = await window.elephantnote?.drawings?.create?.({ title: payload.baseName || 'drawing' })
-    if (!created?.relativePath) throw new Error('The drawing backend did not return a path.')
-    await window.elephantnote?.drawings?.write?.({
-      relativePath: created.relativePath,
-      imageBlob: Array.from(payload.imageBlob),
-      sceneBlob: payload.sceneBlob || ''
+    const displayName = String(payload.baseName || 'drawing').trim() || 'drawing'
+    const slug = drawingSlug(displayName)
+    const storageTitle = `excalidraw-${slug}`
+    const created = await window.elephantnote?.drawings?.create?.({ title: storageTitle })
+    const scenePath = created?.path || created?.relativePath
+    if (!scenePath) throw new Error('The drawing backend did not return a scene path.')
+
+    const saved = await window.elephantnote?.drawings?.write?.({
+      relativePath: scenePath,
+      sceneBlob: payload.sceneBlob,
+      imageBlob: Array.from(payload.imageBlob)
     })
+    const previewPath = saved?.previewPath
+    if (!previewPath) throw new Error('The drawing backend did not write a PNG preview.')
+
+    const noteResult = await elephantnoteClient.notes.create({
+      relativePath: store.currentPath || '',
+      filename: `${slug}.md`,
+      title: displayName
+    })
+    const note = noteResult?.note
+    if (!note?.path) throw new Error('The drawing wrapper note was not created.')
+    const previewLink = relativeAssetLink(note.path, previewPath)
+    await elephantnoteClient.notes.write({
+      relativePath: note.path,
+      markdown: `# ${markdownText(displayName)}\n\n![${markdownText(displayName)}](${previewLink})\n`
+    })
+
     isExcalidrawOpen.value = false
     await store.openDirectory(store.currentPath || '', { record: false })
+    const entry = store.entries.find((candidate) => candidate.path === note.path) || note
+    store.openNote(entry)
   } catch (error) {
     actionError.value = error?.message || 'Unable to save Excalidraw.'
     console.error('[library] save Excalidraw failed', error)

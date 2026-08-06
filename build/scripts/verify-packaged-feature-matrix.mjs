@@ -69,7 +69,7 @@ function runnerContractErrors(source) {
     'create-note': { required: [/click/, /en-create-button-primary/], forbidden: [/(?:set|setup)\s*\([^\n]*createNote/] },
     'create-folder': { required: [/click/, /en-create-button/], forbidden: [/(?:set|setup)\s*\([^\n]*createFolder/] },
     'excalidraw-open-close': {
-      required: [/click/, /toolbar-rectangle/, /pointerDrag/, /walkVaultFiles/, /elements/, /data-entry-path/],
+      required: [/click/, /toolbar-rectangle/, /pointerDrag/, /walkVaultFiles/, /elements/, /en-excalidraw-edit-button/],
       forbidden: [/tauri_drawings_create/, /openExcalidraw/, /readExcalidraw/, /closeExcalidraw/]
     }
   }
@@ -117,7 +117,7 @@ const featureRequirementMatchers = {
   'visible-pointer-draw': (block) => /toolbar-rectangle/.test(block) && /pointerDrag/.test(block),
   'scene-written-to-disk': (block) => /walkVaultFiles/.test(block) && /sceneFile/.test(block) && /elements/.test(block),
   'png-preview-written-to-disk': (block) => /preview/.test(block) && /bytes/.test(block) && /png/i.test(block),
-  'saved-drawing-reopened-from-library': (block) => /data-entry-path/.test(block) && /reopened/.test(block),
+  'saved-drawing-reopened-from-note': (block) => /en-excalidraw-edit-button/.test(block) && /reopenedFromVisibleNote/.test(block),
   'physical-keyboard-shortcut': (block) => /act\(h, ['"]pressShortcut['"]/.test(block),
   'physical-data-transfer-drop': (block) => /act\(h, ['"]dropFiles['"]/.test(block),
   'byte-identical-disk-copy': (block) => /readFileSync/.test(block) && /drop-marker/.test(block),

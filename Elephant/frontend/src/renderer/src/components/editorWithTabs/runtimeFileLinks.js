@@ -1,4 +1,6 @@
 const PDF_EXTENSION = /\.pdf(?:[?#].*)?$/i
+const IMAGE_MIME = /^image\//i
+const IMAGE_EXTENSION = /\.(?:png|jpe?g|gif|webp|svg|avif|bmp|ico)$/i
 const EXTERNAL_SCHEME = /^(?:https?|mailto):/i
 const FILE_SCHEME = /^file:\/\//i
 
@@ -29,11 +31,15 @@ const safeName = (value) => {
   return normalized || 'file'
 }
 
+const isImageFile = (file) => IMAGE_MIME.test(String(file?.type || '')) || IMAGE_EXTENSION.test(String(file?.name || ''))
+
 const nextAvailablePath = async (directory, name, fileUtils, pathApi) => {
-  const parsed = pathApi.parse(safeName(name))
+  const normalizedName = safeName(name)
+  const extension = pathApi.extname(normalizedName)
+  const stem = pathApi.basename(normalizedName, extension) || 'file'
   for (let index = 0; index < 10000; index += 1) {
     const suffix = index === 0 ? '' : `-${index}`
-    const candidate = pathApi.join(directory, `${parsed.name}${suffix}${parsed.ext}`)
+    const candidate = pathApi.join(directory, `${stem}${suffix}${extension}`)
     const exists = typeof fileUtils.pathExists === 'function'
       ? await fileUtils.pathExists(candidate)
       : Boolean(fileUtils.pathExistsSync?.(candidate))
@@ -59,20 +65,43 @@ export const storeDroppedAttachment = async ({ file, currentFile, projectRoot, t
     try {
       await fileUtils.copy(nativePath, destination)
       copied = true
-    } catch {
-      copied = false
+    } catch (error) {
+      console.warn('[elephantnote:file-drop] native copy failed; using browser bytes', {
+        name: file?.name || '',
+        nativePath,
+        destination,
+        error: error?.message || String(error)
+      })
     }
   }
   if (!copied) {
     const bytes = new Uint8Array(await file.arrayBuffer())
+    if (!bytes.byteLength) throw new Error(`Dropped file ${file?.name || '<unnamed>'} is empty.`)
     await fileUtils.writeFile(destination, bytes, 'binary')
   }
 
   const relativePath = pathApi.relative(pathApi.dirname(currentFile.pathname), destination).replace(/\\/g, '/')
+  const encodedPath = encodeMarkdownPath(relativePath)
+  const label = escapeLabel(file?.name)
+  const image = isImageFile(file)
+  const markdown = image
+    ? `![${label}](${encodedPath})`
+    : `[${label}](${encodedPath})`
+
+  console.info('[elephantnote:file-drop] attachment persisted', {
+    name: file?.name || '',
+    type: file?.type || '',
+    image,
+    destination,
+    relativePath,
+    markdown
+  })
+
   return {
     absolutePath: destination,
     relativePath,
-    markdown: `[${escapeLabel(file?.name)}](${encodeMarkdownPath(relativePath)})`
+    image,
+    markdown
   }
 }
 
@@ -80,23 +109,30 @@ export const createRuntimeFileHandlers = ({
   currentFile,
   projectTree,
   dispatch,
-  dropImage,
   target = globalThis
 }) => ({
   dropped: async (files) => {
     const list = Array.from(files || [])
     if (!list.length) return false
-    const image = list.find((file) => /^image\//i.test(file.type || ''))
-    if (image) return dropImage([image])
 
-    const attachment = await storeDroppedAttachment({
-      file: list[0],
-      currentFile: currentFile.value,
-      projectRoot: projectTree.value,
-      target
+    const attachments = []
+    for (const file of list) {
+      attachments.push(await storeDroppedAttachment({
+        file,
+        currentFile: currentFile.value,
+        projectRoot: projectTree.value,
+        target
+      }))
+    }
+
+    const markdown = attachments.map((attachment) => attachment.markdown).join('\n')
+    const result = await dispatch('paste-markdown', markdown)
+    if (!result) throw new Error('Rust editor rejected the dropped attachment Markdown.')
+    console.info('[elephantnote:file-drop] canonical Markdown inserted', {
+      attachmentCount: attachments.length,
+      markdownLength: markdown.length
     })
-    await dispatch('insert-text', attachment.markdown)
-    return attachment
+    return attachments.length === 1 ? attachments[0] : attachments
   }
 })
 
@@ -115,7 +151,13 @@ const resolveLocalPath = ({ href, currentFile, projectRoot, target }) => {
     ? pathApi.normalize(source)
     : pathApi.resolve(pathApi.dirname(currentFile.pathname), source)
   const root = pathApi.normalize(projectRoot.pathname)
-  const insideVault = absolutePath === root || target.fileUtils?.isChildOfDirectory?.(root, absolutePath) === true
+  const relativeToRoot = pathApi.relative(root, absolutePath).replace(/\\/g, '/')
+  const insideVault = absolutePath === root || Boolean(
+    relativeToRoot &&
+    relativeToRoot !== '..' &&
+    !relativeToRoot.startsWith('../') &&
+    !pathApi.isAbsolute(relativeToRoot)
+  )
   return insideVault ? absolutePath : null
 }
 

@@ -369,6 +369,17 @@ export default class RustOwnedMuya extends Muya {
     const images = files.filter((file) => String(file.type || '').startsWith('image/'))
     event.preventDefault()
     event.stopImmediatePropagation()
+
+    if (files.length && typeof this.options?.onFileDrop === 'function') {
+      this.__onUserMutation?.('drop:files')
+      console.info('[elephantnote:muya-rust] drop:delegated', {
+        fileCount: files.length,
+        imageCount: images.length
+      })
+      return Promise.resolve(this.options.onFileDrop(files, event))
+        .catch(this.__reportRustError)
+    }
+
     if (images.length) {
       Promise.all(images.map((file) => this.__persistImage(file))).catch(this.__reportRustError)
       return

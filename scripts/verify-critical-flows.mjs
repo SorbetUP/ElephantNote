@@ -169,8 +169,26 @@ for (const [needle, description] of [
 ordered('Elephant/shared/apiContractsRuntime.js', ["import * as baseContracts from './apiContracts.js'", "const runtimeField = ['local', 'Runtime'].join('')", "actionName === 'ai.config.set'", 'baseContracts.validateApiPayload(actionName, validatedByBaseContract)', 'return payload'], 'runtime-aware API contract wrapper')
 has('vitest.config.js', "'common/elephantnote/apiContracts': apiContractsRuntime", 'Vitest alias for runtime-aware API contracts')
 ordered('test/unit/specs/main/elephantnote/apiContracts.spec.js', ['accepts explicit valid sync.plan operations', 'rejects unknown sync.plan operations instead of falling back to the default plan', 'rejects non-array sync.plan operations', 'accepts local runtime AI config payloads used by the Tauri bridge'], 'API contract regression tests')
-ordered('Elephant/front/app/services/elephantnoteClient/apiRuntime.js', ["import { validateApiRequest, validateApiResponse } from '../../../../../shared/apiContractsV2.js'", 'const validatedPayload = validateApiRequest(action, payload)', 'const response = await requestApi(action, validatedPayload)', 'return validateApiResponse(action, response)'], 'renderer API v2 validation path')
-for (const needle of ['UNKNOWN_API_ACTION', 'UNKNOWN_API_METHOD', 'UNAVAILABLE_API_ACTION', "if (canFallback(error) && typeof fallback === 'function')"]) has('Elephant/front/app/services/elephantnoteClient/apiRuntime.js', needle, `API v2 fallback invariant ${needle}`)
+ordered('Elephant/front/app/services/elephantnoteClient/apiRuntime.js', [
+  'const plainPayload = toPlainObject(payload)',
+  'const validatedPayload = validateForTransport(action, plainPayload, compatibilityAdapter)',
+  'const dispatch = async() => {',
+  'return await unwrapApiEnvelope(requireElephantNoteApi().call(action, validatedPayload))',
+  'return compatibilityAdapter.call(action, validatedPayload)',
+  'return dispatch()'
+], 'renderer API v2 validation and transport path')
+for (const needle of [
+  "code === 'ELEPHANTNOTE_UNKNOWN_API_ACTION'",
+  "code === 'ELEPHANTNOTE_COMPATIBILITY_METHOD_UNAVAILABLE'",
+  'if (!compatibilityAdapter.canHandle(action) || !isUnknownOrUnavailableAction(error))',
+  'if (!compatibilityAdapter.canHandle(action))'
+]) has('Elephant/front/app/services/elephantnoteClient/apiRuntime.js', needle, `API v2 fallback invariant ${needle}`)
+ordered('test/unit/specs/main/elephantnote/apiRuntime.spec.js', [
+  "it('rejects invalid payloads synchronously before bridge transport'",
+  "const invocation = () => callApiAction('calendar.create', { title: 'Invalid event' })",
+  'expect(invocation).to.throw(TypeError',
+  'expect(bridge.api.call.called).to.equal(false)'
+], 'runtime request validation must remain synchronous and avoid bridge transport')
 ordered('Elephant/front/app/services/elephantnoteClient/domainClients.js', ['const CHAT_REBUILD_COOLDOWN_MS', 'const searchVaultInitializedForChat', 'const shouldRebuildChatSearch', 'notes: {', 'read: (relativePath) => call(API.NOTES_READ', 'write: (payload = {}) => call(API.NOTES_WRITE, payload)'], 'front client note methods and chat search throttling')
 has('test/unit/elephantnote/domainClients.spec.js', 'does not rebuild chat search when the model already produced an answer', 'chat search rebuild throttling test')
 

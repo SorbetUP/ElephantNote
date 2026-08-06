@@ -64,7 +64,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup
-      - name: Verify host and execute the exact AppImage without Xvfb or xdotool
+      - name: Verify host and execute the exact AppImage with Wayland-native automation only
         shell: bash
         run: |
           set -euxo pipefail

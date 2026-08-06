@@ -1,0 +1,73 @@
+name: Bazzite Wayland production proof
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/bazzite-production-proof.yml'
+      - 'build/scripts/run-bazzite-packaged-user-journey.mjs'
+      - 'build/scripts/run-bazzite-production-proof.mjs'
+      - 'build/scripts/verify-bazzite-proof.mjs'
+      - 'tests/trust/bazzite-proof.json'
+  workflow_dispatch:
+    inputs:
+      appimage_path:
+        description: 'Absolute path to the exact AppImage already present on the Bazzite runner'
+        required: true
+        type: string
+      expected_sha256:
+        description: 'Expected SHA-256 of that exact AppImage'
+        required: true
+        type: string
+      quick:
+        description: 'Skip the exhaustive official addon acceptance suite'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: Bazzite proof contract guard
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Reject incomplete or X11-only Bazzite proof wiring
+        run: node build/scripts/verify-bazzite-proof.mjs
+
+  production-proof:
+    needs: contract
+    name: Exact AppImage on real Bazzite Wayland
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, linux, x64, bazzite, gnome, wayland]
+    timeout-minutes: 180
+    env:
+      ELEPHANT_ACCEPTANCE_APP_PATH: ${{ inputs.appimage_path }}
+      ELEPHANT_EXPECTED_APPIMAGE_SHA256: ${{ inputs.expected_sha256 }}
+      ELEPHANT_BAZZITE_QUICK: ${{ inputs.quick && '1' || '0' }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup
+      - name: Verify host and execute the exact AppImage without Xvfb or xdotool
+        shell: bash
+        run: |
+          set -euxo pipefail
+          test -f "$ELEPHANT_ACCEPTANCE_APP_PATH"
+          node build/scripts/run-bazzite-production-proof.mjs "$ELEPHANT_ACCEPTANCE_APP_PATH"
+      - name: Upload compact Bazzite proof evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bazzite-wayland-exact-appimage-proof
+          path: |
+            test-results/trusted/bazzite-production/**/*.json
+            test-results/trusted/bazzite-production/**/*.log
+            test-results/trusted/bazzite-packaged-user-journey/**/*.json
+            test-results/trusted/bazzite-packaged-user-journey/**/*.log
+            test-results/trusted/backend-contract/**/*.json
+            test-results/trusted/frontend-behavior/**/*.json
+            test-results/acceptance/latest.json
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 9

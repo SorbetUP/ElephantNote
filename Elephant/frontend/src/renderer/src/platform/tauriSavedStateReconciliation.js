@@ -9,16 +9,23 @@ const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, mill
 
 const reconcile = (store, tabId, isSaved) => {
   if (!tabId) return false
-  const tab = store.tabs.find((entry) => entry?.id === tabId)
-  if (tab) tab.isSaved = isSaved
 
-  if (store.currentFile?.id === tabId) {
-    store.currentFile.isSaved = isSaved
-    if (isSaved && tab?.lastSavedHistoryId !== undefined) {
-      store.currentFile.lastSavedHistoryId = tab.lastSavedHistoryId
+  let reconciled = false
+  store.$patch((state) => {
+    const tab = state.tabs.find((entry) => entry?.id === tabId)
+    if (tab) {
+      tab.isSaved = isSaved
+      reconciled = true
     }
-  }
-  return Boolean(tab || store.currentFile?.id === tabId)
+    if (state.currentFile?.id === tabId) {
+      state.currentFile.isSaved = isSaved
+      if (isSaved && tab?.lastSavedHistoryId !== undefined) {
+        state.currentFile.lastSavedHistoryId = tab.lastSavedHistoryId
+      }
+      reconciled = true
+    }
+  })
+  return reconciled
 }
 
 export const installTauriSavedStateReconciliation = (target = globalThis) => {
@@ -33,7 +40,8 @@ export const installTauriSavedStateReconciliation = (target = globalThis) => {
     console.info('[tauri:marktext-save] saved state reconciled', {
       tabId,
       reconciled,
-      currentFileId: store.currentFile?.id || null
+      currentFileId: store.currentFile?.id || null,
+      currentFileSaved: store.currentFile?.id === tabId ? store.currentFile?.isSaved === true : null
     })
   })
   ipc.on('mt::tab-save-failure', (_event, tabId) => {

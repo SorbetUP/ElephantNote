@@ -154,18 +154,69 @@ const initialData = shallowRef(null)
 """,
 )
 
-for required in (
-    "this.options.onFileDrop(files, event)",
-    ':on-file-drop="handleFileDrop"',
-    "const apiRef = shallowRef(null)",
-    'data-testid="excalidraw-name"',
-):
-    found = any(required in Path(path).read_text(encoding="utf-8") for path in (
-        "Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js",
-        "Elephant/frontend/src/renderer/src/components/editorWithTabs/runtimeEditor.vue",
-        "Elephant/frontend/app/components/editor/ExcalidrawDialog.vue",
-    ))
-    if not found:
-        raise SystemExit(f"Missing required patched contract: {required}")
+replace_once(
+    "Elephant/frontend/src/renderer/src/components/editorWithTabs/runtimeFileLinks.js",
+    """const nextAvailablePath = async (directory, name, fileUtils, pathApi) => {
+  const parsed = pathApi.parse(safeName(name))
+  for (let index = 0; index < 10000; index += 1) {
+    const suffix = index === 0 ? '' : `-${index}`
+    const candidate = pathApi.join(directory, `${parsed.name}${suffix}${parsed.ext}`)
+""",
+    """const nextAvailablePath = async (directory, name, fileUtils, pathApi) => {
+  const normalizedName = safeName(name)
+  const extension = pathApi.extname(normalizedName)
+  const stem = pathApi.basename(normalizedName, extension) || 'file'
+  for (let index = 0; index < 10000; index += 1) {
+    const suffix = index === 0 ? '' : `-${index}`
+    const candidate = pathApi.join(directory, `${stem}${suffix}${extension}`)
+""",
+)
 
-print("Applied guarded drop delegation and Excalidraw React isolation fixes.")
+replace_once(
+    "Elephant/frontend/src/renderer/src/editor-rust/domRenderer/helpers.js",
+    """export const safeUrl = (value) => {
+  const url = String(value || '').trim()
+  if (!url) return ''
+  if (/^(https?:|mailto:|tel:|#|\\/|\\.\\/|\\.\\.\\/)/i.test(url)) return url
+  return ''
+}
+""",
+    """export const safeUrl = (value) => {
+  const url = String(value || '').trim()
+  if (!url) return ''
+  if (/^(https?:|mailto:|tel:|#|\\/|\\.\\/|\\.\\.\\/)/i.test(url)) return url
+  // Preserve portable vault-relative links such as .assets/report.pdf while
+  // rejecting unknown or executable URL schemes such as javascript:.
+  if (/^[a-z][a-z0-9+.-]*:/i.test(url)) return ''
+  return url
+}
+""",
+)
+
+required_contracts = {
+    "Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js": (
+        "this.options.onFileDrop(files, event)",
+        "drop:delegated",
+    ),
+    "Elephant/frontend/src/renderer/src/components/editorWithTabs/runtimeEditor.vue": (
+        ':on-file-drop="handleFileDrop"',
+        "product handler entered",
+    ),
+    "Elephant/frontend/app/components/editor/ExcalidrawDialog.vue": (
+        "const apiRef = shallowRef(null)",
+        'data-testid="excalidraw-name"',
+    ),
+    "Elephant/frontend/src/renderer/src/components/editorWithTabs/runtimeFileLinks.js": (
+        "const extension = pathApi.extname(normalizedName)",
+    ),
+    "Elephant/frontend/src/renderer/src/editor-rust/domRenderer/helpers.js": (
+        "Preserve portable vault-relative links",
+    ),
+}
+for path, required_values in required_contracts.items():
+    content = Path(path).read_text(encoding="utf-8")
+    for required in required_values:
+        if required not in content:
+            raise SystemExit(f"Missing required patched contract in {path}: {required}")
+
+print("Applied guarded drop, relative-link and Excalidraw isolation fixes.")

@@ -52,7 +52,7 @@ const validate = ({ runnerSource, journeySource, featureMatrixSource, workflowSo
 
   assert(featureMatrixSource.includes('createRealAppHarness'), 'Bazzite feature matrix must use the real application harness.')
   assert(featureMatrixSource.includes('requirePackagedApp:true') || featureMatrixSource.includes('requirePackagedApp: true'), 'Bazzite feature matrix must require the packaged executable.')
-  assert(featureMatrixSource.includes('packaged-feature-${id}'), 'Bazzite feature matrix must isolate every feature in its own suite.')
+  assert(featureMatrixSource.includes('suite: `packaged-feature-${id}`'), 'Bazzite feature matrix must isolate every feature in its own suite.')
   assert(featureMatrixSource.includes('process.exit(1)'), 'Bazzite feature matrix must fail closed when a feature fails.')
   assert(!featureMatrixSource.includes('xdotool'), 'Bazzite feature matrix must not use xdotool.')
   assert(!featureMatrixSource.includes('xvfb'), 'Bazzite feature matrix must not use Xvfb.')
@@ -101,7 +101,13 @@ const mutations = [
   ['wrong-pr-sha', { ...valid, workflowSource: workflow.replace('github.event.pull_request.head.sha || github.sha', 'github.sha') }],
   ['missing-scenario', { ...valid, journeySource: journey.replace(manifest.requiredJourneyScenarios[0], 'removed-scenario') }],
   ['missing-feature-runner', { ...valid, workflowSource: workflow.replaceAll('run-packaged-feature-matrix.mjs', 'removed-feature-matrix.mjs') }],
-  ['shared-feature-suite', { ...valid, featureMatrixSource: featureMatrix.replace('packaged-feature-${id}', 'shared-feature-suite') }],
+  ['shared-feature-suite', {
+    ...valid,
+    featureMatrixSource: featureMatrix.replace(
+      'suite: `packaged-feature-${id}`',
+      'suite: `shared-feature-suite`'
+    )
+  }],
   ['missing-feature-suite-contract', { ...valid, proofManifest: { ...manifest, requiredSuites: manifest.requiredSuites.filter((id) => id !== 'packaged-feature-matrix') } }],
   ['missing-fail-closed-status', { ...valid, workflowSource: workflow.replace('proof-status:', 'removed-proof-status:').replaceAll('NOT PROVEN', 'REMOVED_STATUS') }]
 ]

@@ -10,14 +10,21 @@ const requireElement = (target, selector) => {
   return element
 }
 
-const resolveDropElement = (target, selector) => {
-  const folderTitle = String(selector || '').match(/\.folder-name\[title="([^"]+)"\]/)?.[1]
-  if (folderTitle) {
-    const escapedTitle = target.CSS?.escape?.(folderTitle) || folderTitle.replace(/"/g, '\\"')
+const waitForFolderDropElement = async (target, folderTitle, timeoutMs = 10_000) => {
+  const escapedTitle = target.CSS?.escape?.(folderTitle) || folderTitle.replace(/"/g, '\\"')
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() <= deadline) {
     const label = target.document?.querySelector?.(`.en-sidebar-tree-label[title="${escapedTitle}"]`)
     const row = label?.closest?.('.en-sidebar-tree-row')
     if (row) return row
+    await wait(50)
   }
+  throw new Error(`Acceptance folder drop target did not become visible: ${folderTitle}`)
+}
+
+const resolveDropElement = async (target, selector) => {
+  const folderTitle = String(selector || '').match(/\.folder-name\[title="([^"]+)"\]/)?.[1]
+  if (folderTitle) return waitForFolderDropElement(target, folderTitle)
   return requireElement(target, selector)
 }
 
@@ -64,7 +71,78 @@ const createTransfer = (target, descriptors) => {
   const transfer = typeof target.DataTransfer === 'function' ? new target.DataTransfer() : null
   if (!transfer) throw new Error('DataTransfer is unavailable in the packaged renderer')
   for (const descriptor of descriptors) transfer.items.add(createDroppedFile(target, descriptor))
+  if (transfer.files.length !== descriptors.length) {
+    throw new Error(`DataTransfer contains ${transfer.files.length} files instead of ${descriptors.length}`)
+  }
   return transfer
+}
+
+const createDragEvent = (target, name, transfer, options = {}) => {
+  const init = {
+    dataTransfer: transfer,
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    clientX: Number(options.clientX || 20),
+    clientY: Number(options.clientY || 20)
+  }
+  const event = new target.DragEvent(name, init)
+  if (event.dataTransfer !== transfer) {
+    try {
+      Object.defineProperty(event, 'dataTransfer', {
+        configurable: true,
+        enumerable: true,
+        value: transfer
+      })
+    } catch {}
+  }
+  if (event.dataTransfer !== transfer) {
+    throw new Error(`Unable to attach DataTransfer to ${name}`)
+  }
+  return event
+}
+
+const textPointAt = (target, element, requestedOffset) => {
+  const text = String(element.textContent || '')
+  const offset = Number(requestedOffset)
+  if (!Number.isInteger(offset) || offset < 0 || offset > text.length) {
+    throw new RangeError(`Selection offset ${requestedOffset} is outside ${element.tagName} text length ${text.length}`)
+  }
+  const showText = target.NodeFilter?.SHOW_TEXT ?? 4
+  const walker = element.ownerDocument.createTreeWalker(element, showText)
+  let remaining = offset
+  let node = walker.nextNode()
+  let last = null
+  while (node) {
+    last = node
+    const length = String(node.data || '').length
+    if (remaining <= length) return { node, offset: remaining }
+    remaining -= length
+    node = walker.nextNode()
+  }
+  if (last) return { node: last, offset: String(last.data || '').length }
+  return { node: element, offset: 0 }
+}
+
+const installSelectionOverride = (target, api) => {
+  if (api.__elephantNestedTextSelection === true) return
+  api.selectText = (selector, startOffset, endOffset = startOffset) => {
+    const element = requireElement(target, selector)
+    const selection = element.ownerDocument.defaultView?.getSelection?.()
+    if (!selection) throw new Error('Selection API is unavailable')
+    const start = textPointAt(target, element, startOffset)
+    const end = textPointAt(target, element, endOffset)
+    const range = element.ownerDocument.createRange()
+    range.setStart(start.node, start.offset)
+    range.setEnd(end.node, end.offset)
+    selection.removeAllRanges()
+    selection.addRange(range)
+    return api.readDom(selector)
+  }
+  Object.defineProperty(api, '__elephantNestedTextSelection', {
+    value: true,
+    enumerable: false
+  })
 }
 
 const alignDomTextWithSelectionOffsets = (target, api) => {
@@ -94,6 +172,7 @@ export const installAcceptancePhysicalSurface = async (target = globalThis) => {
     const api = target.__ELEPHANT_ACCEPTANCE_TEST__
     if (api) {
       alignDomTextWithSelectionOffsets(target, api)
+      installSelectionOverride(target, api)
 
       api.pressShortcut = (selector, key, modifiers = {}) => {
         const element = requireElement(target, selector)
@@ -127,22 +206,16 @@ export const installAcceptancePhysicalSurface = async (target = globalThis) => {
       }
 
       api.dropFiles = async (selector, descriptors, options = {}) => {
-        const element = resolveDropElement(target, selector)
+        const element = await resolveDropElement(target, selector)
         if (!Array.isArray(descriptors) || descriptors.length === 0) throw new TypeError('dropFiles requires file descriptors')
         const materialized = []
         for (const descriptor of descriptors) {
           materialized.push(await materializeDescriptor(target, descriptor))
         }
         const transfer = createTransfer(target, materialized)
-        const init = {
-          dataTransfer: transfer,
-          bubbles: true,
-          cancelable: true,
-          composed: true,
-          clientX: Number(options.clientX || 20),
-          clientY: Number(options.clientY || 20)
+        for (const name of ['dragenter', 'dragover', 'drop']) {
+          element.dispatchEvent(createDragEvent(target, name, transfer, options))
         }
-        for (const name of ['dragenter', 'dragover', 'drop']) element.dispatchEvent(new target.DragEvent(name, init))
         return {
           selector,
           resolvedTarget: element.className || element.tagName,

@@ -68,6 +68,8 @@ const dispatchApiAction = async (bridge, action, payload = {}) => {
       return bridge.renameEntry(payload)
     case apiActions.ENTRIES_MOVE:
       return bridge.moveEntry(payload)
+    case apiActions.ENTRIES_IMPORT_EXTERNAL_FILE:
+      return bridge.importExternalFile(payload)
     case apiActions.ENTRIES_DELETE:
       return bridge.deleteEntry(payload)
     case apiActions.SEARCH_QUERY:
@@ -96,13 +98,13 @@ const createAtomicFeatureApi = (target) => {
     get,
     toggle,
     set,
-    providers: async() => [],
-    describeApi: async() => ({
+    providers: async () => [],
+    describeApi: async () => ({
       runtime: 'tauri',
       owner: 'elephant-core',
       actions: ['list', 'get', 'toggle', 'set']
     }),
-    callApi: async(request = {}) => {
+    callApi: async (request = {}) => {
       const action = String(request.action || request.method || '')
       const args = Array.isArray(request.arguments) ? request.arguments : []
       if (action === 'list') return list()
@@ -139,6 +141,7 @@ const createBridge = (target) => {
     detachSidebarEntry: (payload = {}) => invoke(target, 'tauri_sidebar_detach', normalizePayload(payload)),
     renameEntry: (payload = {}) => invoke(target, 'tauri_entries_rename', normalizePayload(payload)),
     moveEntry: (payload = {}) => invoke(target, 'tauri_entries_move', normalizePayload(payload)),
+    importExternalFile: (payload = {}) => invoke(target, 'tauri_entries_import_external_file', normalizePayload(payload)),
     deleteEntry: (payload = {}) => invoke(target, 'tauri_entries_delete', normalizePayload(payload)),
     notes: {
       read: (payload = {}) => invoke(target, 'tauri_notes_read', normalizePayload(payload)),
@@ -209,19 +212,19 @@ const createBridge = (target) => {
     },
     atomicFeatures,
     clipboard: {
-      writeText: async(text) => target.__TAURI__?.clipboardManager?.writeText?.(text),
-      readText: async() => target.__TAURI__?.clipboardManager?.readText?.()
+      writeText: async (text) => target.__TAURI__?.clipboardManager?.writeText?.(text),
+      readText: async () => target.__TAURI__?.clipboardManager?.readText?.()
     }
   }
 
   bridge.api = {
-    describe: async() => ({
+    describe: async () => ({
       runtime: 'tauri',
       backend: 'rust',
       bridge: 'elephantnote-tauri-core',
       actions: apiActions
     }),
-    call: async(action, payload = {}) => ({
+    call: async (action, payload = {}) => ({
       ok: true,
       data: await dispatchApiAction(bridge, action, normalizePayload(payload))
     })

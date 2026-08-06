@@ -8,10 +8,11 @@ const read = (path) => readFileSync(resolve(root, path), 'utf8')
 const manifest = JSON.parse(read('tests/trust/bazzite-proof.json'))
 const runner = read(manifest.runner)
 const journey = read(manifest.journeyRunner)
+const nativePicker = read(manifest.nativePickerDriver)
 const featureMatrix = read(manifest.featureMatrixRunner)
 const workflow = read('.github/workflows/bazzite-production-proof.yml')
 
-const validate = ({ runnerSource, journeySource, featureMatrixSource, workflowSource, proofManifest }) => {
+const validate = ({ runnerSource, journeySource, nativePickerSource, featureMatrixSource, workflowSource, proofManifest }) => {
   const errors = []
   const assert = (condition, message) => { if (!condition) errors.push(message) }
 
@@ -21,7 +22,10 @@ const validate = ({ runnerSource, journeySource, featureMatrixSource, workflowSo
   assert(proofManifest.requires?.gearLeverDesktopEntry === true, 'Bazzite manifest must require a Gear Lever desktop entry.')
   assert(proofManifest.requires?.selinux === 'Enforcing', 'Bazzite manifest must require enforcing SELinux.')
   assert(proofManifest.requires?.desktopPortal === 'active', 'Bazzite manifest must require an active desktop portal.')
+  assert(proofManifest.requires?.atSpi === true, 'Bazzite manifest must require AT-SPI.')
+  assert(proofManifest.requires?.nativeFolderSelection === true, 'Bazzite manifest must require native folder selection.')
   assert(proofManifest.requires?.exactSha256 === true, 'Bazzite manifest must require the exact SHA-256.')
+  assert(proofManifest.nativePickerDriver === 'build/scripts/bazzite-native-vault-picker.py', 'Bazzite manifest must identify the native portal driver.')
   assert(proofManifest.requiredSuites?.includes('packaged-feature-matrix'), 'Bazzite manifest must require the independent packaged feature matrix.')
   assert(proofManifest.featureMatrixRunner === 'build/scripts/run-packaged-feature-matrix.mjs', 'Bazzite manifest must identify the independent feature runner.')
   assert(proofManifest.featureMatrixArtifact === 'test-results/trusted/packaged-feature-matrix/latest.json', 'Bazzite manifest must identify the aggregate feature artifact.')
@@ -34,6 +38,7 @@ const validate = ({ runnerSource, journeySource, featureMatrixSource, workflowSo
     '.local/share/applications',
     'getenforce',
     'xdg-desktop-portal.service',
+    "gi.require_version('Atspi', '2.0')",
     'ELEPHANT_EXPECTED_APPIMAGE_SHA256',
     'test:backend:raw',
     'test:frontend:raw',
@@ -44,11 +49,32 @@ const validate = ({ runnerSource, journeySource, featureMatrixSource, workflowSo
 
   assert(journeySource.includes('requirePackagedApp: true'), 'Bazzite journey must require the packaged app.')
   assert(journeySource.includes("suite: 'bazzite-packaged-user-journey'"), 'Bazzite journey must have an isolated evidence suite.')
+  assert(journeySource.includes("'bazzite-native-folder-picker'"), 'Bazzite journey must prove native folder selection.')
+  assert(journeySource.includes("'.en-secondary-button'"), 'Bazzite native picker must click the visible Choose folder control.')
+  assert(journeySource.includes('bazzite-native-vault-picker.py'), 'Bazzite journey must execute the native AT-SPI driver.')
+  assert(journeySource.includes('xdg-desktop-portal-at-spi-wayland'), 'Bazzite journey must record the native portal transport.')
+  assert(journeySource.includes('activeVault') && journeySource.includes('expectedVault'), 'Bazzite journey must compare the selected and expected vault paths.')
+  assert(!/setup\s*\(\s*['"]selectVault['"]/.test(journeySource), 'Bazzite journey must not replace native folder selection with the internal selectVault fixture command.')
   assert(!journeySource.includes('xdotool'), 'Bazzite Wayland journey must not use xdotool.')
   assert(!journeySource.includes('xvfb'), 'Bazzite Wayland journey must not use Xvfb.')
   for (const id of proofManifest.requiredJourneyScenarios || []) {
     assert(journeySource.includes(`'${id}'`), `Bazzite journey is missing required scenario ${id}.`)
   }
+
+  for (const token of [
+    'gi.require_version("Atspi", "2.0")',
+    'Atspi.generate_keyboard_event',
+    'Atspi.KeySynthType.PRESSRELEASE',
+    'get_editable_text_iface',
+    'set_text_contents',
+    'CONFIRM_NAMES',
+    'XDG_SESSION_TYPE',
+    'wayland',
+    'NOT PROVEN'
+  ]) assert(nativePickerSource.includes(token), `Native Bazzite picker driver must contain ${token}.`)
+  assert(!nativePickerSource.includes('xdotool'), 'Native Bazzite picker driver must not use xdotool.')
+  assert(!nativePickerSource.includes('xvfb'), 'Native Bazzite picker driver must not use Xvfb.')
+  assert(!nativePickerSource.includes('tauri_vaults_select_path'), 'Native Bazzite picker driver must not call Elephant vault APIs.')
 
   assert(featureMatrixSource.includes('createRealAppHarness'), 'Bazzite feature matrix must use the real application harness.')
   assert(featureMatrixSource.includes('requirePackagedApp:true') || featureMatrixSource.includes('requirePackagedApp: true'), 'Bazzite feature matrix must require the packaged executable.')
@@ -63,6 +89,7 @@ const validate = ({ runnerSource, journeySource, featureMatrixSource, workflowSo
   }
   assert(workflowSource.includes('expected_sha256'), 'Bazzite proof workflow must require an expected SHA-256.')
   assert(workflowSource.includes('run-bazzite-production-proof.mjs'), 'Bazzite proof workflow must execute the production proof runner.')
+  assert(workflowSource.includes('bazzite-native-vault-picker.py'), 'Bazzite workflow paths must include the native picker driver.')
   assert(workflowSource.includes('run-packaged-feature-matrix.mjs'), 'Bazzite proof workflow must execute the independent feature matrix.')
   assert(workflowSource.includes('ELEPHANT_ACCEPTANCE_SKIP_BUILD=1'), 'Bazzite feature matrix must reuse the exact supplied AppImage.')
   assert(workflowSource.includes('ELEPHANT_PACKAGED_FORMAT=linux-appimage'), 'Bazzite feature matrix must identify the exact AppImage format.')
@@ -88,6 +115,7 @@ const validate = ({ runnerSource, journeySource, featureMatrixSource, workflowSo
 const valid = {
   runnerSource: runner,
   journeySource: journey,
+  nativePickerSource: nativePicker,
   featureMatrixSource: featureMatrix,
   workflowSource: workflow,
   proofManifest: manifest
@@ -100,6 +128,8 @@ const mutations = [
   ['missing-sha-contract', { ...valid, workflowSource: workflow.replaceAll('expected_sha256', 'removed_hash_input') }],
   ['wrong-pr-sha', { ...valid, workflowSource: workflow.replace('github.event.pull_request.head.sha || github.sha', 'github.sha') }],
   ['missing-scenario', { ...valid, journeySource: journey.replace(manifest.requiredJourneyScenarios[0], 'removed-scenario') }],
+  ['native-picker-shortcut', { ...valid, journeySource: journey.replace("await harness.action(layer, 'click', '.en-secondary-button')", "await harness.setup('selectVault', harness.vaultRoot)") }],
+  ['missing-native-driver', { ...valid, nativePickerSource: nativePicker.replace('Atspi.generate_keyboard_event', 'removed_generate_keyboard_event') }],
   ['missing-feature-runner', { ...valid, workflowSource: workflow.replaceAll('run-packaged-feature-matrix.mjs', 'removed-feature-matrix.mjs') }],
   ['shared-feature-suite', {
     ...valid,
@@ -121,4 +151,4 @@ if (errors.length) {
   process.exit(1)
 }
 
-console.log('[bazzite-proof] Bazzite Wayland exact-AppImage journey, twenty isolated features, exact PR SHA and fail-closed mutation sensitivity passed')
+console.log('[bazzite-proof] Bazzite Wayland exact-AppImage journey, native portal folder selection, twenty isolated features, exact PR SHA and fail-closed mutation sensitivity passed')

@@ -1,6 +1,6 @@
 use serde_json::{json, Value};
-use std::io::Read;
-use tauri::AppHandle;
+use std::{fs, io::Read};
+use tauri::{AppHandle, Manager};
 
 use super::config::{get_active_vault, read_config, remove_vault, set_active_vault, set_vault_icon, set_vault_name, upsert_vault, write_config};
 use super::entries;
@@ -16,6 +16,7 @@ const SEARCH_FILE_READ_LIMIT_MIN: usize = 4 * 1024;
 const SEARCH_FILE_READ_LIMIT_MAX: usize = 1024 * 1024;
 const SEARCH_EXCERPT_LIMIT: usize = 600;
 const DIRECTORY_LIST_LIMIT_MAX: usize = 500;
+const PRIVATE_VAULT_DIRECTORY: &str = "Private Vault";
 
 fn payload(app: &AppHandle, vault: Option<super::types::VaultDescriptor>) -> R<Value> {
   let config = read_config(app)?;
@@ -50,6 +51,22 @@ pub fn tauri_vaults_get(app: AppHandle) -> R<Value> {
 pub fn tauri_vaults_select_path(app: AppHandle, vault_path: String) -> R<Value> {
   let mut config = read_config(&app)?;
   let vault = upsert_vault(&mut config, vault_path);
+  write_config(&app, &config)?;
+  payload(&app, Some(vault))
+}
+
+#[tauri::command]
+pub fn tauri_vaults_create_local(app: AppHandle) -> R<Value> {
+  let root = app
+    .path()
+    .app_data_dir()
+    .map_err(|error| error.to_string())?
+    .join("vaults")
+    .join(PRIVATE_VAULT_DIRECTORY);
+  fs::create_dir_all(&root).map_err(|error| error.to_string())?;
+  let canonical = fs::canonicalize(&root).map_err(|error| error.to_string())?;
+  let mut config = read_config(&app)?;
+  let vault = upsert_vault(&mut config, canonical.to_string_lossy().to_string());
   write_config(&app, &config)?;
   payload(&app, Some(vault))
 }

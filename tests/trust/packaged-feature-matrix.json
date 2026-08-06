@@ -28,6 +28,14 @@
       "physical-data-transfer-drop",
       "visible-clickable-link",
       "attachment-written-to-disk"
+    ],
+    "pdf-addon-open-route": [
+      "physical-data-transfer-drop",
+      "visible-clickable-link"
+    ],
+    "pdf-system-open-fallback": [
+      "physical-data-transfer-drop",
+      "visible-clickable-link"
     ]
   },
   "requiredFeatures": [

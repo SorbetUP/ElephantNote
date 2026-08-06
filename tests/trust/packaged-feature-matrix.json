@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "packaged-feature-matrix",
+  "runner": "build/scripts/run-packaged-feature-matrix.mjs",
+  "artifact": "test-results/trusted/packaged-feature-matrix/latest.json",
+  "requiresPackagedExecutable": true,
+  "requiredPackagedFormat": "linux-appimage",
+  "requiredFeatures": [
+    "app-launch",
+    "vault-selection",
+    "create-note",
+    "create-folder",
+    "external-note-refresh",
+    "external-folder-refresh",
+    "note-visible-edit",
+    "note-realtime-autosave",
+    "note-read-stability",
+    "excalidraw-open-close",
+    "text-basic-editing",
+    "markdown-live-formatting",
+    "settings-roundtrip",
+    "sidebar-hide-full-button",
+    "sidebar-hide-full-shortcut",
+    "drop-file-into-vault-folder",
+    "drop-image-into-note",
+    "drop-file-link-into-note",
+    "pdf-addon-open-route",
+    "pdf-system-open-fallback"
+  ]
+}

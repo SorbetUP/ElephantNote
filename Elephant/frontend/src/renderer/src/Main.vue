@@ -1,4 +1,5 @@
 <script setup>
+import './platform/automationAcceptancePhysicalSurface.js'
 </script>
 
 <template>

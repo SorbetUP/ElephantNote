@@ -60,7 +60,7 @@ const alignDomTextWithSelectionOffsets = (target, api) => {
   })
 }
 
-export const installAcceptancePhysicalSurface = async(target = globalThis) => {
+export const installAcceptancePhysicalSurface = async (target = globalThis) => {
   if (target[INSTALL_FLAG]) return target[INSTALL_FLAG]
   for (let attempt = 0; attempt < 2400; attempt += 1) {
     const api = target.__ELEPHANT_ACCEPTANCE_TEST__
@@ -114,12 +114,12 @@ export const installAcceptancePhysicalSurface = async(target = globalThis) => {
         return { selector, files: descriptors.map(({ name, type, path, relativePath }) => ({ name, type, path, relativePath })) }
       }
 
-      api.createFolder = async(relativePath) => {
+      api.createFolder = async (relativePath) => {
         if (!relativePath || typeof relativePath !== 'string') throw new TypeError('createFolder requires a relative path')
         return target.__TAURI__?.core?.invoke('tauri_folders_create', { relativePath })
       }
 
-      api.openSystemPath = async(path) => {
+      api.openSystemPath = async (path) => {
         if (!path || typeof path !== 'string') throw new TypeError('openSystemPath requires a path')
         return target.__TAURI__?.core?.invoke('plugin:opener|open_path', { path })
       }
@@ -129,7 +129,7 @@ export const installAcceptancePhysicalSurface = async(target = globalThis) => {
         const host = target.__ELEPHANT_ADDON_HOST__
         if (typeof host?.provide !== 'function') throw new Error('Addon host is unavailable')
         disposePdfViewerProbe = host.provide('pdf.viewer', {
-          open: async(path) => ({ handled: true, path, provider: 'acceptance-pdf-viewer' })
+          open: async (path) => ({ handled: true, path, provider: 'acceptance-pdf-viewer' })
         })
         return { installed: true, resource: 'pdf.viewer' }
       }

@@ -41,6 +41,13 @@ const CLIENT_CASES = [
   ['editorEngine.editorSnapshot', [state], API.MUYA_EDITOR_SNAPSHOT, { state }]
 ]
 
+const VALIDATION_CASES = CLIENT_CASES.map(([path, args, action, payload]) => ({
+  path,
+  args,
+  action,
+  payload
+}))
+
 const resolveMethod = (client, path) =>
   path.split('.').reduce((value, key) => value?.[key], client)
 
@@ -91,7 +98,7 @@ describe('Markdown and editor engine API matrix', () => {
     expect(client.muya).toBe(client.editorEngine)
   })
 
-  it.each(CLIENT_CASES)('validates the payload emitted by %s', (_path, _args, action, payload) => {
+  it.each(VALIDATION_CASES)('validates the payload emitted by $path', ({ action, payload }) => {
     expect(validateApiPayload(action, payload)).toEqual(payload)
   })
 
@@ -109,7 +116,10 @@ describe('Markdown and editor engine API matrix', () => {
   it('rejects invalid editor state and cursor payloads before transport', () => {
     expect(() => validateApiPayload(API.MUYA_BACKSPACE, { state: null })).toThrow(/state/i)
     expect(() => validateApiPayload(API.MUYA_MOVE_CURSOR, {
-      markdown: '# Note', cursor: 'invalid', direction: 'right'
+      markdown: '# Note', cursor: '2', direction: 'right'
+    })).toThrow(/cursor/i)
+    expect(() => validateApiPayload(API.MUYA_IMAGE_SELECTION, {
+      markdown: '![x](a.png)', cursor: -1
     })).toThrow(/cursor/i)
     expect(() => validateApiPayload(API.MUYA_TABLE_INSERT_ROW, {
       markdown: '| A |', rowIndex: Number.NaN

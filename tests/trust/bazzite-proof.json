@@ -1,8 +1,9 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "bazzite-production",
   "runner": "build/scripts/run-bazzite-production-proof.mjs",
   "journeyRunner": "build/scripts/run-bazzite-packaged-user-journey.mjs",
+  "nativePickerDriver": "build/scripts/bazzite-native-vault-picker.py",
   "featureMatrixRunner": "build/scripts/run-packaged-feature-matrix.mjs",
   "artifact": "test-results/trusted/bazzite-production/latest.json",
   "journeyArtifact": "test-results/trusted/bazzite-packaged-user-journey/latest.json",
@@ -12,6 +13,8 @@
     "sessionType": "wayland",
     "selinux": "Enforcing",
     "desktopPortal": "active",
+    "atSpi": true,
+    "nativeFolderSelection": true,
     "packagedFormat": "linux-appimage",
     "exactSha256": true,
     "desktop": "GNOME",
@@ -26,6 +29,7 @@
   ],
   "requiredJourneyScenarios": [
     "bazzite-clean-install-first-screen",
+    "bazzite-native-folder-picker",
     "bazzite-wayland-visible-input-rust-disk",
     "bazzite-theme-choice-persists",
     "bazzite-crash-restart-restores-visible-work",
@@ -33,8 +37,7 @@
     "bazzite-session-has-no-unexpected-errors"
   ],
   "limitations": [
-    "The native folder picker is verified as an active desktop portal dependency but is not automatically selected by the journey.",
-    "The visible Wayland input path uses Elephant's authenticated external automation boundary and does not claim physical keyboard injection.",
+    "The visible editor input path uses Elephant's authenticated external automation boundary; native folder selection itself is driven through the real GNOME portal accessibility tree.",
     "Each requested feature is isolated in its own application process, temporary vault and evidence artifact on the exact Bazzite AppImage."
   ]
 }

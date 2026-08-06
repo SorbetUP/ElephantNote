@@ -33,6 +33,7 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
       FORCE_COLOR: '1'
+      ELEPHANT_TEST_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
@@ -70,14 +71,55 @@ jobs:
           echo "ELEPHANT_ACCEPTANCE_APP_PATH=$APPIMAGE_PATH" >> "$GITHUB_ENV"
           echo 'APPIMAGE_EXTRACT_AND_RUN=1' >> "$GITHUB_ENV"
           sha256sum "$APPIMAGE_PATH" | tee addon-independent-appimage.sha256
-      - name: Execute each addon in a fresh process and vault
+      - name: Execute each addon in a fresh process, XDG profile and vault
         shell: bash
         run: |
-          set -o pipefail
-          xvfb-run --auto-servernum env \
-            ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
-            node build/scripts/run-independent-addon-acceptance.mjs \
-            2>&1 | tee addon-independent-acceptance.log
+          set +e
+          : > addon-independent-acceptance.log
+          overall=0
+          for addon_id in \
+            elephant.dashboard \
+            elephant.recently-edited \
+            elephant.calendar \
+            elephant.google-keep-import
+          do
+            run_root="$(mktemp -d)"
+            mkdir -p "$run_root/config" "$run_root/data" "$run_root/cache" "$run_root/state" "$run_root/runtime"
+            echo "===== $addon_id =====" | tee -a addon-independent-acceptance.log
+            xvfb-run --auto-servernum env \
+              HOME="$run_root/home" \
+              XDG_CONFIG_HOME="$run_root/config" \
+              XDG_DATA_HOME="$run_root/data" \
+              XDG_CACHE_HOME="$run_root/cache" \
+              XDG_STATE_HOME="$run_root/state" \
+              XDG_RUNTIME_DIR="$run_root/runtime" \
+              ELEPHANT_ADDON_MATRIX="$addon_id" \
+              ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
+              node build/scripts/run-independent-addon-acceptance.mjs \
+              2>&1 | tee -a addon-independent-acceptance.log
+            test_rc=${PIPESTATUS[0]}
+            if [ "$test_rc" -ne 0 ]; then overall=1; fi
+            rm -rf "$run_root"
+          done
+          node --input-type=module <<'NODE'
+          import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
+          import { join } from 'node:path'
+          const directory = 'test-results/addon-independent'
+          const results = readdirSync(directory)
+            .filter((name) => name.startsWith('elephant.') && name.endsWith('.json'))
+            .sort()
+            .map((name) => JSON.parse(readFileSync(join(directory, name), 'utf8')))
+          const summary = {
+            status: results.every((entry) => entry.status === 'PASS') ? 'PASS' : 'FAIL',
+            evidenceLevel: 'packaged-functional-independent',
+            generatedAt: new Date().toISOString(),
+            commit: process.env.ELEPHANT_TEST_COMMIT || process.env.GITHUB_SHA || null,
+            addons: results.map(({ addonId, status, error = null }) => ({ addonId, status, error }))
+          }
+          writeFileSync(join(directory, 'summary.json'), JSON.stringify(summary, null, 2))
+          console.log(JSON.stringify(summary))
+          NODE
+          exit "$overall"
       - name: Publish compact independent evidence
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7

@@ -1,57 +1,29 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { LEGACY_CALLS } from '../../../../../Elephant/front/app/services/elephantnoteClient/legacyCalls.js'
+import fs from 'node:fs'
+import path from 'node:path'
+import { describe, expect, it } from 'vitest'
 
-const originalBridge = globalThis.window?.elephantnote
-const originalTauri = globalThis.window?.__TAURI__
+const root = process.cwd()
+const read = (relativePath) => fs.readFileSync(path.resolve(root, relativePath), 'utf8')
 
-const installBridge = (bridge) => {
-  globalThis.window.elephantnote = bridge
-}
-
-const installTauriInvoke = (invoke) => {
-  globalThis.window.__TAURI__ = { core: { invoke } }
-}
-
-const disableTauriInvoke = () => {
-  globalThis.window.__TAURI__ = null
-}
-
-afterEach(() => {
-  globalThis.window.elephantnote = originalBridge
-  globalThis.window.__TAURI__ = originalTauri
-})
-
-describe('LEGACY_CALLS', () => {
-  it('routes sync.plan to the bridge when Tauri invoke is unavailable', () => {
-    const payload = { operations: ['init', 'pull'], pull: { remoteName: 'origin' } }
-    const plan = vi.fn((value) => ({ ok: true, value }))
-    disableTauriInvoke()
-    installBridge({ sync: { plan } })
-
-    expect(LEGACY_CALLS['sync.plan'](payload)).toEqual({ ok: true, value: payload })
-    expect(plan).toHaveBeenCalledWith(payload)
+describe('legacy call removal', () => {
+  it('removes the obsolete legacy call table', () => {
+    expect(fs.existsSync(path.resolve(
+      root,
+      'Elephant/front/app/services/elephantnoteClient/legacyCalls.js'
+    ))).toBe(false)
   })
 
-  it('passes sync.plan payloads directly to the Tauri command when available', () => {
-    const payload = { operations: ['init', 'pull'], pull: { remoteName: 'origin' } }
-    const invoke = vi.fn((command, value) => ({ command, value }))
-    installTauriInvoke(invoke)
-
-    expect(LEGACY_CALLS['sync.plan'](payload)).toEqual({
-      command: 'tauri_sync_plan',
-      value: { payloadByOperation: payload }
-    })
-    expect(invoke).toHaveBeenCalledWith('tauri_sync_plan', { payloadByOperation: payload })
+  it('keeps the public client on the versioned API runtime', () => {
+    const client = read('Elephant/front/app/services/elephantnoteClient.js')
+    expect(client).toContain('createApiCaller')
+    expect(client).not.toContain('LEGACY_CALLS')
+    expect(client).not.toContain('legacyCalls')
   })
 
-  it('normalizes non-object sync.plan payloads before dispatching to Tauri', () => {
-    const invoke = vi.fn((command, value) => ({ command, value }))
-    installTauriInvoke(invoke)
-
-    expect(LEGACY_CALLS['sync.plan']('pull')).toEqual({
-      command: 'tauri_sync_plan',
-      value: { payloadByOperation: {} }
-    })
-    expect(invoke).toHaveBeenCalledWith('tauri_sync_plan', { payloadByOperation: {} })
+  it('does not expose raw Tauri invoke calls from domain clients', () => {
+    const domains = read('Elephant/front/app/services/elephantnoteClient/domainClients.js')
+    expect(domains).not.toContain('__TAURI__')
+    expect(domains).not.toContain('.core.invoke(')
+    expect(domains).not.toContain('getBridge')
   })
 })

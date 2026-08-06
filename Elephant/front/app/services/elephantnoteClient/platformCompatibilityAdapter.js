@@ -1,4 +1,4 @@
-import { ELEPHANTNOTE_API_ACTIONS as API, ELEPHANTNOTE_API_EVENT_TOPICS as EVENTS } from 'common/elephantnote/apiActions'
+import { ELEPHANTNOTE_API_ACTIONS as API, ELEPHANTNOTE_API_EVENT_TOPICS as EVENTS } from 'common/elephantnote/apiContractsV2'
 import { toPlainObject } from '../../../../shared/plainObject.js'
 
 const getBridge = (target = globalThis) => target?.window?.elephantnote || target?.elephantnote || null

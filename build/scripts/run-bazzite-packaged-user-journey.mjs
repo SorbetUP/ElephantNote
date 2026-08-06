@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { spawnSync } from 'node:child_process'
+import { resolve } from 'node:path'
 import { createRealAppHarness } from './lib/real-app-harness.mjs'
 
 const layer = 'user-journey'
@@ -8,6 +10,7 @@ const editorInputSelector = `${editorSelector}[contenteditable="true"], ${editor
 const marker = 'bazzite-wayland-marker-9173'
 const unicodeLine = 'Bazzite Wayland — élève, 日本語, مرحبا, 👩🏽‍💻'
 const recoveryMarker = 'bazzite-recovery-before-autosave-9173'
+const nativePickerDriver = resolve(import.meta.dirname, 'bazzite-native-vault-picker.py')
 
 if (process.platform !== 'linux') throw new Error('Bazzite proof requires Linux.')
 if (String(process.env.XDG_SESSION_TYPE || '').toLowerCase() !== 'wayland') {
@@ -48,6 +51,30 @@ const waitForDom = async(selector, predicate, label, timeoutMs = 20_000) => {
   throw new Error(`${label}: visible DOM did not reach the expected value: ${JSON.stringify(value)}`)
 }
 
+const parseLastJsonLine = (output) => {
+  const lines = String(output || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+  for (const line of lines.reverse()) {
+    try { return JSON.parse(line) } catch {}
+  }
+  throw new Error(`Native picker driver did not emit JSON: ${JSON.stringify(output)}`)
+}
+
+const driveNativeVaultPicker = (targetDirectory) => {
+  const result = spawnSync('python3', [nativePickerDriver, targetDirectory], {
+    cwd: resolve(import.meta.dirname, '../..'),
+    env: { ...process.env },
+    encoding: 'utf8',
+    maxBuffer: 4 * 1024 * 1024,
+    timeout: 45_000
+  })
+  const output = `${result.stdout || ''}${result.stderr || ''}`
+  const evidence = parseLastJsonLine(output)
+  if (result.status !== 0 || evidence.status !== 'PROVEN') {
+    throw new Error(`Native Bazzite folder picker failed: ${JSON.stringify({ status: result.status, evidence, output })}`)
+  }
+  return evidence
+}
+
 let failure = null
 try {
   await harness.start()
@@ -60,9 +87,30 @@ try {
     return { text: firstRun.text }
   })
 
-  // Native portal selection is validated separately by the host preflight. The
-  // fixture setup itself is not counted as a user interaction claim.
-  await harness.setup('selectVault', harness.vaultRoot)
+  await harness.runScenario('bazzite-native-folder-picker', layer, async() => {
+    const chooserButton = await harness.action(layer, 'readDom', '.en-secondary-button')
+    if (!chooserButton.visible || !chooserButton.text.includes('Choose folder')) {
+      throw new Error(`Native folder chooser control is not visible: ${JSON.stringify(chooserButton)}`)
+    }
+    await harness.action(layer, 'click', '.en-secondary-button')
+    const portal = driveNativeVaultPicker(harness.vaultRoot)
+    const expectedVault = resolve(harness.vaultRoot)
+    const selected = await waitForState((value) => {
+      const activeVault = value?.activeVault ? resolve(String(value.activeVault)) : ''
+      return activeVault === expectedVault
+    }, 'bazzite-native-selected-vault', 30_000)
+    await harness.action(layer, 'waitFor', '.en-library-toolbar', 20_000)
+    return {
+      visibleControl: '.en-secondary-button',
+      selectionTransport: 'xdg-desktop-portal-at-spi-wayland',
+      expectedVault,
+      activeVault: resolve(String(selected.activeVault)),
+      portal
+    }
+  })
+
+  // Opening the fixture note is setup for the following independent scenarios;
+  // the vault itself was selected through the real native portal above.
   await harness.setup('openNote', 'Bazzite acceptance.md')
 
   await harness.runScenario('bazzite-wayland-visible-input-rust-disk', layer, async() => {
@@ -182,7 +230,7 @@ try {
         waylandDisplay: process.env.WAYLAND_DISPLAY,
         desktop: process.env.XDG_CURRENT_DESKTOP || null
       },
-      proofBoundary: 'Exact Linux AppImage on a real Bazzite Wayland session, visible contenteditable input through the external automation boundary, canonical Rust state, real vault persistence, SIGKILL recovery, preference restoration and search. Native portal selection remains host-preflight evidence, not an automated user-journey claim.'
+      proofBoundary: 'Exact Linux AppImage on a real Bazzite GNOME Wayland session, native xdg-desktop-portal folder selection driven through AT-SPI, visible contenteditable input through the authenticated external automation boundary, canonical Rust state, real vault persistence, SIGKILL recovery, preference restoration and search.'
     }
   })
 } catch (error) {

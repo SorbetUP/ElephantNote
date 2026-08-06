@@ -31,6 +31,41 @@ const flattenOptions = (payload = {}) => {
   return { ...base, ...options }
 }
 
+const MARKDOWN_ACTIONS = Object.freeze(new Set([
+  API.MARKDOWN_PARSE,
+  API.MARKDOWN_RENDER_HTML,
+  API.MARKDOWN_TO_TEXT,
+  API.MARKDOWN_EXTRACT_FRONTMATTER,
+  API.MARKDOWN_EXTRACT_LINKS
+]))
+
+const EDITOR_ENGINE_ACTIONS = Object.freeze(new Set([
+  API.MUYA_PARSE,
+  API.MUYA_RENDER_HTML,
+  API.MUYA_TOKENS,
+  API.MUYA_EXTRAS,
+  API.MUYA_CONTRACT,
+  API.MUYA_CLIPBOARD,
+  API.MUYA_COPY_MARKDOWN,
+  API.MUYA_COPY_HTML,
+  API.MUYA_PASTE,
+  API.MUYA_BACKSPACE,
+  API.MUYA_REMOVE_NEXT,
+  API.MUYA_UNDO,
+  API.MUYA_REDO,
+  API.MUYA_MOVE_CURSOR,
+  API.MUYA_INPUT_RULE,
+  API.MUYA_TABLE_INSERT_ROW,
+  API.MUYA_TABLE_INSERT_COLUMN,
+  API.MUYA_TABLE_CONTRACT,
+  API.MUYA_IMAGE_SELECTION,
+  API.MUYA_START_COMPOSITION,
+  API.MUYA_UPDATE_COMPOSITION,
+  API.MUYA_COMMIT_COMPOSITION,
+  API.MUYA_CANCEL_COMPOSITION,
+  API.MUYA_EDITOR_SNAPSHOT
+]))
+
 export const COMPATIBILITY_ACTIONS = Object.freeze(new Set([
   API.CALENDAR_PROVIDERS_LIST,
   API.CALENDAR_IMPORT,
@@ -60,7 +95,9 @@ export const COMPATIBILITY_ACTIONS = Object.freeze(new Set([
   API.ATOMIC_STRUCTURE,
   API.ATOMIC_NOTE_AUTO_NAME,
   API.ATOMIC_MODELS_LIST_LOCAL,
-  API.ATOMIC_MODELS_PULL
+  API.ATOMIC_MODELS_PULL,
+  ...MARKDOWN_ACTIONS,
+  ...EDITOR_ENGINE_ACTIONS
 ]))
 
 export const createPlatformCompatibilityAdapter = (target = globalThis) => {
@@ -150,6 +187,51 @@ export const createPlatformCompatibilityAdapter = (target = globalThis) => {
     return requireMethod(atomic.pullModel, 'atomicFeatures.pullModel')(normalized)
   }
 
+  const callMarkdown = (action, payload = {}) => {
+    const markdown = bridge()?.markdown || {}
+    const methods = {
+      [API.MARKDOWN_PARSE]: ['parse', markdown.parse],
+      [API.MARKDOWN_RENDER_HTML]: ['renderHtml', markdown.renderHtml],
+      [API.MARKDOWN_TO_TEXT]: ['toText', markdown.toText],
+      [API.MARKDOWN_EXTRACT_FRONTMATTER]: ['extractFrontmatter', markdown.extractFrontmatter],
+      [API.MARKDOWN_EXTRACT_LINKS]: ['extractLinks', markdown.extractLinks]
+    }
+    const [name, method] = methods[action] || []
+    return requireMethod(method, `markdown.${name || action}`)(toPlainObject(payload))
+  }
+
+  const callEditorEngine = (action, payload = {}) => {
+    const muya = bridge()?.muya || {}
+    const methods = {
+      [API.MUYA_PARSE]: ['parse', muya.parse],
+      [API.MUYA_RENDER_HTML]: ['renderHtml', muya.renderHtml],
+      [API.MUYA_TOKENS]: ['tokens', muya.tokens],
+      [API.MUYA_EXTRAS]: ['extras', muya.extras],
+      [API.MUYA_CONTRACT]: ['contract', muya.contract],
+      [API.MUYA_CLIPBOARD]: ['clipboard', muya.clipboard],
+      [API.MUYA_COPY_MARKDOWN]: ['copyMarkdown', muya.copyMarkdown],
+      [API.MUYA_COPY_HTML]: ['copyHtml', muya.copyHtml],
+      [API.MUYA_PASTE]: ['paste', muya.paste],
+      [API.MUYA_BACKSPACE]: ['backspace', muya.backspace],
+      [API.MUYA_REMOVE_NEXT]: ['removeNext', muya.removeNext],
+      [API.MUYA_UNDO]: ['undo', muya.undo],
+      [API.MUYA_REDO]: ['redo', muya.redo],
+      [API.MUYA_MOVE_CURSOR]: ['moveCursor', muya.moveCursor],
+      [API.MUYA_INPUT_RULE]: ['inputRule', muya.inputRule],
+      [API.MUYA_TABLE_INSERT_ROW]: ['tableInsertRow', muya.tableInsertRow],
+      [API.MUYA_TABLE_INSERT_COLUMN]: ['tableInsertColumn', muya.tableInsertColumn],
+      [API.MUYA_TABLE_CONTRACT]: ['tableContract', muya.tableContract],
+      [API.MUYA_IMAGE_SELECTION]: ['imageSelection', muya.imageSelection],
+      [API.MUYA_START_COMPOSITION]: ['startComposition', muya.startComposition],
+      [API.MUYA_UPDATE_COMPOSITION]: ['updateComposition', muya.updateComposition],
+      [API.MUYA_COMMIT_COMPOSITION]: ['commitComposition', muya.commitComposition],
+      [API.MUYA_CANCEL_COMPOSITION]: ['cancelComposition', muya.cancelComposition],
+      [API.MUYA_EDITOR_SNAPSHOT]: ['editorSnapshot', muya.editorSnapshot]
+    }
+    const [name, method] = methods[action] || []
+    return requireMethod(method, `muya.${name || action}`)(toPlainObject(payload))
+  }
+
   return {
     canHandle: (action) => COMPATIBILITY_ACTIONS.has(action),
     async call(action, payload = {}) {
@@ -160,6 +242,8 @@ export const createPlatformCompatibilityAdapter = (target = globalThis) => {
       }
       if (action.startsWith('calendar.')) return callCalendar(action, payload)
       if (action.startsWith('models.')) return callModels(action, payload)
+      if (MARKDOWN_ACTIONS.has(action)) return callMarkdown(action, payload)
+      if (EDITOR_ENGINE_ACTIONS.has(action)) return callEditorEngine(action, payload)
       if (action === API.SEARCH_CONCEPTS) {
         return requireMethod(bridge()?.search?.concepts, 'search.concepts')(toPlainObject(payload))
       }

@@ -69,24 +69,28 @@ const validateForTransport = (action, payload, compatibilityAdapter) => {
 export const createApiCaller = (compatibility = platformCompatibilityAdapter) => {
   const compatibilityAdapter = normalizeCompatibilityAdapter(compatibility)
 
-  return async(action, payload = {}) => {
+  return (action, payload = {}) => {
     const plainPayload = toPlainObject(payload)
     const validatedPayload = validateForTransport(action, plainPayload, compatibilityAdapter)
 
-    if (isElephantNoteApiAvailable()) {
-      try {
-        return await unwrapApiEnvelope(requireElephantNoteApi().call(action, validatedPayload))
-      } catch (error) {
-        if (!compatibilityAdapter.canHandle(action) || !isUnknownOrUnavailableAction(error)) {
-          throw error
+    const dispatch = async() => {
+      if (isElephantNoteApiAvailable()) {
+        try {
+          return await unwrapApiEnvelope(requireElephantNoteApi().call(action, validatedPayload))
+        } catch (error) {
+          if (!compatibilityAdapter.canHandle(action) || !isUnknownOrUnavailableAction(error)) {
+            throw error
+          }
         }
       }
+
+      if (!compatibilityAdapter.canHandle(action)) {
+        throw new Error(`ElephantNote API is not available for action: ${action}`)
+      }
+      return compatibilityAdapter.call(action, validatedPayload)
     }
 
-    if (!compatibilityAdapter.canHandle(action)) {
-      throw new Error(`ElephantNote API is not available for action: ${action}`)
-    }
-    return compatibilityAdapter.call(action, validatedPayload)
+    return dispatch()
   }
 }
 

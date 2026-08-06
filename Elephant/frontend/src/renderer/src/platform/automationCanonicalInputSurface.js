@@ -4,6 +4,8 @@ const HOST_ATTRIBUTE = 'data-elephant-rust-editor-host'
 const SURFACE_ATTRIBUTE = 'data-elephant-rust-input-surface'
 const POLL_MS = 20
 const INSTALL_ATTEMPTS = 3000
+const MUTATION_REFRESH_ATTEMPTS = 200
+const MUTATION_REFRESH_DELAY_MS = 5
 
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 
@@ -50,13 +52,25 @@ export const publishCanonicalInputSurface = (target = globalThis) => {
   return true
 }
 
+const refreshAfterDomMutation = async(refresh) => {
+  // Muya replaces the disposable Vue child before its asynchronous Rust session
+  // is ready and before __ELEPHANT_ACTIVE_MUYA__ points at the new generation.
+  // Follow that exact DOM replacement until the corresponding connected canonical
+  // contenteditable is published, rather than leaving a 50 ms selector race.
+  for (let attempt = 0; attempt < MUTATION_REFRESH_ATTEMPTS; attempt += 1) {
+    if (refresh()) return true
+    await wait(MUTATION_REFRESH_DELAY_MS)
+  }
+  return false
+}
+
 const install = (target = globalThis) => {
   if (target[INSTALL_FLAG] === true) return true
   if (!automationApi(target)) return false
 
   const refresh = () => publishCanonicalInputSurface(target)
   const observer = typeof target.MutationObserver === 'function'
-    ? new target.MutationObserver(refresh)
+    ? new target.MutationObserver(() => { void refreshAfterDomMutation(refresh) })
     : null
   observer?.observe(target.document?.documentElement, {
     childList: true,

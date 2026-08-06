@@ -11,8 +11,11 @@ const scenarioId = String(process.env.ELEPHANT_INTERACTION_SCENARIO || 'base-add
 const baseAddonApi = async(context) => {
   const capabilities = await command(context, 'capabilities')
   assert(capabilities.runtime === 'tauri' && ['invokeTauri', 'readDom', 'readState'].every((name) => capabilities.commands.includes(name)), 'Base API capability contract is incomplete', capabilities)
-  const core = await command(context, 'core')
-  assert(core && typeof core === 'object', 'Core read model is invalid', core)
+  const coreState = await command(context, 'readState')
+  const vaults = await command(context, 'invokeTauri', 'tauri_vaults_get')
+  const directory = await command(context, 'invokeTauri', 'tauri_directory_list', { relativePath: '', offset: 0, limit: 1000, includePreview: false })
+  const features = await command(context, 'invokeTauri', 'tauri_features_get')
+  assert(coreState && typeof coreState === 'object' && Array.isArray(directory) && features && typeof features === 'object', 'Core read/inventory API is invalid', { coreState, vaults, directory, features })
   const rendered = await command(context, 'invokeTauri', 'tauri_markdown_render_html', { markdown: '# API\n\n[[Linked Note]]' })
   const plain = await command(context, 'invokeTauri', 'tauri_markdown_to_text', { markdown: '# API\n\nBody' })
   const links = await command(context, 'invokeTauri', 'tauri_markdown_extract_links', { markdown: '[[Linked Note]]\n[File](Acceptance.md)' })
@@ -58,7 +61,7 @@ const baseAddonApi = async(context) => {
   const resourceKeys = state.resources.map((entry) => typeof entry === 'string' ? entry : JSON.stringify(entry))
   const actionKeys = state.actions.map((entry) => typeof entry === 'string' ? entry : JSON.stringify(entry))
   assert(new Set(resourceKeys).size === resourceKeys.length && new Set(actionKeys).size === actionKeys.length, 'Addon API registered duplicate resources/actions', state)
-  return { capabilities, coreKeys: Object.keys(core).sort(), rendered, links, traversal, unknownNative, unknownSurface, status, unknownResource, unknownMethod, addonCount: state.addons.length, resourceCount: state.resources.length, actionCount: state.actions.length }
+  return { capabilities, coreStateKeys: Object.keys(coreState).sort(), vaultCount: Array.isArray(vaults?.vaults) ? vaults.vaults.length : Array.isArray(vaults) ? vaults.length : null, directoryCount: directory.length, featureKeys: Object.keys(features).sort(), rendered, links, traversal, unknownNative, unknownSurface, status, unknownResource, unknownMethod, addonCount: state.addons.length, resourceCount: state.resources.length, actionCount: state.actions.length }
 }
 
 const wikiKnowledgeGraph = async(context) => {

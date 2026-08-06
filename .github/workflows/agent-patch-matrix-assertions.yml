@@ -1,0 +1,31 @@
+name: Agent patch matrix assertions
+
+on:
+  push:
+    branches:
+      - agent/addon-runtime-stabilization
+    paths:
+      - '.github/workflows/agent-patch-matrix-assertions.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/addon-runtime-stabilization
+      - name: Patch and verify matrix assertions
+        run: python3 build/scripts/agent_patch_matrix_assertions.py
+      - name: Commit verified runner
+        run: |
+          set -euxo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git rm build/scripts/agent_patch_matrix_assertions.py
+          git add build/scripts/run-packaged-feature-matrix.mjs
+          git diff --cached --check
+          git commit -m "test: prove rendered Markdown and Excalidraw controls"
+          git push origin HEAD:agent/addon-runtime-stabilization

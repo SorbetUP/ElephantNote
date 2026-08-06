@@ -23,6 +23,13 @@ const modelPayload = (payload = {}) => {
   return toPlainObject(payload)
 }
 
+const flattenOptions = (payload = {}) => {
+  const normalized = toPlainObject(payload)
+  const options = toPlainObject(normalized.options || {})
+  const { options: _options, ...base } = normalized
+  return { ...base, ...options }
+}
+
 export const COMPATIBILITY_ACTIONS = Object.freeze(new Set([
   API.CALENDAR_PROVIDERS_LIST,
   API.CALENDAR_IMPORT,
@@ -119,15 +126,23 @@ export const createPlatformCompatibilityAdapter = (target = globalThis) => {
       })
     }
     if (action === API.ATOMIC_PROVIDERS_LIST) return requireMethod(atomic.providers, 'atomicFeatures.providers')()
-    if (action === API.ATOMIC_OVERVIEW) return requireMethod(atomic.overview, 'atomicFeatures.overview')(normalized)
-    if (action === API.ATOMIC_GRAPH) return requireMethod(atomic.graph, 'atomicFeatures.graph')(normalized)
-    if (action === API.ATOMIC_WIKI) return requireMethod(atomic.wiki, 'atomicFeatures.wiki')(normalized)
+    if (action === API.ATOMIC_OVERVIEW) {
+      return requireMethod(atomic.overview, 'atomicFeatures.overview')(flattenOptions(normalized))
+    }
+    if (action === API.ATOMIC_GRAPH) {
+      return requireMethod(atomic.graph, 'atomicFeatures.graph')(flattenOptions(normalized))
+    }
+    if (action === API.ATOMIC_WIKI) {
+      return requireMethod(atomic.wiki, 'atomicFeatures.wiki')(flattenOptions(normalized))
+    }
     if (action === API.ATOMIC_WIKI_CREATE_PAGE) {
       return requireMethod(atomic.createWikiPage, 'atomicFeatures.createWikiPage')(normalized)
     }
     if (action === API.ATOMIC_SUMMARIZE) return requireMethod(atomic.summarize, 'atomicFeatures.summarize')(normalized)
     if (action === API.ATOMIC_STRUCTURE) return requireMethod(atomic.structure, 'atomicFeatures.structure')(normalized)
-    if (action === API.ATOMIC_NOTE_AUTO_NAME) return requireMethod(atomic.autoNameNote, 'atomicFeatures.autoNameNote')(normalized)
+    if (action === API.ATOMIC_NOTE_AUTO_NAME) {
+      return requireMethod(atomic.autoNameNote, 'atomicFeatures.autoNameNote')(flattenOptions(normalized))
+    }
     if (action === API.ATOMIC_MODELS_LIST_LOCAL) {
       return requireMethod(atomic.listLocalModels, 'atomicFeatures.listLocalModels')(normalized)
     }

@@ -235,7 +235,7 @@ try {
   })
 
   await harness.runScenario('code-boundary-return', layer, async() => {
-    const initial = '# Boundary\n\n```js\nconst value = 1\n```\n\noutside'
+    const initial = 'Boundary\n\n```js\nconst value = 1\n```\n\noutside'
     await setMarkdownAndCaret(initial)
     await command('press', editorSelector, 'Enter')
     await command('insertText', editorSelector, 'tail')

@@ -174,6 +174,7 @@ pub fn run() {
             state::tauri_atomic_features_set,
             vault::commands::tauri_vaults_get,
             vault::commands::tauri_vaults_select_path,
+            vault::commands::tauri_vaults_create_local,
             vault::commands::tauri_vaults_set_active,
             vault::commands::tauri_vaults_set_icon,
             vault::commands::tauri_vaults_set_name,

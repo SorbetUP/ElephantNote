@@ -60,11 +60,11 @@ describe('platform compatibility adapter', () => {
     expect(bridge.models.download).toHaveBeenCalledWith({ repoId: 'org/model' })
   })
 
-  it('routes Atomic operations through the same action interface', async() => {
+  it('preserves legacy Atomic option shapes behind the generic action interface', async() => {
     const { target, bridge } = createTarget()
     const adapter = createPlatformCompatibilityAdapter(target)
     await adapter.call(API.ATOMIC_GRAPH, { vaultRoot: '/vault', options: { limit: 10 } })
-    expect(bridge.atomicFeatures.graph).toHaveBeenCalledWith({ vaultRoot: '/vault', options: { limit: 10 } })
+    expect(bridge.atomicFeatures.graph).toHaveBeenCalledWith({ vaultRoot: '/vault', limit: 10 })
   })
 
   it('normalizes progress events into transport-independent topics', () => {

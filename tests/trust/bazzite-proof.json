@@ -3,8 +3,10 @@
   "id": "bazzite-production",
   "runner": "build/scripts/run-bazzite-production-proof.mjs",
   "journeyRunner": "build/scripts/run-bazzite-packaged-user-journey.mjs",
+  "featureMatrixRunner": "build/scripts/run-packaged-feature-matrix.mjs",
   "artifact": "test-results/trusted/bazzite-production/latest.json",
   "journeyArtifact": "test-results/trusted/bazzite-packaged-user-journey/latest.json",
+  "featureMatrixArtifact": "test-results/trusted/packaged-feature-matrix/latest.json",
   "requires": {
     "os": "bazzite",
     "sessionType": "wayland",
@@ -19,6 +21,7 @@
     "backend-contract",
     "frontend-behavior",
     "bazzite-packaged-user-journey",
+    "packaged-feature-matrix",
     "official-addon-acceptance"
   ],
   "requiredJourneyScenarios": [
@@ -31,6 +34,7 @@
   ],
   "limitations": [
     "The native folder picker is verified as an active desktop portal dependency but is not automatically selected by the journey.",
-    "The visible Wayland input path uses Elephant's authenticated external automation boundary and does not claim physical keyboard injection."
+    "The visible Wayland input path uses Elephant's authenticated external automation boundary and does not claim physical keyboard injection.",
+    "Each requested feature is isolated in its own application process, temporary vault and evidence artifact on the exact Bazzite AppImage."
   ]
 }

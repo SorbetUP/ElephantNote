@@ -1,0 +1,42 @@
+name: Apply durable Excalidraw save correction
+
+on:
+  push:
+    branches: [agent/excalidraw-durable-save-fix]
+    paths:
+      - .github/workflows/agent-apply-excalidraw-durable-save.yml
+      - build/scripts/agent_apply_excalidraw_durable_save.py
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/excalidraw-durable-save-fix
+          fetch-depth: 0
+      - name: Apply correction
+        run: python build/scripts/agent_apply_excalidraw_durable_save.py
+      - name: Validate changed sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check build/scripts/run-packaged-feature-matrix.mjs
+          node --check build/scripts/verify-packaged-feature-matrix.mjs
+          grep -F "scene_blob: Option<String>" Elephant/backend/tauri/src/core_commands.rs
+          grep -F "reopenedFromVisibleNote" build/scripts/run-packaged-feature-matrix.mjs
+      - name: Commit correction and remove temporary files
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/agent-apply-excalidraw-durable-save.yml
+          rm build/scripts/agent_apply_excalidraw_durable_save.py
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m 'fix: persist and reopen Excalidraw drawings'
+          git push origin HEAD:agent/excalidraw-durable-save-fix

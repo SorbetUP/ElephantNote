@@ -118,12 +118,16 @@ const CASES = [
 
 describe('domain client contract matrix', () => {
   it.each(CASES)('%s dispatches its canonical action', async(path, args, action, payload) => {
-    const call = vi.fn(async() => ({}))
+    const calls = []
+    const call = vi.fn(async(receivedAction, receivedPayload = {}) => {
+      calls.push([receivedAction, receivedPayload])
+      return {}
+    })
     const client = createDomainClients(call, vi.fn(() => vi.fn()))
     const method = resolveMethod(client, path)
     expect(typeof method).toBe('function')
     await method(...args)
-    expect(call).toHaveBeenLastCalledWith(action, payload)
+    expect(calls.at(-1)).toEqual([action, payload])
   })
 
   it('routes progress subscriptions through canonical event topics', () => {

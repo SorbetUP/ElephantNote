@@ -5,6 +5,31 @@
   "artifact": "test-results/trusted/packaged-feature-matrix/latest.json",
   "requiresPackagedExecutable": true,
   "requiredPackagedFormat": "linux-appimage",
+  "featureRequirements": {
+    "excalidraw-open-close": [
+      "visible-pointer-draw",
+      "scene-written-to-disk",
+      "png-preview-written-to-disk",
+      "saved-drawing-reopened-from-library"
+    ],
+    "sidebar-hide-full-shortcut": [
+      "physical-keyboard-shortcut"
+    ],
+    "drop-file-into-vault-folder": [
+      "physical-data-transfer-drop",
+      "byte-identical-disk-copy"
+    ],
+    "drop-image-into-note": [
+      "physical-data-transfer-drop",
+      "visible-image-render",
+      "asset-written-to-disk"
+    ],
+    "drop-file-link-into-note": [
+      "physical-data-transfer-drop",
+      "visible-clickable-link",
+      "attachment-written-to-disk"
+    ]
+  },
   "requiredFeatures": [
     "app-launch",
     "vault-selection",

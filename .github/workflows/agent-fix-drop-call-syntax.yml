@@ -1,0 +1,33 @@
+name: Apply drop call syntax repair
+
+on:
+  push:
+    branches: [agent/addon-runtime-stabilization]
+    paths:
+      - .github/workflows/agent-fix-drop-call-syntax.yml
+      - build/scripts/agent_fix_drop_call_syntax.py
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/addon-runtime-stabilization
+          fetch-depth: 0
+      - run: python build/scripts/agent_fix_drop_call_syntax.py
+      - name: Commit repaired runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/agent-fix-drop-call-syntax.yml
+          rm build/scripts/agent_fix_drop_call_syntax.py
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m 'fix: repair physical drop call syntax'
+          git push origin HEAD:agent/addon-runtime-stabilization

@@ -1,14 +1,18 @@
-import { createApiCaller, isElephantNoteApiAvailable, requireElephantNoteApi } from './elephantnoteClient/apiRuntime'
-import { requireAtomicFeatureApi } from './elephantnoteClient/atomicFeatureApi'
+import {
+  createApiCaller,
+  describeElephantNoteApi,
+  isElephantNoteApiAvailable,
+  subscribeApiEvent
+} from './elephantnoteClient/apiRuntime'
 import { createDomainClients } from './elephantnoteClient/domainClients'
-import { LEGACY_CALLS } from './elephantnoteClient/legacyCalls'
 
 export { isElephantNoteApiAvailable }
 
-const call = createApiCaller(LEGACY_CALLS)
+const call = createApiCaller()
 
 export const elephantnoteClient = {
-  describe: () => requireElephantNoteApi().describe(),
+  describe: describeElephantNoteApi,
   call,
-  ...createDomainClients(call, requireAtomicFeatureApi)
+  subscribe: subscribeApiEvent,
+  ...createDomainClients(call, subscribeApiEvent)
 }

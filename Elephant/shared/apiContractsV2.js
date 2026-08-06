@@ -229,12 +229,44 @@ const editorEngineContracts = Object.freeze([
   action('MUYA_EDITOR_SNAPSHOT', 'muya.editorSnapshot', editStatePayload)
 ])
 
+const assetContracts = Object.freeze([
+  action('ATTACHMENTS_LIST', 'attachments.list'),
+  action(
+    'ATTACHMENTS_WRITE_TEXT',
+    'attachments.writeText',
+    schema.object({
+      relativePath: schema.requiredString,
+      content: schema.textString
+    })
+  ),
+  action('DRAWINGS_LIST', 'drawings.list'),
+  action(
+    'DRAWINGS_CREATE',
+    'drawings.create',
+    schema.object({ title: schema.optionalString })
+  ),
+  action(
+    'DRAWINGS_READ',
+    'drawings.read',
+    schema.object({ relativePath: schema.requiredString })
+  ),
+  action(
+    'DRAWINGS_WRITE',
+    'drawings.write',
+    schema.object({
+      relativePath: schema.requiredString,
+      scene: requiredObject
+    })
+  )
+])
+
 const extendedContracts = Object.freeze([
   ...providerContracts,
   ...modelContracts,
   ...atomicContracts,
   ...markdownContracts,
-  ...editorEngineContracts
+  ...editorEngineContracts,
+  ...assetContracts
 ])
 
 export const ELEPHANTNOTE_API_DOMAINS = Object.freeze({
@@ -243,7 +275,8 @@ export const ELEPHANTNOTE_API_DOMAINS = Object.freeze({
   modelLibrary: modelContracts,
   atomicFeatures: atomicContracts,
   markdownEngine: markdownContracts,
-  editorEngine: editorEngineContracts
+  editorEngine: editorEngineContracts,
+  assets: assetContracts
 })
 
 export const listApiContracts = () => [

@@ -1,83 +1,45 @@
-name: Apply final five guarded fixes
+name: Agent governance
 
 on:
   push:
     branches:
-      - agent/fix-remaining-packaged-matrix
-    paths:
-      - build/scripts/apply_pasted_patch.py
-      - .github/workflows/agent-governance.yml
+      - develop
+      - main
+      - 'agent/**'
+  pull_request:
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: apply-final-five-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  patch:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 10
+  verify-agent-governance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
-      - name: Clone exact branch without external actions
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euxo pipefail
-          git clone --depth 8 --branch "$GITHUB_REF_NAME" \
-            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" repo
+      - uses: actions/checkout@v6
 
-      - name: Apply guarded product corrections
-        working-directory: repo
-        run: python build/scripts/apply_pasted_patch.py
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          package-manager-cache: false
 
-      - name: Validate patched contracts
-        working-directory: repo
+      - name: Verify mandatory repository rules
         shell: bash
         run: |
-          set -euxo pipefail
-          node --check Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js
-          node --check Elephant/frontend/src/renderer/src/editor-rust/domRenderer/helpers.js
-          node --check Elephant/frontend/src/renderer/src/components/editorWithTabs/runtimeFileLinks.js
-          python - <<'PY'
-          from pathlib import Path
-          adapter = Path('Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js').read_text()
-          editor = Path('Elephant/frontend/src/renderer/src/components/editorWithTabs/runtimeEditor.vue').read_text()
-          links = Path('Elephant/frontend/src/renderer/src/components/editorWithTabs/runtimeFileLinks.js').read_text()
-          helpers = Path('Elephant/frontend/src/renderer/src/editor-rust/domRenderer/helpers.js').read_text()
-          excalidraw = Path('Elephant/frontend/app/components/editor/ExcalidrawDialog.vue').read_text()
-          assert 'this.options.onFileDrop(files, event)' in adapter
-          assert 'drop:delegated' in adapter
-          assert ':on-file-drop="handleFileDrop"' in editor
-          assert 'product handler entered' in editor
-          assert 'pathApi.extname(normalizedName)' in links
-          assert 'Preserve portable vault-relative links' in helpers
-          assert 'const apiRef = shallowRef(null)' in excalidraw
-          assert 'const root = shallowRef(null)' in excalidraw
-          assert 'data-testid="excalidraw-name"' in excalidraw
-          PY
-          git diff --check
+          set -o pipefail
+          node build/scripts/verify-agent-governance.mjs 2>&1 | tee agent-governance.txt
 
-      - name: Commit only product fixes
-        working-directory: repo
-        shell: bash
-        env:
-          ORIGINAL_CLEAN_SHA: bf9c627aa27cd646e87adebdb9f089b955709f2f
-        run: |
-          set -euxo pipefail
-          git checkout "$ORIGINAL_CLEAN_SHA" -- \
-            .github/workflows/agent-governance.yml \
-            build/scripts/apply_pasted_patch.py
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/workflows/agent-governance.yml build/scripts/apply_pasted_patch.py \
-            Elephant/frontend/src/renderer/src/muya/realMuyaRustAdapter.js \
-            Elephant/frontend/src/renderer/src/components/editorWithTabs/runtimeEditor.vue \
-            Elephant/frontend/src/renderer/src/components/editorWithTabs/runtimeFileLinks.js \
-            Elephant/frontend/src/renderer/src/editor-rust/domRenderer/helpers.js \
-            Elephant/frontend/app/components/editor/ExcalidrawDialog.vue
-          git commit -m "fix: complete Excalidraw and dropped attachment paths"
-          git push origin HEAD:"$GITHUB_REF_NAME"
+      - name: Upload governance evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: agent-governance
+          path: agent-governance.txt
+          if-no-files-found: error
+          retention-days: 30

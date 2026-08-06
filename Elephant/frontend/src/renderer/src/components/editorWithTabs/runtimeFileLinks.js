@@ -34,10 +34,12 @@ const safeName = (value) => {
 const isImageFile = (file) => IMAGE_MIME.test(String(file?.type || '')) || IMAGE_EXTENSION.test(String(file?.name || ''))
 
 const nextAvailablePath = async (directory, name, fileUtils, pathApi) => {
-  const parsed = pathApi.parse(safeName(name))
+  const normalizedName = safeName(name)
+  const extension = pathApi.extname(normalizedName)
+  const stem = pathApi.basename(normalizedName, extension) || 'file'
   for (let index = 0; index < 10000; index += 1) {
     const suffix = index === 0 ? '' : `-${index}`
-    const candidate = pathApi.join(directory, `${parsed.name}${suffix}${parsed.ext}`)
+    const candidate = pathApi.join(directory, `${stem}${suffix}${extension}`)
     const exists = typeof fileUtils.pathExists === 'function'
       ? await fileUtils.pathExists(candidate)
       : Boolean(fileUtils.pathExistsSync?.(candidate))
@@ -149,7 +151,13 @@ const resolveLocalPath = ({ href, currentFile, projectRoot, target }) => {
     ? pathApi.normalize(source)
     : pathApi.resolve(pathApi.dirname(currentFile.pathname), source)
   const root = pathApi.normalize(projectRoot.pathname)
-  const insideVault = absolutePath === root || target.fileUtils?.isChildOfDirectory?.(root, absolutePath) === true
+  const relativeToRoot = pathApi.relative(root, absolutePath).replace(/\\/g, '/')
+  const insideVault = absolutePath === root || Boolean(
+    relativeToRoot &&
+    relativeToRoot !== '..' &&
+    !relativeToRoot.startsWith('../') &&
+    !pathApi.isAbsolute(relativeToRoot)
+  )
   return insideVault ? absolutePath : null
 }
 

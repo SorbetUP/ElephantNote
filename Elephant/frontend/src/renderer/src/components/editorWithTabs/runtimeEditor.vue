@@ -3,7 +3,7 @@
     v-if="!sourceCode"
     :model-value="editorModelValue"
     :factory="rustRuntimeFactory"
-    :on-file-drop="fileHandlers.dropped"
+    :on-file-drop="handleFileDrop"
     :on-uri-drop="imageHandlers.uriDropped"
     :on-image-click="imageToolbar.open"
     mode="rust"
@@ -161,10 +161,8 @@ const installFileInteractions = (runtime) => {
     if (!files.length) return
     event.preventDefault()
     event.stopImmediatePropagation()
-    void (async () => {
-      await positionDropSelection(runtime, event)
-      await fileHandlers.dropped(files)
-    })().catch((error) => console.error('[elephantnote:file-drop] failed', error))
+    void handleFileDrop(files, event)
+      .catch((error) => console.error('[elephantnote:file-drop] failed', error))
   }
   const click = (event) => {
     if (!event.target?.closest?.('a[href]')) return
@@ -229,6 +227,17 @@ const fileHandlers = {
     dropImage: imageHandlers.dropped
   }),
   openLink: createRuntimeLinkHandler({ currentFile, projectTree })
+}
+const handleFileDrop = async (files, event) => {
+  const list = Array.from(files || [])
+  if (!list.length) return false
+  if (event && rustRuntime.value) {
+    await positionDropSelection(rustRuntime.value, event)
+  }
+  console.info('[elephantnote:file-drop] product handler entered', {
+    fileCount: list.length
+  })
+  return fileHandlers.dropped(list)
 }
 const imageToolbar = useRuntimeImageToolbar(imageHandlers)
 

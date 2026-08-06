@@ -14,6 +14,7 @@
               v-model="editableBaseName"
               type="text"
               class="en-excalidraw-name-input"
+              data-testid="excalidraw-name"
               spellcheck="false"
               :placeholder="t('excalidraw.drawingPlaceholder')"
               :aria-label="t('excalidraw.drawingName')"
@@ -78,7 +79,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import React from 'react'
 import { createRoot } from 'react-dom/client'
@@ -122,11 +123,13 @@ const props = defineProps({
 const emit = defineEmits(['close', 'save'])
 const { t } = useI18n()
 const mountEl = ref(null)
-const apiRef = ref(null)
-const root = ref(null)
-const excalidrawModule = ref(null)
+// React roots, modules and imperative APIs must never be deeply proxied by Vue.
+// Proxying these opaque objects corrupts React's internal context/Fiber stacks.
+const apiRef = shallowRef(null)
+const root = shallowRef(null)
+const excalidrawModule = shallowRef(null)
 const isSaving = ref(false)
-const initialData = ref(null)
+const initialData = shallowRef(null)
 const errorMessage = ref('')
 const isMacOS = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(`${navigator.platform || ''} ${navigator.userAgent || ''}`)
 let disposed = false

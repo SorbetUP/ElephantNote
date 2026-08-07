@@ -3,8 +3,8 @@
     v-if="!sourceCode"
     :model-value="editorModelValue"
     :factory="rustRuntimeFactory"
-    :on-file-drop="fileHandlers.dropped"
-    :on-uri-drop="imageHandlers.uriDropped"
+    :on-file-drop="handleFileDrop"
+    :on-uri-drop="handleUriDrop"
     :on-image-click="imageToolbar.open"
     mode="rust"
     class="rust-editor-runtime"
@@ -230,6 +230,14 @@ const fileHandlers = {
     dropImage: imageHandlers.dropped
   }),
   openLink: createRuntimeLinkHandler({ currentFile, projectTree })
+}
+const handleFileDrop = async(files) => {
+  rustRuntime.value?.markUserMutation?.('drop:file-callback')
+  return fileHandlers.dropped(files)
+}
+const handleUriDrop = async(...args) => {
+  rustRuntime.value?.markUserMutation?.('drop:uri-callback')
+  return imageHandlers.uriDropped(...args)
 }
 const imageToolbar = useRuntimeImageToolbar(imageHandlers)
 

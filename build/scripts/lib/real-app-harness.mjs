@@ -47,6 +47,20 @@ const ensureRelativePath = (relativePath) => {
 
 const normalizeError = (error) => error?.stack || error?.message || String(error)
 
+const hydrateDroppedFileDescriptors = (descriptors) => {
+  if (!Array.isArray(descriptors)) return descriptors
+  return descriptors.map((descriptor) => {
+    if (!descriptor || typeof descriptor !== 'object') return descriptor
+    if (descriptor.contentBase64 || descriptor.content !== undefined) return descriptor
+    if (typeof descriptor.path !== 'string' || !descriptor.path || !existsSync(descriptor.path)) return descriptor
+    const bytes = readFileSync(descriptor.path)
+    return {
+      ...descriptor,
+      contentBase64: bytes.toString('base64')
+    }
+  })
+}
+
 export const createRealAppHarness = ({
   suite,
   initialFiles = {},
@@ -236,8 +250,11 @@ export const createRealAppHarness = ({
     if (!FRONTEND_ACTIONS.has(commandName) && !FRONTEND_OBSERVATIONS.has(commandName)) {
       throw new Error(`${suite} ${layer} scenario attempted forbidden internal command ${commandName}`)
     }
-    const result = await rawCommand(commandName, ...args)
-    actionCommands.push({ at: new Date().toISOString(), layer, command: commandName, argsCount: args.length })
+    const commandArgs = commandName === 'dropFiles' && Array.isArray(args[1])
+      ? [args[0], hydrateDroppedFileDescriptors(args[1]), ...args.slice(2)]
+      : args
+    const result = await rawCommand(commandName, ...commandArgs)
+    actionCommands.push({ at: new Date().toISOString(), layer, command: commandName, argsCount: commandArgs.length })
     return result
   }
 

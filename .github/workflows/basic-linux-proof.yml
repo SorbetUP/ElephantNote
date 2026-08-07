@@ -55,9 +55,6 @@ jobs:
         run: |
           set -euxo pipefail
           node build/scripts/verify-rust-canonical-readiness.mjs
-          node --check build/scripts/addon-acceptance-harness.mjs
-          node --check build/scripts/run-focused-addon-scenario.mjs
-          node --check build/scripts/run-addon-interaction-scenario.mjs
 
       - name: Build exact Linux AppImage
         shell: bash

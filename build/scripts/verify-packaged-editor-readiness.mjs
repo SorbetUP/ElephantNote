@@ -82,7 +82,7 @@ assert.ok(
 )
 assert.match(rustMirrorSource, /const initialize = async\(\) =>/)
 assert.match(rustMirrorSource, /const state = await client\.create\(markdown\)/)
-assert.match(rustMirrorSource, /initializationPromise\s*=\s*Promise\s*\.\s*resolve\s*\(\s*\)/)
+assert.match(rustMirrorSource, /initializationPromise\s*=\s*initialize\s*\(\s*\)/)
 assert.match(rustMirrorSource, /await initializationPromise\n {4}if \(draining\)/)
 assert.match(rustMirrorSource, /await initializationPromise\n {8}await flush\(\)/)
 assert.doesNotMatch(rustMirrorSource, /const ready = reset\(initialMarkdown, 'initial'\)/)
@@ -92,7 +92,7 @@ assert.match(rustMirrorSource, /if \(!client\.state\) \{/)
 assert.match(rustMirrorSource, /has no canonical state before \$\{reason\}/)
 assert.match(rustMirrorSource, /\[elephantnote:muya-rust\] command failed/)
 assert.match(rustMirrorSource, /sessionId: client\.sessionId/)
-const initializationBarrierIndex = rustMirrorSource.search(/initializationPromise\s*=\s*Promise\s*\.\s*resolve\s*\(\s*\)/)
+const initializationBarrierIndex = rustMirrorSource.search(/initializationPromise\s*=\s*initialize\s*\(\s*\)/)
 assert.ok(
   initializationBarrierIndex >= 0 && initializationBarrierIndex < rustMirrorSource.indexOf('const ready = initializationPromise'),
   'the mirror readiness promise must be the explicit native session creation barrier'

@@ -266,7 +266,8 @@ export const createRealMuyaRustMirror = ({
     false
   )
 
-  initializationPromise = initialize()
+  initializationPromise = Promise.resolve()
+    .then(initialize)
     .catch((error) => {
       fail(error)
       throw error
@@ -320,7 +321,7 @@ export const createRealMuyaRustMirror = ({
       engine.commitComposition(selection, String(text))
     )),
     replaceRange: command('rust-replace-range', (engine, start, end, text = '') => (
-      engine.replaceRange(start, end, text)
+      engine.replaceRange(start, end, String(text))
     )),
     deleteBackward: command('rust-delete-backward', (engine) => engine.completeDeleteBackward()),
     deleteForward: command('rust-delete-forward', (engine) => engine.completeDeleteForward()),

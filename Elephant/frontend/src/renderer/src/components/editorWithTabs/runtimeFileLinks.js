@@ -16,6 +16,10 @@ const recordOpen = (entry, target = globalThis) => {
   return entry
 }
 
+const markDroppedUserMutation = (target = globalThis, reason = 'drop:file') => {
+  target.__ELEPHANT_ACTIVE_MUYA__?.__onUserMutation?.(reason)
+}
+
 const escapeLabel = (value) => String(value || 'file')
   .replace(/\\/g, '\\\\')
   .replace(/([\[\]])/g, '\\$1')
@@ -89,6 +93,7 @@ export const createRuntimeFileHandlers = ({
     const image = list.find((file) => /^image\//i.test(file.type || ''))
     if (image) return dropImage([image])
 
+    markDroppedUserMutation(target)
     const attachment = await storeDroppedAttachment({
       file: list[0],
       currentFile: currentFile.value,

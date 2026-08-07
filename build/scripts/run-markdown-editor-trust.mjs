@@ -43,7 +43,7 @@ const visibleWords = (markdown) => normalize(markdown)
   .match(/\S+/g) || []
 
 const waitForRenderedMarkdown = async(markdown, label, timeoutMs = 10_000) => {
-  const expectedWords = visibleWords(markdown)
+  const expectedWords = visibleWords(noteBody(markdown))
   const deadline = Date.now() + timeoutMs
   let previousText = null
   let stableReads = 0

@@ -341,5 +341,3 @@ export const installAcceptancePhysicalSurface = async (target = globalThis) => {
   }
   throw new Error('Acceptance API was not installed before physical-surface timeout')
 }
-
-void installAcceptancePhysicalSurface()

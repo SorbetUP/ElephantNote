@@ -137,6 +137,11 @@ const cleanupDragDropHandler = () => {
 }
 
 onMounted(async () => {
+  // Tauri does not have the legacy Electron bootstrap event. Mark the shell
+  // ready before awaiting optional command/listener setup so a restart cannot
+  // leave the mounted route on the placeholder forever.
+  if (isTauriRuntime) mainStore.SET_INITIALIZED()
+
   if (global.marktext.initialState) {
     preferencesStore.SET_USER_PREFERENCE(global.marktext.initialState)
   }
@@ -181,12 +186,6 @@ onMounted(async () => {
   notificationStore.listenForNotification()
 
   setupDragDropHandler()
-
-  if (isTauriRuntime) {
-    window.setTimeout(() => {
-      if (!mainStore.init) mainStore.SET_INITIALIZED()
-    }, 250)
-  }
 
   nextTick(() => {
     addStyles(global.marktext.initialState || DEFAULT_STYLE)

@@ -353,7 +353,12 @@ pub fn tauri_drawings_create(app: AppHandle, title: Option<String>) -> R<Value> 
         .unwrap_or_else(|| path.strip_prefix(&root).unwrap_or(&path).to_path_buf())
         .to_string_lossy()
         .replace('\\', "/");
-    Ok(json!({ "path": public_path, "fullPath": path.to_string_lossy(), "scene": scene }))
+    Ok(json!({
+        "path": public_path,
+        "relativePath": public_path,
+        "fullPath": path.to_string_lossy(),
+        "scene": scene
+    }))
 }
 
 #[tauri::command]

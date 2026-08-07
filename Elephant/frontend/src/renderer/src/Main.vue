@@ -1,6 +1,5 @@
 <script setup>
 import './platform/shellKeyboardShortcuts.js'
-import './platform/automationAcceptancePhysicalSurface.js'
 </script>
 
 <template>

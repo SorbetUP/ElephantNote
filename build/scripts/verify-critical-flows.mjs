@@ -54,6 +54,8 @@ for (const file of [
   'build/scripts/lib/real-app-harness.mjs',
   'tests/trust/test-layers.json',
   'Elephant/frontend/src/renderer/src/main.js',
+  'Elephant/frontend/src/renderer/src/Main.vue',
+  'Elephant/frontend/src/renderer/src/pages/app.vue',
   'Elephant/frontend/src/renderer/src/addons/builtin/index.js',
   'Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js',
   'Elephant/frontend/src/renderer/src/addons/officialAddonCatalogBridge.js',
@@ -161,6 +163,24 @@ ordered(
 )
 has('Elephant/frontend/src/renderer/src/main.js', "const runtime = 'tauri'", 'Tauri-only runtime selection')
 lacks('Elephant/frontend/src/renderer/src/main.js', 'tauri-compatible', 'compatibility runtime fallback')
+ordered(
+  'Elephant/frontend/src/renderer/src/main.js',
+  [
+    'installAcceptanceTestBridge({ pinia })',
+    'installAcceptancePhysicalSurface(globalThis)'
+  ],
+  'acceptance physical surface must only start after the acceptance bridge exists'
+)
+lacks('Elephant/frontend/src/renderer/src/Main.vue', 'automationAcceptancePhysicalSurface', 'unconditional acceptance-only physical surface import')
+ordered(
+  'Elephant/frontend/src/renderer/src/pages/app.vue',
+  [
+    'if (isTauriRuntime) mainStore.SET_INITIALIZED()',
+    'await commandCenterStore.LISTEN_COMMAND_CENTER_BUS()'
+  ],
+  'Tauri shell readiness must not wait for optional listener setup'
+)
+lacks('Elephant/frontend/src/renderer/src/pages/app.vue', 'if (!mainStore.init) mainStore.SET_INITIALIZED()', 'delayed Tauri shell readiness')
 
 has('Elephant/frontend/src/renderer/src/addons/builtin/index.js', 'builtinAddons = Object.freeze([])', 'empty builtin addon catalogue')
 lacks('Elephant/frontend/src/renderer/src/addons/builtin/index.js', 'import(', 'bundled optional addon import')

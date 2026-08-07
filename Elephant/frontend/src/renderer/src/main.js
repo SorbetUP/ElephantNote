@@ -34,6 +34,7 @@ import { restorePortableWindowState, savePortableWindowState } from './platform/
 import { installRendererDiagnostics, pushDiagnosticLog } from './platform/rendererDiagnostics'
 import { installStoreDiagnostics } from './platform/storeDiagnostics'
 import { installAcceptanceTestBridge } from './platform/acceptanceTestBridge'
+import { installAcceptancePhysicalSurface } from './platform/automationAcceptancePhysicalSurface'
 import { installAddonSystem } from './addons'
 import { activateCoreFeature } from './addons/coreFeatures'
 import { addonPacksCoreFeature } from './addons/builtin/addonProfiles'
@@ -206,7 +207,14 @@ const mountRendererApp = async(runtime, windowType) => {
   const acceptanceEnabled = typeof window.__TAURI__?.core?.invoke === 'function'
     ? await window.__TAURI__.core.invoke('tauri_acceptance_enabled').catch(() => false)
     : false
-  if (acceptanceEnabled === true) installAcceptanceTestBridge({ pinia })
+  if (acceptanceEnabled === true) {
+    installAcceptanceTestBridge({ pinia })
+    void installAcceptancePhysicalSurface(globalThis).catch((error) => {
+      pushDiagnosticLog('error', 'acceptance physical surface installation failed', {
+        error: error?.message || String(error)
+      })
+    })
+  }
   installNoteCitationRuntime({ pinia })
   installNoteCitationSelectionGuard(window)
 }

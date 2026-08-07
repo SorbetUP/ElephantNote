@@ -82,8 +82,6 @@
     "test:e2e": "pnpm test:automation",
     "test:desktop:acceptance": "pnpm test:automation:raw",
     "test:desktop:acceptance:packaged": "node build/scripts/run-packaged-desktop-acceptance.mjs",
-    "test:official-addons:e2e:raw": "pnpm test:automation:raw",
-    "test:official-addons:e2e": "pnpm test:automation",
     "test:feature-matrix": "node build/scripts/validate-feature-matrix.mjs",
     "prod:check": "pnpm lint && pnpm security:guard && pnpm release:check && pnpm test:feature-matrix && pnpm test:trust:guard && pnpm test:automation && pnpm validate-licenses && pnpm run build:unpack",
     "gen-third-party": "node build/scripts/generateThirdPartyLicense.js",

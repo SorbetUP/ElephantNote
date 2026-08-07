@@ -98,4 +98,10 @@ mod tests {
     let error = validate_prebuilt_package(&item, &bytes).expect_err("catalog identity must be enforced");
     assert!(error.contains("version mismatch"));
   }
+
+  #[test]
+  fn source_transport_finds_multiline_relative_imports() {
+    let source = "import {\n  helper\n} from './agent.js'\n";
+    assert_eq!(static_relative_imports(source), vec!["./agent.js"]);
+  }
 }

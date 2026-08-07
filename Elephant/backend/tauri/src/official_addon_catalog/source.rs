@@ -36,20 +36,33 @@ fn package_prefix(item: &CatalogAddon) -> R<String> {
 
 fn static_relative_imports(source: &str) -> Vec<String> {
   let mut imports = Vec::new();
-  for line in source.lines() {
-    let trimmed = line.trim();
-    if !trimmed.starts_with("import ") {
+  let lines = source.lines().collect::<Vec<_>>();
+  let mut index = 0;
+  while index < lines.len() {
+    let trimmed = lines[index].trim();
+    if !trimmed.starts_with("import ") && !trimmed.starts_with("export ") {
+      index += 1;
       continue;
     }
+
+    let mut statement = trimmed.to_string();
+    let mut next_index = index + 1;
+    while !statement.contains(['\'', '"']) && next_index < lines.len() {
+      statement.push(' ');
+      statement.push_str(lines[next_index].trim());
+      next_index += 1;
+    }
+
     for quote in ['\'', '"'] {
-      let Some(start) = trimmed.find(quote) else { continue };
-      let rest = &trimmed[start + 1..];
+      let Some(start) = statement.find(quote) else { continue };
+      let rest = &statement[start + 1..];
       let Some(end) = rest.find(quote) else { continue };
       let candidate = &rest[..end];
       if candidate.starts_with('.') {
         imports.push(candidate.to_string());
       }
     }
+    index = next_index;
   }
   imports
 }

@@ -75,7 +75,7 @@ const setMarkdownAndCaret = async(markdown, position = 'end') => {
   const synchronized = await waitForRenderedMarkdown(markdown, 'set-markdown-and-caret')
   const text = selectableText(synchronized.editor)
   const requested = position === 'end'
-    ? Number.MAX_SAFE_INTEGER
+    ? text.length
     : Math.max(0, Math.min(text.length, Number(position)))
   const selection = await command('selectText', editorSelector, requested, requested)
   const exactNumericCaret = position !== 'end' && selection?.start === requested && selection?.end === requested

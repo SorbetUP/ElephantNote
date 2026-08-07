@@ -8,6 +8,10 @@ import { createEditorImageAction } from './editorImageAction'
 const REMOTE_URL_REG = /^(?:https?:|data:|blob:)/i
 const IMAGE_EXT_REG = /\.(?:png|jpe?g|gif|webp|svg|avif|bmp|ico)(?:[?#].*)?$/i
 
+const markDroppedUserMutation = (reason) => {
+  globalThis.__ELEPHANT_ACTIVE_MUYA__?.__onUserMutation?.(reason)
+}
+
 export const checkRuntimeImageContentType = async (source, fetchImpl = globalThis.fetch) => {
   if (typeof fetchImpl !== 'function') return false
   try {
@@ -86,6 +90,7 @@ export const createRuntimeImageHandlers = ({
   const dropped = async (files) => {
     const image = Array.from(files || []).find((file) => /image/.test(file.type || ''))
     if (!image) return false
+    markDroppedUserMutation('drop:image')
     const nativePath = window.tauri?.webUtils?.getPathForFile?.(image) || image?.path || ''
     const source = await imageAction(nativePath || image, null, image.name || '')
     if (!String(source || '').trim()) {
@@ -97,6 +102,7 @@ export const createRuntimeImageHandlers = ({
 
   const uriDropped = async (source) => {
     if (!await isImageUrl(source)) return false
+    markDroppedUserMutation('drop:image-uri')
     await insert({ source, alt: '' })
     return true
   }

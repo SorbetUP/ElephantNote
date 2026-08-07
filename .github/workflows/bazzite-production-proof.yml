@@ -44,8 +44,15 @@ jobs:
   contract:
     name: Bazzite proof contract guard
     runs-on: ubuntu-24.04
+    env:
+      PROOF_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.PROOF_HEAD_SHA }}
+      - name: Bind the contract guard to the exact branch commit
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$PROOF_HEAD_SHA"
       - name: Reject incomplete or X11-only Bazzite proof wiring
         run: node build/scripts/verify-bazzite-proof.mjs
 
@@ -58,11 +65,17 @@ jobs:
     runs-on: [self-hosted, linux, x64, bazzite, gnome, wayland]
     timeout-minutes: 240
     env:
+      PROOF_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       ELEPHANT_ACCEPTANCE_APP_PATH: ${{ inputs.appimage_path || vars.ELEPHANT_BAZZITE_APPIMAGE_PATH }}
       ELEPHANT_EXPECTED_APPIMAGE_SHA256: ${{ inputs.expected_sha256 || vars.ELEPHANT_BAZZITE_APPIMAGE_SHA256 }}
       ELEPHANT_BAZZITE_QUICK: ${{ inputs.quick && '1' || vars.ELEPHANT_BAZZITE_QUICK || '0' }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.PROOF_HEAD_SHA }}
+      - name: Bind the hardware proof to the exact branch commit
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$PROOF_HEAD_SHA"
       - uses: ./.github/actions/setup
       - name: Verify host and execute the exact AppImage with Wayland-native automation only
         shell: bash

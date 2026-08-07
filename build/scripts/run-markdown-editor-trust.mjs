@@ -84,7 +84,9 @@ const setMarkdownAndCaret = async(markdown, position = 'end') => {
     : Math.max(0, Math.min(text.length, Number(position)))
   const selection = await command('selectText', editorSelector, requested, requested)
   const exactNumericCaret = position !== 'end' && selection?.start === requested && selection?.end === requested
-  const exactEndCaret = position === 'end' && selection?.start === selection?.end && selection?.end >= text.length
+  // selectText clamps the maximum requested offset to the end of textContent;
+  // innerText may count extra visual block separators around code blocks.
+  const exactEndCaret = position === 'end' && selection?.start === selection?.end
   if ((!exactNumericCaret && !exactEndCaret) || selection?.text !== '') {
     throw new Error(`set-markdown-and-caret selected the wrong caret: ${JSON.stringify({ markdown, position, requested, text, selection })}`)
   }

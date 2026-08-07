@@ -67,8 +67,8 @@ const baseConfig = readJson('Elephant/backend/tauri/tauri.conf.json')
 const resources = baseConfig.bundle?.resources
 const errors = [...launcherErrors]
 
-if (!Array.isArray(resources) || resources.length !== 1 || resources[0] !== 'resources/official-addons') {
-  errors.push('Elephant/backend/tauri/tauri.conf.json: desktop bundle must contain only controlled official addon resources')
+if (resources !== undefined && (!Array.isArray(resources) || resources.length !== 0)) {
+  errors.push('Elephant/backend/tauri/tauri.conf.json: desktop bundle must not contain addon resources')
 }
 
 const serializedConfig = JSON.stringify(baseConfig)

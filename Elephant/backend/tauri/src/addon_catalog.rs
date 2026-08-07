@@ -23,9 +23,6 @@ const MAX_CATALOG_BYTES: u64 = 1024 * 1024;
 const MAX_MANIFEST_BYTES: u64 = 256 * 1024;
 const MAX_ENTRY_BYTES: u64 = 5 * 1024 * 1024;
 const MAX_PACKAGE_BYTES: u64 = 250 * 1024 * 1024;
-const BUNDLED_TRUSTED_LAB_ID: &str = "com.elephantnote.examples.trusted-workspace-lab";
-const BUNDLED_TRUSTED_LAB_MANIFEST: &str = include_str!("../../../../examples/addons/trusted-workspace-lab/manifest.json");
-const BUNDLED_TRUSTED_LAB_ENTRY: &str = include_str!("../../../../examples/addons/trusted-workspace-lab/main.js");
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -71,25 +68,6 @@ struct AddonCatalog {
   #[serde(default)]
   updated_at: String,
   addons: Vec<CatalogAddon>,
-}
-
-fn bundled_trusted_lab_item() -> CatalogAddon {
-  CatalogAddon {
-    id: BUNDLED_TRUSTED_LAB_ID.to_string(),
-    slug: "trusted-workspace-lab".to_string(),
-    name: "Trusted Workspace Lab".to_string(),
-    version: "1.0.0".to_string(),
-    description: "Full app access reference addon that visibly modifies Settings, workspace UI and application behavior.".to_string(),
-    author: "ElephantNote".to_string(),
-    official: false,
-    requires_platform_package: false,
-    manifest_path: "bundled/trusted-workspace-lab/manifest.json".to_string(),
-    entry_path: "bundled/trusted-workspace-lab/main.js".to_string(),
-    package_path: String::new(),
-    package_hash: String::new(),
-    packages: BTreeMap::new(),
-    readme_path: String::new(),
-  }
 }
 
 fn safe_catalog_path(value: &str) -> R<String> {
@@ -155,10 +133,6 @@ fn validate_catalog_item(item: &CatalogAddon) -> R<()> {
   if item.official && !item.id.starts_with("elephant.") {
     return Err(format!("Only first-party elephant.* packages may be marked official: {}", item.id));
   }
-  if item.id == BUNDLED_TRUSTED_LAB_ID {
-    return Ok(());
-  }
-
   let expected_prefix = format!("addons/{}/", item.slug);
   if item.requires_platform_package && item.packages.is_empty() {
     return Err(format!("Catalogue addon {} requires at least one platform package", item.id));
@@ -329,14 +303,6 @@ fn download_prebuilt_package(item: &CatalogAddon, package_path: &str, package_ha
 }
 
 fn create_temporary_package(item: &CatalogAddon) -> R<PathBuf> {
-  if item.id == BUNDLED_TRUSTED_LAB_ID {
-    return write_temporary_package(
-      item,
-      BUNDLED_TRUSTED_LAB_MANIFEST.as_bytes(),
-      BUNDLED_TRUSTED_LAB_ENTRY.as_bytes(),
-    );
-  }
-
   let platform = platform_key();
   if let Some(package) = item.packages.get(&platform) {
     return download_prebuilt_package(item, &package.path, &package.hash);
@@ -380,9 +346,6 @@ pub fn tauri_addons_catalog_list() -> R<Vec<CatalogAddon>> {
   let platform = platform_key();
   let mut addons = fetch_catalog()?.addons;
   addons.retain(|item| available_for_platform(item, &platform));
-  if !addons.iter().any(|item| item.id == BUNDLED_TRUSTED_LAB_ID) {
-    addons.push(bundled_trusted_lab_item());
-  }
   Ok(addons)
 }
 
@@ -392,15 +355,11 @@ pub fn tauri_addons_catalog_install(
   state: State<'_, AddonState>,
   addon_id: String,
 ) -> R<InstalledAddon> {
-  let item = if addon_id == BUNDLED_TRUSTED_LAB_ID {
-    bundled_trusted_lab_item()
-  } else {
-    fetch_catalog()?
-      .addons
-      .into_iter()
-      .find(|item| item.id == addon_id && available_for_platform(item, &platform_key()))
-      .ok_or_else(|| format!("Addon is not available for this platform: {addon_id}"))?
-  };
+  let item = fetch_catalog()?
+    .addons
+    .into_iter()
+    .find(|item| item.id == addon_id && available_for_platform(item, &platform_key()))
+    .ok_or_else(|| format!("Addon is not available for this platform: {addon_id}"))?;
   let package_path = create_temporary_package(&item)?;
   let package_string = package_path.to_string_lossy().to_string();
   let result = addons::tauri_addons_install(app.clone(), state, package_string);
@@ -509,15 +468,4 @@ mod tests {
     assert!(validate_catalog_item(&item).is_err());
   }
 
-  #[test]
-  fn bundles_the_full_access_lab_without_network_paths() {
-    let item = bundled_trusted_lab_item();
-    assert!(!item.official);
-    assert_eq!(item.id, BUNDLED_TRUSTED_LAB_ID);
-    assert!(validate_catalog_item(&item).is_ok());
-    let manifest: AddonManifest = serde_json::from_str(BUNDLED_TRUSTED_LAB_MANIFEST).unwrap();
-    assert_eq!(manifest.id, BUNDLED_TRUSTED_LAB_ID);
-    assert_eq!(manifest.runtime.entry, "main.js");
-    assert!(BUNDLED_TRUSTED_LAB_ENTRY.contains("export default class TrustedWorkspaceLab"));
-  }
 }

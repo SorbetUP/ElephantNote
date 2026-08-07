@@ -33,7 +33,3 @@ runs:
         git diff --exit-code -- package.json pnpm-lock.yaml
       env:
         GITHUB_TOKEN: ${{ github.token }}
-
-    - name: Materialize official addons
-      shell: bash
-      run: node build/scripts/sync-elephant-addons.mjs

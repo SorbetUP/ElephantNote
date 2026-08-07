@@ -39,30 +39,10 @@ const ordered = (relativePath, needles, description) => {
   }
 }
 
-const physicalPackages = [
-  ['dashboard', 'elephant.dashboard', 'main.js'],
-  ['ai', 'elephant.ai', 'main.js'],
-  ['ai-chat', 'elephant.ai-chat', 'main.js'],
-  ['ai-search', 'elephant.ai-search', 'main.js'],
-  ['ai-ocr', 'elephant.ai-ocr', 'main.js'],
-  ['wiki', 'elephant.wiki', 'main.v2.js'],
-  ['graph', 'elephant.graph', 'main.js'],
-  ['knowledge', 'elephant.knowledge', 'main.js'],
-  ['open-models', 'elephant.open-models', 'main.js'],
-  ['codex-connection', 'elephant.codex-connection', 'main.js'],
-  ['sync', 'elephant.sync', 'main.service.js'],
-  ['calendar', 'elephant.calendar', 'main.js'],
-  ['sites', 'elephant.sites', 'main.js'],
-  ['code-execution', 'elephant.code-execution', 'main.js'],
-  ['google-keep-import', 'elephant.google-keep-import', 'main.js'],
-  ['recently-edited', 'elephant.recently-edited', 'main.js']
-]
-
 for (const file of [
   'package.json',
   '.github/workflows/ci.yml',
   '.github/workflows/tauri-ci.yml',
-  '.github/workflows/addon-platform-validation.yml',
   '.github/workflows/e2e.yml',
   '.github/workflows/test.yml',
   'build/scripts/verify-security-guardrails.mjs',
@@ -127,7 +107,6 @@ has(
   'cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features',
   'blocking Tauri library tests'
 )
-has('.github/workflows/addon-platform-validation.yml', 'Package every integrated physical addon', 'physical addon packaging gate')
 has('package.json', '"security:guard": "node build/scripts/verify-security-guardrails.mjs"', 'security guard command')
 has('package.json', '"test:trust:guard": "node build/scripts/verify-test-trust.mjs"', 'real test trust guard command')
 
@@ -263,48 +242,11 @@ for (const leakedCoreImplementation of [
   'tauri-rust://'
 ]) lacks('Elephant/backend/tauri/src/core_commands.rs', leakedCoreImplementation, `optional implementation ${leakedCoreImplementation}`)
 
-for (const [directory, addonId, entry] of physicalPackages) {
-  const base = `addons/official/${directory}`
-  const manifest = `${base}/manifest.json`
-  const main = `${base}/${entry}`
-  has(manifest, `"id": "${addonId}"`, `${addonId} manifest id`)
-  has(manifest, '"runtime"', `${addonId} runtime declaration`)
-  read(main)
-}
-
-has('addons/official/dashboard/main.js', "const DASHBOARD_DIRECTORY = '.elephantnote'", 'hidden Elephant Dashboard directory')
-has('addons/official/dashboard/main.js', "const DASHBOARD_FILENAME = 'Dashboard.md'", 'Dashboard note filename')
-has('addons/official/dashboard/main.js', 'api.workspace.registerSidebarItem', 'package-owned Dashboard rail item')
-has('addons/official/dashboard/main.js', 'api.commands.register', 'package-owned Dashboard command')
-has('addons/official/dashboard/main.js', 'await store.openNote(note, { record: false })', 'normal Dashboard note opening')
-lacks('addons/official/dashboard/main.js', 'api.workspace.registerView', 'custom Dashboard workspace view')
-lacks('addons/official/dashboard/main.js', 'dashboard.provider', 'custom Dashboard provider')
-lacks('addons/official/dashboard/main.js', 'Recently edited', 'custom Dashboard recent-note surface')
-has('addons/catalog.json', '"id": "elephant.dashboard"', 'downloadable Dashboard package')
-has('packs/base.enaddonpack', '"id": "elephant.dashboard"', 'Dashboard in base pack')
-
-has('addons/official/ai/main.js', "const CONFIG_KEY = 'provider-config'", 'package-owned AI configuration')
-has('addons/official/ai/main.js', 'this.api.storage.get(CONFIG_KEY)', 'AI configuration storage read')
-has('addons/official/ai/main.js', 'this.api.storage.set(CONFIG_KEY, payload)', 'AI configuration storage write')
-has('addons/official/ai/main.js', "api.resources.provide('ai.config'", 'AI configuration resource')
-lacks('addons/official/ai/main.js', 'tauri_ai_config_', 'core AI configuration bridge')
-lacks('addons/official/ai/main.js', 'ollama:', 'implicit local model provider')
-lacks('addons/official/ai/main.js', 'lmstudio:', 'implicit local model provider')
-lacks('addons/official/ai/main.js', 'llamacpp:', 'implicit local model provider')
-
-has('addons/official/ai-search/main.js', "const PROVIDER_RESOURCE = 'search.provider'", 'package-owned search provider')
-has('addons/official/ai-search/main.js', "engine: 'package-owned-bm25'", 'package-owned lexical index')
-has('addons/official/wiki/main.v2.js', 'wiki.provider', 'package-owned Wiki provider')
-has('addons/official/graph/main.js', 'api.workspace.registerView', 'package-owned Graph view')
-has('addons/official/open-models/manifest.json', '"runner": "service"', 'Open Models native service')
-has('addons/official/codex-connection/manifest.json', '"runner": "service"', 'Codex native service')
-has('addons/official/sync/manifest.json', '"protocol": "elephant-addon-service-v1"', 'Sync native service protocol')
-has('addons/official/sync/main.service.js', "this.callNativeService('sync.run'", 'active package Sync path')
-has('addons/official/sync/native/src/main.rs', '"sync.run" => service.run_sync().await', 'package-owned Sync sessions')
-has('addons/official/sync/native/tests/two_endpoint_sync.rs', 'physical_package_pairs_and_synchronizes_two_real_iroh_endpoints', 'real package Iroh validation')
-
-has('Elephant/backend/tauri/src/official_addon_catalog/source.rs', 'collect_local_files', 'complete local official package installation')
-has('Elephant/backend/tauri/src/official_addon_catalog/install.rs', 'collect_remote_files', 'complete remote official package installation')
+missing('addons', 'materialized official addon source tree')
+missing('Elephant/backend/tauri/resources/official-addons', 'embedded official addon resources')
+has('build/scripts/run-tauri-web-build.mjs', "runNode('build/scripts/build-muya-wasm.mjs')", 'core-only renderer build')
+lacks('build/scripts/run-tauri-web-build.mjs', 'sync-elephant-addons', 'addon repository checkout from the core build')
+lacks('build/scripts/run-tauri-web-build.mjs', 'prepare-tauri-addon-resources', 'embedded addon preparation from the core build')
 
 ordered(
   'Elephant/frontend/app/components/editor/NoteEditorHost.vue',

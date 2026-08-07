@@ -1,7 +1,7 @@
 {
   "name": "elephantnote",
   "productName": "Elephant",
-  "version": "0.18.9",
+  "version": "0.1.0",
   "description": "ElephantNote",
   "license": "MIT",
   "author": {
@@ -33,7 +33,7 @@
     "pnpm": ">=10"
   },
   "scripts": {
-    "postinstall": "pnpm addons:sync && node build/scripts/postinstall.js",
+    "postinstall": "node build/scripts/postinstall.js",
     "format": "NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/prettier --write .",
     "lint": "NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/eslint --cache .",
     "security:guard": "node build/scripts/verify-security-guardrails.mjs",
@@ -44,11 +44,7 @@
     "build": "pnpm tauri:web:build",
     "build:unpack": "pnpm tauri:web:build",
     "bundle:report": "node build/scripts/report-renderer-bundle.mjs",
-    "addon:build": "pnpm addons:sync && node build/scripts/build-physical-addon.mjs",
-    "addon:build:ocr": "pnpm addons:sync && node build/scripts/build-physical-addon.mjs addons/official/ai-ocr",
-    "addon:build:open-models": "pnpm addons:sync && node build/scripts/build-physical-addon.mjs addons/official/open-models",
-    "addon:build:codex": "pnpm addons:sync && node build/scripts/build-physical-addon.mjs addons/official/codex-connection",
-    "tauri:web:dev": "pnpm addons:sync && pnpm muya:wasm:build && NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vite --config vite.tauri.config.mjs --host 127.0.0.1 --port 1420 --strictPort",
+    "tauri:web:dev": "pnpm muya:wasm:build && NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vite --config vite.tauri.config.mjs --host 127.0.0.1 --port 1420 --strictPort",
     "tauri:web:build": "node build/scripts/run-tauri-web-build.mjs",
     "tauri:web:build:rust-editor": "pnpm tauri:web:build",
     "tauri:check": "cargo check --manifest-path Elephant/backend/tauri/Cargo.toml",
@@ -66,7 +62,7 @@
     "build:win": "node build/scripts/run-tauri-build.mjs",
     "build:mac": "node build/scripts/run-tauri-build.mjs",
     "build:linux": "node build/scripts/run-tauri-build.mjs --config Elephant/backend/tauri/tauri.linux.conf.json",
-    "release:check": "pnpm addons:sync && node build/scripts/verify-release-version.mjs",
+    "release:check": "node build/scripts/verify-release-version.mjs",
     "test:trust:guard": "node build/scripts/verify-test-trust.mjs",
     "test:backend:raw": "node build/scripts/run-backend-contract-trust.mjs",
     "test:backend": "node build/scripts/run-observable.mjs --label backend-contract-real-app -- pnpm test:backend:raw",
@@ -88,12 +84,11 @@
     "test:desktop:acceptance:packaged": "node build/scripts/run-packaged-desktop-acceptance.mjs",
     "test:official-addons:e2e:raw": "pnpm test:automation:raw",
     "test:official-addons:e2e": "pnpm test:automation",
-    "test:feature-matrix": "pnpm addons:sync && node build/scripts/validate-feature-matrix.mjs",
+    "test:feature-matrix": "node build/scripts/validate-feature-matrix.mjs",
     "prod:check": "pnpm lint && pnpm security:guard && pnpm release:check && pnpm test:feature-matrix && pnpm test:trust:guard && pnpm test:automation && pnpm validate-licenses && pnpm run build:unpack",
     "gen-third-party": "node build/scripts/generateThirdPartyLicense.js",
     "validate-licenses": "node build/scripts/validateLicenses.js",
-    "muya:wasm:build": "node build/scripts/build-muya-wasm.mjs",
-    "addons:sync": "node build/scripts/sync-elephant-addons.mjs"
+    "muya:wasm:build": "node build/scripts/build-muya-wasm.mjs"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",

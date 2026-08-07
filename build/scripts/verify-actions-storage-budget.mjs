@@ -19,7 +19,6 @@ const workflows = {
   desktop: '.github/workflows/tauri-desktop-acceptance.yml',
   e2e: '.github/workflows/e2e.yml',
   android: '.github/workflows/android-apk.yml',
-  addons: '.github/workflows/addon-platform-validation.yml',
   ci: '.github/workflows/ci.yml',
   cleanup: '.github/workflows/actions-storage-cleanup.yml'
 }

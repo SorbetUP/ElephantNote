@@ -69,7 +69,6 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          node build/scripts/prepare-tauri-addon-resources.mjs
           node build/scripts/run-cargo-future-compat-check.mjs \
             --manifest-path Elephant/backend/tauri/Cargo.toml \
             --all-targets --no-default-features \

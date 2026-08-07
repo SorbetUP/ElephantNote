@@ -10,7 +10,6 @@ on:
       - 'build/scripts/run-focused-addon-scenario.mjs'
       - 'build/scripts/run-addon-interaction-scenario.mjs'
       - 'build/scripts/run-desktop-acceptance.mjs'
-      - 'build/scripts/sync-elephant-addons.mjs'
       - 'addons/**'
       - 'Elephant/frontend/src/renderer/src/platform/automationAcceptancePhysicalSurface.js'
       - 'Elephant/frontend/src/**'
@@ -24,7 +23,6 @@ on:
       - 'build/scripts/run-focused-addon-scenario.mjs'
       - 'build/scripts/run-addon-interaction-scenario.mjs'
       - 'build/scripts/run-desktop-acceptance.mjs'
-      - 'build/scripts/sync-elephant-addons.mjs'
 
 concurrency:
   group: packaged-app-addon-api-${{ github.ref }}
@@ -69,7 +67,6 @@ jobs:
         run: |
           set -euxo pipefail
           node build/scripts/postinstall.js
-          pnpm addons:sync
           node --check build/scripts/addon-acceptance-harness.mjs
           node --check build/scripts/run-focused-addon-scenario.mjs
           node --check build/scripts/run-addon-interaction-scenario.mjs

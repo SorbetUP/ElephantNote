@@ -24,41 +24,10 @@ const libMin = readText('Elephant/backend/tauri/src/lib_min.rs')
 const addonServices = readText('Elephant/backend/tauri/src/addon_services.rs')
 const desktopAcceptanceWorkflow = readText('.github/workflows/tauri-desktop-acceptance.yml')
 
-const addonPreparationCall = "runNode('build/scripts/prepare-tauri-addon-resources.mjs')"
-const rendererBuildCall = "runNode('Elephant/node_modules/vite/bin/vite.js'"
-
 const resolveNodeEntrypoint = (command) => {
   const match = String(command || '').trim().match(/^node\s+([^\s;&|]+\.mjs)(?:\s|$)/)
   return match?.[1] || null
 }
-
-const preparesAddonsBeforeRenderer = (source) => {
-  const addonPreparationIndex = String(source || '').indexOf(addonPreparationCall)
-  const rendererBuildIndex = String(source || '').indexOf(rendererBuildCall)
-  return addonPreparationIndex >= 0 && rendererBuildIndex > addonPreparationIndex
-}
-
-const assertBuildLauncherGuardSensitivity = () => {
-  const misleadingViteDeclaration = "const viteCli = resolve(nodeModules, 'vite/bin/vite.js')"
-  const valid = [misleadingViteDeclaration, addonPreparationCall, rendererBuildCall].join('\n')
-  const missingPreparation = [misleadingViteDeclaration, rendererBuildCall].join('\n')
-  const reversed = [misleadingViteDeclaration, rendererBuildCall, addonPreparationCall].join('\n')
-
-  assert(
-    preparesAddonsBeforeRenderer(valid),
-    'Tauri build launcher guard self-test must accept preparation before the executed Vite call'
-  )
-  assert(
-    !preparesAddonsBeforeRenderer(missingPreparation),
-    'Tauri build launcher guard self-test must reject a missing addon preparation call'
-  )
-  assert(
-    !preparesAddonsBeforeRenderer(reversed),
-    'Tauri build launcher guard self-test must reject addon preparation after the executed Vite call'
-  )
-}
-
-assertBuildLauncherGuardSensitivity()
 
 const tauriWebBuildCommand = packageJson.scripts?.['tauri:web:build']
 const tauriWebBuildEntrypoint = resolveNodeEntrypoint(tauriWebBuildCommand)
@@ -103,10 +72,9 @@ assert(
 )
 assertWorkspaceBuildHook(baseConfig, 'Core Tauri build')
 assert(
-  Array.isArray(baseConfig.bundle?.resources) &&
-    baseConfig.bundle.resources.length === 1 &&
-    baseConfig.bundle.resources[0] === 'resources/official-addons',
-  'Core desktop bundle must include only the controlled official addon resource root'
+  !('resources' in (baseConfig.bundle || {})) ||
+    (Array.isArray(baseConfig.bundle.resources) && baseConfig.bundle.resources.length === 0),
+  'Core desktop bundle must not embed official addon resources'
 )
 assert(
   typeof tauriWebBuildCommand === 'string' && Boolean(tauriWebBuildEntrypoint),
@@ -117,12 +85,9 @@ assert(
   'Tauri web build launcher must exist'
 )
 assert(
-  preparesAddonsBeforeRenderer(tauriWebBuildSource),
-  'Tauri production build launcher must prepare official addon resources before invoking the renderer build'
-)
-assert(
-  existsSync(absolute('build/scripts/prepare-tauri-addon-resources.mjs')),
-  'The Tauri official addon resource preparation script must exist'
+  !tauriWebBuildSource.includes('sync-elephant-addons') &&
+    !tauriWebBuildSource.includes('prepare-tauri-addon-resources'),
+  'Tauri production build launcher must remain independent from the addon repository'
 )
 for (const platform of ['linux-x86_64', 'windows-x86_64', 'macos-x86_64', 'macos-aarch64']) {
   assert(
@@ -214,29 +179,6 @@ assert(
   'Android build must not carry obsolete bundled-llama switches'
 )
 
-for (const addon of ['open-models', 'codex-connection', 'sync']) {
-  const manifest = readJson(`addons/official/${addon}/manifest.json`)
-  const sidecarPlatforms = Object.keys(manifest.native?.sidecars || {})
-  assert(manifest.native?.runner === 'service', `${manifest.id} must use the persistent service runner`)
-  assert(
-    manifest.native?.protocol === 'elephant-addon-service-v1',
-    `${manifest.id} must use the versioned addon service protocol`
-  )
-  assert(sidecarPlatforms.length > 0, `${manifest.id} must publish desktop sidecars`)
-  assert(
-    sidecarPlatforms.every((platform) => !/^(android|ios)-/.test(platform)),
-    `${manifest.id} must not publish process sidecars for Android or iOS`
-  )
-  assert(
-    manifest.native?.mobile?.android?.supported === false,
-    `${manifest.id} must explicitly reject Android until it has a native mobile adapter`
-  )
-  assert(
-    manifest.native?.mobile?.ios?.supported === false,
-    `${manifest.id} must explicitly reject iOS until it has a native mobile adapter`
-  )
-}
-
 assert(
   addonServices.includes('Persistent process services require a desktop addon package'),
   'Generic native service host must reject downloaded process services on mobile'
@@ -282,4 +224,4 @@ if (errors.length > 0) {
   process.exit(1)
 }
 
-console.log('[tauri-platforms] macOS/Linux/Android physical-addon compatibility guard passed')
+console.log('[tauri-platforms] macOS/Linux/Android core and addon boundary guard passed')

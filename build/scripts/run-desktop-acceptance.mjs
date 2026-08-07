@@ -574,8 +574,12 @@ try {
     reinstalledAddonCoverage
   }
   const packagedRun = Boolean(process.env.ELEPHANT_ACCEPTANCE_APP_PATH)
-  const catalogSource = output.includes('[official-addon-catalog] source=bundled') ? 'bundled' : 'local-or-remote'
-  if (packagedRun && catalogSource !== 'bundled') throw new Error('Packaged acceptance did not use the bundled official addon catalogue')
+  const catalogSource = output.includes('[official-addon-catalog] source=bundled')
+    ? 'bundled'
+    : output.includes('[official-addon-catalog] source=remote')
+      ? 'remote'
+      : 'unknown'
+  if (packagedRun && catalogSource !== 'remote') throw new Error('Packaged acceptance did not use the external official addon repository')
   if (packagedRun && output.includes('Addon service executable is unavailable')) throw new Error('Packaged acceptance reproduced the missing addon service executable regression')
   result = { emptyVaultUi, initial, saved, created, createdSaved, disk, displayed, codeRunButton, codeOutput, citationSelection, citationSelectionAction, citationFeedback, citationBufferItem, citationPasted, citationContext, dom, chatPanel, calendarPanel, graphPanel, sidebarInitial, sidebarToggled, sidebarRestored, searchUi, searchEmptyUi, afterClose, pinned, settingsSearch, themeBefore, themeToggled, themeRestored, listBefore, listView, sortedLibrary, navigationCycles, capabilities, addonState, installedOfficialAddons, installedAddonState, enabledOfficialAddons, enabledAddonState, addonCoverage, nativeRuntimeProbes, codexRuntimeAvailable, codexRuntimeUnavailable, codexProviders, addonResourceProbes, addonActionProbes, dashboardAction, dashboardNote, keepImport, keepNote, siteGenerated, siteStatus, siteStopped, syncStatus, platform, vaults, directory, drawings, attachments, features, searchStatus, atomicFeatures, localBackendProbes, search, folder, lifecycle, moved, attachmentWrite, attachmentList, drawing, drawingRead, drawingWritten, expectedFailure, invalidPathFailure, missingResourceFailure, logs, restartPersistence, addonLifecycle, packagedRun, catalogSource }
   writeFileSync(join(artifactRoot, 'latest.json'), JSON.stringify({ at: new Date().toISOString(), runtime: 'tauri', result }, null, 2))

@@ -9,18 +9,16 @@ const failures = []
 
 const runtimePath = 'Elephant/frontend/src/renderer/src/components/editorWithTabs/runtimeEditor.vue'
 const rustRuntimePath = 'Elephant/frontend/src/renderer/src/muya/RustMuyaRuntimeEditor.vue'
-const addonPath = 'addons/official/code-execution/main.js'
 const trustedRuntimePath = 'Elephant/frontend/src/renderer/src/addons/trustedAddonRuntime.js'
 const resourcePath = 'Elephant/frontend/src/renderer/src/muya/editorRuntimeResource.js'
 
-for (const path of [runtimePath, rustRuntimePath, addonPath, trustedRuntimePath, resourcePath]) {
+for (const path of [runtimePath, rustRuntimePath, trustedRuntimePath, resourcePath]) {
   if (!existsSync(resolve(root, path))) failures.push(`${path}: missing`)
 }
 
 if (failures.length === 0) {
   const runtime = read(runtimePath)
   const rustRuntime = read(rustRuntimePath)
-  const addon = read(addonPath)
   const trusted = read(trustedRuntimePath)
   const resource = read(resourcePath)
 
@@ -31,8 +29,6 @@ if (failures.length === 0) {
     [rustRuntimePath, rustRuntime, 'const hostElement = rootRef.value'],
     [rustRuntimePath, rustRuntime, 'rootRef.value !== hostElement'],
     [rustRuntimePath, rustRuntime, '!hostElement.isConnected'],
-    [addonPath, addon, "queryBlocks?.({ kind: 'code_block' })"],
-    [addonPath, addon, "runtime?.engine === 'rust'"],
     [trustedRuntimePath, trusted, "host?.get('editor.runtime')"],
     [resourcePath, resource, "owner: 'elephant.core.editor'"],
     [resourcePath, resource, "engine: 'rust'"]
@@ -45,8 +41,6 @@ if (failures.length === 0) {
     [runtimePath, runtime, /from ['"]muya(?:\/lib)?['"]/],
     [runtimePath, runtime, /new\s+Muya\s*\(/],
     [rustRuntimePath, rustRuntime, /rootRef\.value\s*=\s*muya\.container/],
-    [addonPath, addon, /runtime\?\.engine\s*===\s*['"]muya-js['"]/],
-    [addonPath, addon, /MutationObserver/],
     [trustedRuntimePath, trusted, /host\?\.get\(['"]muya['"]\)/]
   ]
   for (const [path, source, pattern] of forbidden) {
@@ -60,4 +54,4 @@ if (failures.length > 0) {
   process.exit(1)
 }
 
-console.log('[rust-editor-ownership] OK: production editor and addon integration are Rust-owned on a stable live host')
+console.log('[rust-editor-ownership] OK: production editor is Rust-owned on a stable live host')

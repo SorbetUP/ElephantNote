@@ -19,8 +19,6 @@ const runNode = (script, args = [], env = process.env) => {
   if (result.status !== 0) process.exit(result.status ?? 1)
 }
 
-runNode('build/scripts/sync-elephant-addons.mjs')
-runNode('build/scripts/prepare-tauri-addon-resources.mjs')
 runNode('build/scripts/build-muya-wasm.mjs')
 
 if (!existsSync(viteCli)) {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '../..')
@@ -45,23 +45,4 @@ if (expectedVersion) {
   }
 }
 
-const officialRoot = join(root, 'addons', 'official')
-if (!existsSync(officialRoot)) {
-  throw new Error('Official addons are not materialized; run pnpm addons:sync first')
-}
-
-let checkedAddons = 0
-for (const entry of readdirSync(officialRoot, { withFileTypes: true })) {
-  if (!entry.isDirectory()) continue
-  const manifestPath = join(officialRoot, entry.name, 'manifest.json')
-  if (!existsSync(manifestPath)) continue
-  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
-  if (!manifest.minAppVersion) continue
-  const minimum = parseVersion(manifest.minAppVersion, (manifest.id || entry.name) + ' minAppVersion')
-  if (compareVersions(minimum, appVersion) > 0) {
-    throw new Error((manifest.id || entry.name) + ' requires ' + minimum.raw + ', but the app is ' + appVersion.raw)
-  }
-  checkedAddons += 1
-}
-
-console.log('[release-version] app=' + appVersion.raw + ' canonical-files=4 official-addons=' + checkedAddons)
+console.log('[release-version] app=' + appVersion.raw + ' canonical-files=4 addon-repository=Elephant-Addons')

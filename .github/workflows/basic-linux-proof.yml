@@ -58,7 +58,6 @@ jobs:
           node --check build/scripts/addon-acceptance-harness.mjs
           node --check build/scripts/run-focused-addon-scenario.mjs
           node --check build/scripts/run-addon-interaction-scenario.mjs
-          pnpm addons:sync
 
       - name: Build exact Linux AppImage
         shell: bash

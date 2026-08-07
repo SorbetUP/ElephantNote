@@ -23,7 +23,6 @@ jobs:
       CARGO_TERM_COLOR: always
       FORCE_COLOR: '1'
       ELEPHANT_E2E_EXHAUSTIVE_EVIDENCE: '1'
-      ELEPHANT_E2E_REQUIRE_NATIVE_PACKAGES: '1'
     steps:
       - uses: actions/checkout@v6
 
@@ -78,27 +77,6 @@ jobs:
           set -euxo pipefail
           node build/scripts/run-observable.mjs --label postinstall -- \
             node build/scripts/postinstall.js
-
-      - name: Build every Linux native official addon package
-        shell: bash
-        run: |
-          set -euxo pipefail
-          : > official-addon-native-build.txt
-          built=0
-          for source in addons/official/*
-          do
-            [ -f "$source/addon.build.json" ] || continue
-            supported="$(node -e 'const fs=require("fs"); const file=process.argv[1]; const data=JSON.parse(fs.readFileSync(file,"utf8")); process.stdout.write(String((data.supportedPlatforms||[]).includes("linux-x86_64")))' "$source/addon.build.json")"
-            [ "$supported" = true ] || continue
-            slug="$(basename "$source")"
-            node build/scripts/run-observable.mjs --label "official-addon-native-$slug" -- \
-              node build/scripts/build-physical-addon.mjs "$source" \
-              2>&1 | tee -a official-addon-native-build.txt
-            built=$((built + 1))
-          done
-          echo "Built $built Linux native official addon package(s)." | tee -a official-addon-native-build.txt
-          test "$built" -gt 0
-          find build/out/addons/releases -maxdepth 3 -type f -print -exec ls -lh {} \; | tee -a official-addon-native-build.txt
 
       - name: Build and select the exact distributed Linux AppImage
         shell: bash

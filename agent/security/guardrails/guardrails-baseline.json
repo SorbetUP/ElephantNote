@@ -57,6 +57,12 @@
     },
     {
       "id": "GITHUB_ACTIONS_WRITE_PERMISSION",
+      "file": ".github/workflows/release.yml",
+      "value": "contents: write",
+      "reason": "Dedicated tag-triggered release workflow: it publishes the exact tagged ElephantNote application artifacts to the GitHub release and has no pull_request trigger."
+    },
+    {
+      "id": "GITHUB_ACTIONS_WRITE_PERMISSION",
       "file": ".github/workflows/publish-native-addon-packages.yml",
       "value": "contents: write",
       "reason": "Dedicated release workflow: it publishes signed and hashed platform-specific .enaddon archives to feature/physical-addon-catalog. It has no pull_request trigger and needs branch write access only for the final catalogue publication job."

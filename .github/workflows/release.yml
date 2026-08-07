@@ -83,7 +83,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # macOS artifacts remain pre-release until Developer ID signing and notarization are configured.
+      # macOS artifacts remain unsigned until Developer ID signing and notarization are configured.
       - name: build-mac
         if: matrix.platform == 'macos'
         run: pnpm run build:mac -- --target ${{ matrix.target }}
@@ -101,15 +101,15 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           draft: false
-          prerelease: true
+          prerelease: false
           generate_release_notes: true
-          name: 'Elephant pre-release ${{ github.ref_name }}'
+          name: 'ElephantNote ${{ github.ref_name }}'
           body: |
-            ## Elephant pre-release
+            ## ElephantNote release
             This artifact set was built from the exact tag ${{ github.ref_name }}.
 
             ## macOS packaging
-            macOS artifacts are unsigned until the repository has a configured Developer ID and notarization workflow. Keep this release pre-release until that proof is available.
+            macOS artifacts are unsigned until the repository has a configured Developer ID and notarization workflow.
 
             ## Changes
           files: |

@@ -266,8 +266,7 @@ export const createRealMuyaRustMirror = ({
     false
   )
 
-  initializationPromise = Promise.resolve()
-    .then(initialize)
+  initializationPromise = initialize()
     .catch((error) => {
       fail(error)
       throw error

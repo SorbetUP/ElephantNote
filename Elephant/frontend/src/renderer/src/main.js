@@ -34,7 +34,7 @@ import { restorePortableWindowState, savePortableWindowState } from './platform/
 import { installRendererDiagnostics, pushDiagnosticLog } from './platform/rendererDiagnostics'
 import { installStoreDiagnostics } from './platform/storeDiagnostics'
 import { installAcceptanceTestBridge } from './platform/acceptanceTestBridge'
-import { installAcceptancePhysicalSurface } from './platform/automationAcceptancePhysicalSurface'
+import { installAcceptancePhysicalSurface } from './platform/automationAcceptancePhysicalSurface.js'
 import { installAddonSystem } from './addons'
 import { activateCoreFeature } from './addons/coreFeatures'
 import { addonPacksCoreFeature } from './addons/builtin/addonProfiles'

@@ -8,7 +8,7 @@ const read = (path) => readFileSync(resolve(root, path), 'utf8')
 const manifest = JSON.parse(read('tests/trust/packaged-feature-matrix.json'))
 const runner = read(manifest.runner)
 const surface = read('Elephant/frontend/src/renderer/src/platform/automationAcceptancePhysicalSurface.js')
-const main = read('Elephant/frontend/src/renderer/src/Main.vue')
+const main = read('Elephant/frontend/src/renderer/src/main.js')
 const workflow = read('.github/workflows/packaged-feature-matrix.yml')
 const errors = []
 const assert = (condition, message) => { if (!condition) errors.push(message) }

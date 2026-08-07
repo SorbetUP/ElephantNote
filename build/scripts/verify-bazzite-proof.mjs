@@ -98,7 +98,7 @@ const mutations = [
   ['missing-wayland-check', { ...valid, runnerSource: runner.replace('XDG_SESSION_TYPE', 'REMOVED_SESSION_TYPE') }],
   ['x11-regression', { ...valid, journeySource: `${journey}\n// xdotool regression` }],
   ['missing-sha-contract', { ...valid, workflowSource: workflow.replaceAll('expected_sha256', 'removed_hash_input') }],
-  ['wrong-pr-sha', { ...valid, workflowSource: workflow.replace('github.event.pull_request.head.sha || github.sha', 'github.sha') }],
+  ['wrong-pr-sha', { ...valid, workflowSource: workflow.replaceAll('github.event.pull_request.head.sha || github.sha', 'github.sha') }],
   ['missing-scenario', { ...valid, journeySource: journey.replace(manifest.requiredJourneyScenarios[0], 'removed-scenario') }],
   ['missing-feature-runner', { ...valid, workflowSource: workflow.replaceAll('run-packaged-feature-matrix.mjs', 'removed-feature-matrix.mjs') }],
   ['shared-feature-suite', {

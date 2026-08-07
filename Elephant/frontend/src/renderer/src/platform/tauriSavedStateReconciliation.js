@@ -1,5 +1,6 @@
 import { getActivePinia } from 'pinia'
 import { useEditorStore } from '@/store/editor'
+import { checkpointBufferedState } from '@/store/bufferedState'
 
 const INSTALL_FLAG = '__elephantSavedStateReconciliationInstalled'
 const INSTALL_ATTEMPTS = 3000
@@ -28,6 +29,15 @@ const reconcile = (store, tabId, isSaved) => {
   return reconciled
 }
 
+const checkpointReconciledSave = (tabId) => {
+  void checkpointBufferedState().catch((error) => {
+    console.error('[tauri:marktext-save] unable to checkpoint reconciled saved state', {
+      tabId,
+      error: error?.message || String(error)
+    })
+  })
+}
+
 export const installTauriSavedStateReconciliation = (target = globalThis) => {
   if (target[INSTALL_FLAG] === true) return true
   const ipc = target.tauri?.ipcRenderer
@@ -43,6 +53,7 @@ export const installTauriSavedStateReconciliation = (target = globalThis) => {
       currentFileId: store.currentFile?.id || null,
       currentFileSaved: store.currentFile?.id === tabId ? store.currentFile?.isSaved === true : null
     })
+    if (reconciled) checkpointReconciledSave(tabId)
   })
   ipc.on('mt::tab-save-failure', (_event, tabId) => {
     reconcile(store, tabId, false)

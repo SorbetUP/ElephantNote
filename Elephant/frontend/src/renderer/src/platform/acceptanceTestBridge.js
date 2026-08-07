@@ -416,8 +416,16 @@ export const installAcceptanceTestBridge = ({
 
     async installOfficialAddon(id) {
       if (typeof id !== 'string' || !id.trim()) throw new TypeError('installOfficialAddon requires an addon id')
+      const manager = target.__ELEPHANT_ADDONS__
       const result = await invokeApplicationCommand(target, 'tauri_official_addons_catalog_install', { addonId: id.trim() })
-      await target.__ELEPHANT_ADDONS__?.external?.reload?.()
+      if (!manager?.external?.register || !result?.manifest?.id) throw new Error(`Official addon install returned an invalid record for ${id.trim()}`)
+      const existing = manager.get(result.manifest.id)
+      if (existing) {
+        await manager.disable(result.manifest.id).catch(() => {})
+        manager.unregister(result.manifest.id)
+      }
+      manager.external.register({ ...result, source: 'official' })
+      await manager.external.reload?.()
       log(target, 'addons:official-install:done', { id: id.trim() })
       return result
     },

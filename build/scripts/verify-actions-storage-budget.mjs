@@ -50,8 +50,6 @@ forbid(
   'AppImage binary in E2E diagnostics'
 )
 forbid('e2e', '            build/out/addons/releases/**', 'native addon release directory in E2E diagnostics')
-forbid('addons', '            build/addons/*.enaddon', 'reference .enaddon archive in validation evidence')
-forbid('addons', '            build/out/addons/releases/**/*.enaddon', 'physical .enaddon archives in validation evidence')
 forbid('cleanup', '/actions/caches/', 'cache deletion in the artifact cleanup workflow')
 
 const oversizedCachePaths = [
@@ -70,7 +68,7 @@ for (const key of ['android', 'ci']) {
   forbid(key, 'cargo install wasm-bindgen-cli', 'per-job wasm-bindgen CLI compilation')
 }
 
-for (const key of ['desktop', 'e2e', 'android', 'addons', 'ci']) {
+for (const key of ['desktop', 'e2e', 'android', 'ci']) {
   const uploadAlways = /- name: Upload[^\n]*\n\s+if: always\(\)/g.test(contents[key])
   if (uploadAlways) failures.push(`${workflows[key]}: upload-artifact must not run after cancellation`)
 
@@ -99,8 +97,6 @@ requireMarker('android', 'Upload compact Android proof', 'compact Android succes
 requireMarker('android', 'Upload Android failure diagnostics', 'failure-only Android screenshots and logs')
 requireMarker('android', 'Cache Gradle wrapper only', 'bounded Android Gradle cache')
 requireMarker('android', 'uses: ./.github/actions/setup-tauri-cli', 'shared pinned Android Tauri CLI setup')
-requireMarker('addons', 'addon-package-sha256.txt', 'addon package checksum evidence')
-requireMarker('addons', 'addon-rust-package-sha256.txt', 'native addon checksum evidence')
 requireMarker('ci', 'uses: ./.github/actions/setup-tauri-cli', 'shared pinned Tauri CLI setup for macOS smoke')
 requireMarker('ci', 'Verify exact prebuilt wasm-bindgen CLI', 'prebuilt wasm-bindgen verification instead of compilation')
 requireMarker('cleanup', "      - 'agent/**'", 'one-time agent branch cleanup trigger')

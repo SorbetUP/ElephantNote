@@ -51,16 +51,21 @@ const waitForRenderedMarkdown = async(markdown, label, timeoutMs = 10_000) => {
   while (Date.now() <= deadline) {
     const state = await command('readState')
     const editor = await command('readDom', editorSelector)
-    const actualWords = visibleWords(editor?.text || '')
+    // `text` is raw textContent and intentionally has no separators between
+    // adjacent block nodes. For a real rendered Markdown remount, compare the
+    // browser-visible text (`innerText`) first so block boundaries remain
+    // observable (for example a paragraph followed by a fenced code block).
+    const renderedText = editor?.renderedText || editor?.text || ''
+    const actualWords = visibleWords(renderedText)
     const stateContainsInput = normalize(state?.markdown).includes(normalize(markdown))
     const wordsMatch = JSON.stringify(actualWords) === JSON.stringify(expectedWords)
     if (editor?.visible && stateContainsInput && wordsMatch) {
-      stableReads = previousText === editor.text ? stableReads + 1 : 1
-      previousText = editor.text
+      stableReads = previousText === renderedText ? stableReads + 1 : 1
+      previousText = renderedText
       if (stableReads >= 2) return { state, editor, expectedWords, actualWords }
     } else {
       stableReads = 0
-      previousText = editor?.text || null
+      previousText = renderedText || null
     }
     last = { state, editor, expectedWords, actualWords }
     await sleep(50)

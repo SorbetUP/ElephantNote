@@ -119,12 +119,28 @@ const handleExcalidrawSave = async (payload) => {
   actionError.value = ''
   try {
     const created = await window.elephantnote?.drawings?.create?.({ title: payload.baseName || 'drawing' })
-    if (!created?.relativePath) throw new Error('The drawing backend did not return a path.')
+    const relativePath = created?.relativePath || created?.path
+    if (!relativePath) throw new Error('The drawing backend did not return a path.')
+
+    let scene
+    try {
+      scene = JSON.parse(payload.sceneBlob || '{}')
+    } catch (error) {
+      throw new Error(`The Excalidraw scene is not valid JSON: ${error?.message || String(error)}`)
+    }
+
     await window.elephantnote?.drawings?.write?.({
-      relativePath: created.relativePath,
-      imageBlob: Array.from(payload.imageBlob),
-      sceneBlob: payload.sceneBlob || ''
+      relativePath,
+      scene
     })
+
+    const previewRelativePath = `${relativePath}.png`
+    const previewPath = window.path?.join?.(store.activeVault.path, previewRelativePath)
+    if (!previewPath || typeof window.fileUtils?.writeFile !== 'function') {
+      throw new Error('The desktop file service cannot persist the Excalidraw PNG preview.')
+    }
+    await window.fileUtils.writeFile(previewPath, payload.imageBlob, 'binary')
+
     isExcalidrawOpen.value = false
     await store.openDirectory(store.currentPath || '', { record: false })
   } catch (error) {

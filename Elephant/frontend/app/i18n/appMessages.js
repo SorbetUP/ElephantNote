@@ -124,9 +124,15 @@ export const mergeMessages = (base = {}, override = {}) => {
   return output
 }
 
+const normalizeSystemLocaleInput = (locale = '') => String(locale || '')
+  .trim()
+  .split('.')[0]
+  .split('@')[0]
+  .replaceAll('_', '-')
+
 export const normalizeAppLocale = (locale = '') => {
-  const raw = String(locale || '').trim().replaceAll('_', '-')
-  if (!raw) return APP_DEFAULT_LOCALE
+  const raw = normalizeSystemLocaleInput(locale)
+  if (!raw || /^(?:c|posix)$/i.test(raw)) return APP_DEFAULT_LOCALE
   try {
     const parsed = new Intl.Locale(raw)
     const language = parsed.language.toLowerCase()
@@ -137,7 +143,8 @@ export const normalizeAppLocale = (locale = '') => {
     }
     return language
   } catch {
-    return raw.toLowerCase().split('-')[0] || APP_DEFAULT_LOCALE
+    const language = raw.toLowerCase().split('-')[0]
+    return ISO6391.getAllCodes().includes(language) ? language : APP_DEFAULT_LOCALE
   }
 }
 
@@ -149,8 +156,9 @@ export const getAppMessages = (locale = APP_DEFAULT_LOCALE) => {
 }
 
 export const getSupportedLanguageOptions = (displayLocale = APP_DEFAULT_LOCALE) => {
+  const normalizedDisplayLocale = normalizeAppLocale(displayLocale)
   const displayNames = typeof Intl.DisplayNames === 'function'
-    ? new Intl.DisplayNames([normalizeAppLocale(displayLocale)], { type: 'language' })
+    ? new Intl.DisplayNames([normalizedDisplayLocale], { type: 'language' })
     : null
   const browserLocale = normalizeAppLocale(globalThis.navigator?.language || APP_DEFAULT_LOCALE)
   const codes = ISO6391.getAllCodes()
@@ -160,7 +168,7 @@ export const getSupportedLanguageOptions = (displayLocale = APP_DEFAULT_LOCALE) 
     displayName: displayNames?.of(code) || ISO6391.getName(code) || code,
     hasBuiltInAppMessages: Boolean(builtInMessages[normalizeAppLocale(code)])
   }))
-  options.sort((a, b) => a.displayName.localeCompare(b.displayName, normalizeAppLocale(displayLocale)))
+  options.sort((a, b) => a.displayName.localeCompare(b.displayName, normalizedDisplayLocale))
   return [
     { code: 'system', nativeName: 'System', displayName: 'System', resolvedLocale: browserLocale, hasBuiltInAppMessages: true },
     ...options

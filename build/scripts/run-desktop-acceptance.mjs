@@ -355,7 +355,7 @@ try {
   const citationBufferItem = await command('waitFor', '[data-elephant-citation-buffer-item]', 10000)
   await command('click', '[data-elephant-citation-buffer-item]')
   const citationPasted = await command('readState')
-  if (!citationPasted.markdown.includes('Edited by the real Tauri command runner') || !citationPasted.markdown.includes('](</Acceptance.md#quote=')) {
+  if (!citationPasted.markdown.includes(citationSelection.text) || !citationPasted.markdown.includes('](</Acceptance.md#quote=')) {
     throw new Error(`Citation paste did not create a linked quote: ${JSON.stringify(citationPasted)}`)
   }
   await command('contextClick', '[data-elephant-citation-buffer-item]')
@@ -363,7 +363,7 @@ try {
   await command('click', '[aria-label^="Supprimer la citation"]')
   await command('waitUntilGone', '[data-elephant-citation-buffer-item]', 10000)
   const dom = await command('readDom', '[data-testid="muya-rust-runtime-editor"]')
-  if (!dom.exists || !dom.text.includes('Edited by the real Tauri command runner')) throw new Error(`Displayed editor DOM is incomplete: ${JSON.stringify({ exists: dom.exists, textLength: dom.text.length })}`)
+  if (!dom.exists || !dom.text.includes(citationSelection.text)) throw new Error(`Displayed editor DOM is incomplete: ${JSON.stringify({ exists: dom.exists, textLength: dom.text.length })}`)
   const sidebarInitial = await command('readDom', '.en-body')
   await command('click', '.en-rail-sidebar-toggle')
   const sidebarToggled = await command('readDom', '.en-body')
@@ -488,7 +488,7 @@ try {
   const invalidPathFailure = await expectCommandFailure('readNote', '../outside.md')
   const missingResourceFailure = await expectCommandFailure('invokeAddonResource', 'missing.resource', 'status')
   if (!invalidPathFailure.error || !missingResourceFailure.error) throw new Error('Expected desktop error probes did not return structured errors')
-  const logs = await command('logs')
+  const logs = await command('logs', { limit: 5000 })
   if (!logs.some((entry) => entry.event === 'transport:command:done') || !logs.some((entry) => entry.event === 'transport:command:error')) throw new Error('Acceptance command completion/error was not logged')
 
   await stopChild()

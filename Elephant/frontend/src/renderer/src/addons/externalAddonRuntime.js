@@ -317,10 +317,22 @@ export class ExternalAddonController {
     this.logger = options.logger
     this.records = new Map()
     this.loaded = false
+    this.loading = null
   }
 
   async load() {
     if (this.loaded) return [...this.records.values()]
+    if (this.loading) return this.loading
+    const pending = this.loadRecords()
+    this.loading = pending
+    try {
+      return await pending
+    } finally {
+      if (this.loading === pending) this.loading = null
+    }
+  }
+
+  async loadRecords() {
     const installedRecords = await externalAddonApi.list()
     let records = installedRecords
     try {

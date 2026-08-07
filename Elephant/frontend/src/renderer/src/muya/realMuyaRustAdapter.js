@@ -378,7 +378,7 @@ export default class RustOwnedMuya extends Muya {
     this.__applyRust('drop', (engine) => {
       const selection = this.__selection().selection
       return engine.replaceRange(selection.anchor, selection.focus, text)
-    }).catch(() => {})
+    }).catch(this.__reportRustError)
   }
 
   async __refreshClipboard () {
@@ -401,7 +401,7 @@ export default class RustOwnedMuya extends Muya {
     if (selection.anchor === selection.focus) return
     this.__applyRust('cut', (engine) => (
       engine.replaceRange(selection.anchor, selection.focus, '')
-    )).catch(() => {})
+    )).catch(this.__reportRustError)
   }
 
   __compositionStart () {
@@ -416,7 +416,7 @@ export default class RustOwnedMuya extends Muya {
     this.__rustComposition = null
     this.__applyRust('composition', (engine) => (
       engine.commitComposition(composition.selection, String(event?.data || ''))
-    )).catch(() => {})
+    )).catch(this.__reportRustError)
   }
 
   __tableContext (data, key) {

@@ -6,7 +6,12 @@ import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
 
 const root = resolve(import.meta.dirname, '../..')
-const releaseRoot = resolve(root, 'Elephant/backend/tauri/target/release')
+const targetTriple = process.env.TAURI_BUILD_TARGET || process.env.TAURI_MACOS_TARGET
+const releaseRoots = [
+  targetTriple ? resolve(root, 'Elephant/backend/tauri/target', targetTriple, 'release') : null,
+  resolve(root, 'Elephant/backend/tauri/target/release')
+].filter(Boolean)
+const releaseRoot = releaseRoots.find(existsSync) || releaseRoots[0]
 const bundleRoot = resolve(releaseRoot, 'bundle')
 
 const findFirst = (directory, predicate) => {

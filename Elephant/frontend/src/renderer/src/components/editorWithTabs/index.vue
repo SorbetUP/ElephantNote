@@ -8,6 +8,7 @@
       <runtime-editor
         :markdown="markdown"
         :cursor="cursor"
+        :source-code="sourceCode"
         :text-direction="textDirection"
         :platform="platform"
         :to-editor-markdown="toEditorMarkdown"
@@ -35,6 +36,10 @@ defineProps({
     validator (value) {
       return typeof value === 'object'
     },
+    required: true
+  },
+  sourceCode: {
+    type: Boolean,
     required: true
   },
   muyaIndexCursor: {

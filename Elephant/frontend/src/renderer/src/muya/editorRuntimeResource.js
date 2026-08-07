@@ -63,6 +63,9 @@ export const createRustEditorRuntimeBinding = ({ runtime, getMarkdown = () => ''
   let disposed = false
   let observer = null
   let domNotificationQueued = false
+  const ensureLive = () => {
+    if (disposed) throw new Error('Editor runtime resource has been disposed')
+  }
 
   const elementId = (element) => {
     const explicit = Number(element?.getAttribute?.('data-elephant-editor-node'))
@@ -173,10 +176,20 @@ export const createRustEditorRuntimeBinding = ({ runtime, getMarkdown = () => ''
     owner: 'elephant.core.editor',
     engine: 'rust',
     root,
-    getMarkdown: () => String(getMarkdown() ?? ''),
-    snapshot: () => runtime.bridge.snapshot(),
-    dispatch: (command) => runtime.bridge.dispatch(command),
+    getMarkdown: () => {
+      ensureLive()
+      return String(getMarkdown() ?? '')
+    },
+    snapshot: () => {
+      ensureLive()
+      return runtime.bridge.snapshot()
+    },
+    dispatch: (command) => {
+      ensureLive()
+      return runtime.bridge.dispatch(command)
+    },
     queryBlocks(options = {}) {
+      ensureLive()
       const kind = typeof options === 'string' ? options : String(options.kind || '')
       const language = typeof options === 'object' ? String(options.language || '') : ''
       return semanticElements()
@@ -185,6 +198,7 @@ export const createRustEditorRuntimeBinding = ({ runtime, getMarkdown = () => ''
         .map(blockDescriptor)
     },
     watch(listener, options = {}) {
+      ensureLive()
       if (typeof listener !== 'function') {
         throw new TypeError('Editor runtime listener must be a function')
       }

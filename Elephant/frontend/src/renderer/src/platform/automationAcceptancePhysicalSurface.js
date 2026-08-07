@@ -154,11 +154,19 @@ const installSelectionOverride = (target, api) => {
     selection.removeAllRanges()
     selection.addRange(range)
     synchronizeMuyaSelection(target, element)
+    const directText = selection.toString()
+    const text = directText || (() => {
+      try {
+        return selection.getRangeAt(0).cloneContents().textContent || ''
+      } catch {
+        return ''
+      }
+    })()
     return {
       selector,
       start: Number(startOffset),
       end: Number(endOffset),
-      text: selection.toString()
+      text
     }
   }
   Object.defineProperty(api, '__elephantNestedTextSelection', {

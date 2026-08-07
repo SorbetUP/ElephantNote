@@ -30,7 +30,7 @@
             <span>{{ item.label }}</span>
             <ChevronRight class="en-settings-nav-chevron" aria-hidden="true" />
           </button>
-          <footer class="en-settings-nav-footer"><span>Local-first</span><span>v0.18.9</span></footer>
+          <footer class="en-settings-nav-footer"><span>Local-first</span><span>{{ appVersion }}</span></footer>
         </aside>
 
         <main
@@ -140,6 +140,7 @@ import log from '@/platform/runtimeLogShim'
 import { CalendarDays, Check, ChevronDown, ChevronRight, Cloud, Database, Download, FolderOpen, Globe2, HardDrive, Moon, Package, Palette, PenLine, Search, Sparkles, SunMedium, X } from '@lucide/vue'
 import { usePreferencesStore } from '@/store/preferences'
 import { useAddonsStore } from '@/store/addons'
+import { useMainStore } from '@/store'
 import { ELEPHANTNOTE_THEME_FAMILIES, getThemeFamily, getThemeLabel, getThemeMode, getThemeTokens, getThemeVariant } from 'common/elephantnote/appearance'
 import AddonsSettingsPanel from './AddonsSettingsPanel.vue'
 import IconRailLayoutSettings from './IconRailLayoutSettings.vue'
@@ -197,6 +198,8 @@ const CORE_SETTINGS_INDEX = Object.freeze([
 ])
 
 const addonsStore = useAddonsStore()
+const mainStore = useMainStore()
+const appVersion = computed(() => mainStore.appVersion || 'v—')
 const addonSettingsContributions = computed(() => addonsStore.getContributions('settings.sections'))
 const addonStandaloneSections = computed(() => {
   const unique = new Map()

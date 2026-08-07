@@ -125,6 +125,15 @@ const serializedAutomationError = (error) => {
   return `${message}\nOriginal stack:\n${stack}`
 }
 
+const logAutomationCommand = (target, event, details) => {
+  const entry = { at: new Date().toISOString(), event, ...details }
+  for (const property of ['__ELEPHANT_DEBUG_LOGS__', '__ELEPHANT_ACCEPTANCE_LOGS__']) {
+    const logs = target[property] = Array.isArray(target[property]) ? target[property] : []
+    logs.push(entry)
+    if (property === '__ELEPHANT_DEBUG_LOGS__' && logs.length > 1000) logs.splice(0, logs.length - 1000)
+  }
+}
+
 export const enhanceAutomationApi = ({ target = globalThis, api } = {}) => {
   if (!api || typeof api !== 'object') throw new TypeError('enhanceAutomationApi requires an API object')
   if (api.__elephantAutomationEnhanced === true) return api
@@ -167,11 +176,16 @@ export const enhanceAutomationApi = ({ target = globalThis, api } = {}) => {
   }
 
   api.logs = (filter = {}) => {
-    const source = Array.isArray(target.__ELEPHANT_DEBUG_LOGS__)
-      ? target.__ELEPHANT_DEBUG_LOGS__
-      : Array.isArray(target.__ELEPHANT_ACCEPTANCE_LOGS__)
-        ? target.__ELEPHANT_ACCEPTANCE_LOGS__
-        : []
+    const source = []
+    const seen = new Set()
+    for (const collection of [target.__ELEPHANT_DEBUG_LOGS__, target.__ELEPHANT_ACCEPTANCE_LOGS__]) {
+      if (!Array.isArray(collection)) continue
+      for (const entry of collection) {
+        if (seen.has(entry)) continue
+        seen.add(entry)
+        source.push(entry)
+      }
+    }
     const level = String(filter?.level || '').toLowerCase()
     const contains = String(filter?.contains || '').toLowerCase()
     const since = Number(filter?.since || 0)
@@ -258,6 +272,7 @@ const answerAutomationCommand = async(target, api, payload) => {
   const requestId = payload?.request_id
   const command = payload?.command
   const args = Array.isArray(payload?.args) ? payload.args : []
+  logAutomationCommand(target, 'transport:command:start', { requestId, command, argsCount: args.length })
   try {
     if (!requestId || typeof api[command] !== 'function') throw new Error(`Unknown automation command: ${command}`)
     const result = await api[command](...args)
@@ -266,12 +281,19 @@ const answerAutomationCommand = async(target, api, payload) => {
       result: result ?? null,
       error: null
     })
+    logAutomationCommand(target, 'transport:command:done', {
+      requestId,
+      command,
+      result: command === 'logs' ? { logCount: Array.isArray(result) ? result.length : 0 } : result ?? null
+    })
   } catch (error) {
+    const serializedError = serializedAutomationError(error)
     await target.__TAURI__?.core?.invoke('tauri_acceptance_result', {
       requestId,
       result: null,
-      error: serializedAutomationError(error)
+      error: serializedError
     })
+    logAutomationCommand(target, 'transport:command:error', { requestId, command, error: serializedError })
   }
 }
 

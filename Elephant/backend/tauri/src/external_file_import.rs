@@ -1,6 +1,6 @@
 use serde_json::{json, Value};
 use std::{
-    fs,
+    fs, io,
     path::{Path, PathBuf},
 };
 use tauri::AppHandle;
@@ -9,13 +9,24 @@ use crate::vault::config::get_active_vault;
 
 type R<T> = Result<T, String>;
 
-fn normalize_relative_path(value: &str) -> String {
-    value
-        .replace('\\', "/")
-        .split('/')
-        .filter(|part| !part.is_empty() && *part != "." && *part != "..")
-        .collect::<Vec<_>>()
-        .join("/")
+fn normalize_relative_path(value: &str) -> R<String> {
+    let normalized = value.replace('\\', "/");
+    let first_part = normalized.split('/').next().unwrap_or_default();
+    if normalized.starts_with('/') || first_part.ends_with(':') {
+        return Err("The import directory must be relative to the active vault.".to_string());
+    }
+
+    let mut parts = Vec::new();
+    for part in normalized.split('/') {
+        if part.is_empty() || part == "." {
+            continue;
+        }
+        if part == ".." {
+            return Err("The import directory cannot contain parent traversal.".to_string());
+        }
+        parts.push(part);
+    }
+    Ok(parts.join("/"))
 }
 
 fn safe_leaf_name(value: &str) -> R<String> {
@@ -39,7 +50,7 @@ fn canonical_vault_root(root: &Path) -> R<PathBuf> {
 
 fn target_directory(root: &Path, relative_path: &str) -> R<PathBuf> {
     let canonical_root = canonical_vault_root(root)?;
-    let relative_path = normalize_relative_path(relative_path);
+    let relative_path = normalize_relative_path(relative_path)?;
     let requested = if relative_path.is_empty() {
         canonical_root.clone()
     } else {
@@ -53,7 +64,7 @@ fn target_directory(root: &Path, relative_path: &str) -> R<PathBuf> {
     Ok(canonical)
 }
 
-fn collision_safe_path(directory: &Path, file_name: &str) -> PathBuf {
+fn collision_candidate(directory: &Path, file_name: &str, index: u32) -> PathBuf {
     let original = Path::new(file_name);
     let stem = original
         .file_stem()
@@ -61,21 +72,45 @@ fn collision_safe_path(directory: &Path, file_name: &str) -> PathBuf {
         .unwrap_or("file");
     let extension = original.extension().and_then(|value| value.to_str());
 
+    let candidate_name = if index == 0 {
+        file_name.to_string()
+    } else if let Some(extension) = extension {
+        format!("{stem}-{index}.{extension}")
+    } else {
+        format!("{stem}-{index}")
+    };
+    directory.join(candidate_name)
+}
+
+fn copy_collision_safe(source: &Path, directory: &Path, file_name: &str) -> R<(PathBuf, u64)> {
     for index in 0..10_000_u32 {
-        let candidate_name = if index == 0 {
-            file_name.to_string()
-        } else if let Some(extension) = extension {
-            format!("{stem}-{index}.{extension}")
-        } else {
-            format!("{stem}-{index}")
+        let candidate = collision_candidate(directory, file_name, index);
+        let mut source_file = fs::File::open(source).map_err(|error| error.to_string())?;
+        let mut destination = match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+        {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error.to_string()),
         };
-        let candidate = directory.join(candidate_name);
-        if !candidate.exists() {
-            return candidate;
+
+        let copied_bytes = match io::copy(&mut source_file, &mut destination) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                let _ = fs::remove_file(&candidate);
+                return Err(error.to_string());
+            }
+        };
+        if let Err(error) = destination.sync_all() {
+            let _ = fs::remove_file(&candidate);
+            return Err(error.to_string());
         }
+        return Ok((candidate, copied_bytes));
     }
 
-    directory.join(format!("{stem}-{}", std::process::id()))
+    Err("Unable to allocate a collision-safe destination name.".to_string())
 }
 
 #[tauri::command]
@@ -101,18 +136,15 @@ pub fn tauri_entries_import_external_file(
 
     let vault = get_active_vault(&app)?;
     let root = PathBuf::from(&vault.path);
-    let relative_directory = normalize_relative_path(
-        target_directory_path.as_deref().unwrap_or_default(),
-    );
+    let relative_directory =
+        normalize_relative_path(target_directory_path.as_deref().unwrap_or_default())?;
     let directory = target_directory(&root, &relative_directory)?;
     let fallback_name = source
         .file_name()
         .and_then(|value| value.to_str())
         .ok_or_else(|| "The source file has no usable name.".to_string())?;
     let file_name = safe_leaf_name(filename.as_deref().unwrap_or(fallback_name))?;
-    let destination = collision_safe_path(&directory, &file_name);
-
-    let copied_bytes = fs::copy(&source, &destination).map_err(|error| error.to_string())?;
+    let (destination, copied_bytes) = copy_collision_safe(&source, &directory, &file_name)?;
     let canonical_root = canonical_vault_root(&root)?;
     let relative_path = destination
         .strip_prefix(&canonical_root)
@@ -147,12 +179,43 @@ mod tests {
         fs::create_dir_all(&root).unwrap();
         fs::write(root.join("document.pdf"), b"original").unwrap();
         assert_eq!(
-            collision_safe_path(&root, "document.pdf")
+            collision_candidate(&root, "document.pdf", 1)
                 .file_name()
                 .and_then(|value| value.to_str()),
             Some("document-1.pdf")
         );
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn collision_safe_copy_does_not_clobber_existing_file() {
+        let root = temp_root("copy");
+        fs::create_dir_all(&root).unwrap();
+        let source = root.join("source.pdf");
+        fs::write(root.join("document.pdf"), b"original").unwrap();
+        fs::write(&source, b"imported").unwrap();
+
+        let (destination, bytes) = copy_collision_safe(&source, &root, "document.pdf").unwrap();
+
+        assert_eq!(
+            destination.file_name().and_then(|value| value.to_str()),
+            Some("document-1.pdf")
+        );
+        assert_eq!(bytes, 8);
+        assert_eq!(fs::read(root.join("document.pdf")).unwrap(), b"original");
+        assert_eq!(fs::read(destination).unwrap(), b"imported");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn traversal_in_import_directory_is_rejected() {
+        assert!(normalize_relative_path("../outside").is_err());
+        assert!(normalize_relative_path("nested/../../outside").is_err());
+        assert!(normalize_relative_path("/outside").is_err());
+        assert_eq!(
+            normalize_relative_path("./nested\\folder").unwrap(),
+            "nested/folder"
+        );
     }
 
     #[test]

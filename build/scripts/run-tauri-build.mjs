@@ -9,9 +9,11 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const args = process.argv.slice(2)
 const configIndex = args.indexOf('--config')
 const config = configIndex >= 0 ? args[configIndex + 1] : null
+const passthroughArgs = args.filter((_, index) => index !== configIndex && index !== configIndex + 1)
 const tauriArgs = ['tauri', 'build']
+tauriArgs.push(...passthroughArgs)
 if (config) {
-  tauriArgs.push('--config', resolve(root, config))
+  tauriArgs.splice(2, 0, '--config', resolve(root, config))
 }
 
 const result = spawnSync('cargo', tauriArgs, {
@@ -24,10 +26,16 @@ if (result.status !== 0) {
   process.exit(result.status ?? 1)
 }
 
-const bundleRoot = join(root, 'Elephant/backend/tauri', 'target', 'release', 'bundle')
+const targetIndex = args.indexOf('--target')
+const targetTriple = targetIndex >= 0 ? args[targetIndex + 1] : process.env.TAURI_BUILD_TARGET
+const targetRoots = [
+  targetTriple ? join(root, 'Elephant/backend/tauri', 'target', targetTriple, 'release', 'bundle') : null,
+  join(root, 'Elephant/backend/tauri', 'target', 'release', 'bundle')
+].filter(Boolean)
+const bundleRoot = targetRoots.find(existsSync)
 const distRoot = join(root, 'dist')
 
-if (!existsSync(bundleRoot)) {
+if (!bundleRoot) {
   process.exit(0)
 }
 

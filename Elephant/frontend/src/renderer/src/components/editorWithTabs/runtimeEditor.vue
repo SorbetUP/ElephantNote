@@ -159,6 +159,7 @@ const installFileInteractions = (runtime) => {
   const drop = (event) => {
     const files = Array.from(event.dataTransfer?.files || [])
     if (!files.length) return
+    runtime?.markUserMutation?.('drop:file-interaction')
     event.preventDefault()
     event.stopImmediatePropagation()
     void (async () => {

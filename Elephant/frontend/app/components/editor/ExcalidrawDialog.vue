@@ -78,7 +78,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import React from 'react'
 import { createRoot } from 'react-dom/client'
@@ -122,11 +122,11 @@ const props = defineProps({
 const emit = defineEmits(['close', 'save'])
 const { t } = useI18n()
 const mountEl = ref(null)
-const apiRef = ref(null)
-const root = ref(null)
-const excalidrawModule = ref(null)
+const apiRef = shallowRef(null)
+const root = shallowRef(null)
+const excalidrawModule = shallowRef(null)
 const isSaving = ref(false)
-const initialData = ref(null)
+const initialData = shallowRef(null)
 const errorMessage = ref('')
 const isMacOS = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(`${navigator.platform || ''} ${navigator.userAgent || ''}`)
 let disposed = false
@@ -152,8 +152,6 @@ const logDialogError = (event, error) => {
   console.error(`[excalidraw-dialog] ${event}`, details)
 }
 
-// Elephant themes expose full palettes while Excalidraw accepts only its
-// canonical light/dark modes. Keep the surrounding shell on the full palette.
 const excalidrawTheme = computed(() => getThemeMode(props.theme))
 const themeTokens = computed(() => getThemeTokens(props.theme))
 

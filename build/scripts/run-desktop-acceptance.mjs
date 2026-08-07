@@ -341,7 +341,13 @@ try {
   const codeRunButton = await command('waitFor', '.elephant-physical-code-run', 10000)
   if (!codeRunButton.exists) throw new Error(`Code execution addon did not decorate the code block: ${JSON.stringify(codeRunButton)}`)
   await command('click', '.elephant-physical-code-run')
-  const codeOutput = await command('waitFor', '.elephant-physical-code-output[data-exit-code="0"]', 15000)
+  let codeOutput
+  try {
+    codeOutput = await command('waitFor', '.elephant-physical-code-output[data-exit-code="0"]', 15000)
+  } catch (error) {
+    const observedOutput = await command('readDom', '.elephant-physical-code-output')
+    throw new Error(`Code execution did not exit successfully: ${JSON.stringify({ observedOutput, error: String(error) })}`)
+  }
   if (!codeOutput.text.includes('code execution acceptance')) throw new Error(`Code execution output is incorrect: ${JSON.stringify(codeOutput)}`)
   await command('setMarkdown', '# Acceptance\n\nEdited by the real Tauri command runner.')
   await command('save')

@@ -90,6 +90,15 @@ jobs:
             ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
             node build/scripts/run-packaged-feature-matrix.mjs \
             2>&1 | tee packaged-feature-matrix.log
+      - name: Upload exact AppImage for manual Bazzite test
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: elephant-linux-appimage
+          path: Elephant/backend/tauri/target/release/bundle/appimage/*.AppImage
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
       - name: Upload every independent verdict
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7

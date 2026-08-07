@@ -9,33 +9,10 @@ const LEGACY_ADDON_ID = 'elephant.addon-packs'
 const CORE_CAPABILITY_IDS = new Set(['elephant.excalidraw', LEGACY_ADDON_ID])
 const PACK_DIRECTORY = '.elephantnote/addons/packs'
 const DEFAULT_PACK_PATH = `${PACK_DIRECTORY}/default.enaddonpack`
-const BASE_PACK_PATH = `${PACK_DIRECTORY}/base.enaddonpack`
-const DEVELOP_PARITY_PACK_PATH = `${PACK_DIRECTORY}/develop-parity.enaddonpack`
 const REPORT_PATH = 'Reports/Addon Pack.md'
 const PACK_FORMAT = 'elephantnote-addon-pack'
 const PACK_VERSION = 1
 const MAX_PACK_ADDONS = 200
-
-const DEVELOP_PARITY_ADDONS = Object.freeze([
-  { id: 'elephant.ai', version: '2.1.0', source: 'official', enabled: true },
-  { id: 'elephant.ai-chat', version: '1.1.0', source: 'official', enabled: true },
-  { id: 'elephant.ai-search', version: '1.1.0', source: 'official', enabled: true },
-  { id: 'elephant.ai-ocr', version: '1.0.0', source: 'official', enabled: true },
-  { id: 'elephant.wiki', version: '1.1.0', source: 'official', enabled: true },
-  { id: 'elephant.graph', version: '1.1.0', source: 'official', enabled: true },
-  { id: 'elephant.open-models', version: '1.2.0', source: 'official', enabled: true },
-  { id: 'elephant.codex-connection', version: '1.1.0', source: 'official', enabled: true },
-  { id: 'elephant.sync', version: '1.1.0', source: 'official', enabled: true },
-  { id: 'elephant.calendar', version: '1.2.0', source: 'official', enabled: true },
-  { id: 'elephant.sites', version: '1.1.0', source: 'official', enabled: true },
-  { id: 'elephant.code-execution', version: '2.1.0', source: 'official', enabled: true },
-  { id: 'elephant.google-keep-import', version: '1.1.0', source: 'official', enabled: true },
-  { id: 'elephant.recently-edited', version: '1.1.0', source: 'official', enabled: true }
-])
-
-const BASE_ADDONS = Object.freeze(DEVELOP_PARITY_ADDONS
-  .filter((entry) => entry.id !== 'elephant.calendar')
-  .map((entry) => Object.freeze({ ...entry })))
 
 const readCommunityEnabled = async () => {
   const value = await invokeTauri('tauri_prefs_get', { key: 'addons.communityEnabled' })
@@ -94,47 +71,6 @@ export const validateAddonPack = (raw, sourcePath = DEFAULT_PACK_PATH) => {
     description: typeof parsed.description === 'string' ? parsed.description.trim() : '',
     addons
   }
-}
-
-const protectedPack = (name, description, addons) => ({
-  format: PACK_FORMAT,
-  version: PACK_VERSION,
-  name,
-  description,
-  createdAt: new Date().toISOString(),
-  protected: true,
-  addons: addons.map((entry) => ({ ...entry }))
-})
-
-const ensurePack = async (path, expected, name, description) => {
-  try {
-    const current = validateAddonPack((await readNote(path)).content, path)
-    const entries = new Map(current.addons.map((entry) => [entry.id, entry]))
-    const unchanged = current.addons.length === expected.length && expected.every((entry) => {
-      const value = entries.get(entry.id)
-      return value?.source === entry.source && value?.version === entry.version && value?.enabled === entry.enabled
-    })
-    if (unchanged) return { packPath: path, created: false, updated: false }
-  } catch {}
-  const pack = protectedPack(name, description, expected)
-  await writeNote(path, `${JSON.stringify(pack, null, 2)}\n`)
-  return { packPath: path, created: true, updated: true, pack }
-}
-
-const ensureFirstPartyPacks = async () => {
-  const complete = await ensurePack(
-    DEVELOP_PARITY_PACK_PATH,
-    DEVELOP_PARITY_ADDONS,
-    'Elephant Develop parity',
-    'Installs and enables every first-party physical addon.'
-  )
-  const base = await ensurePack(
-    BASE_PACK_PATH,
-    BASE_ADDONS,
-    'Elephant Base',
-    'Installs and enables the first-party Elephant setup without Calendar.'
-  )
-  return { ...complete, basePackPath: base.packPath, baseCreated: base.created, baseUpdated: base.updated }
 }
 
 const catalogueMap = async () => new Map(
@@ -269,15 +205,6 @@ const applyPack = async (ctx, options = {}) => {
 export const addonPacksCoreFeature = Object.freeze({
   id: CORE_FEATURE_ID,
   activate(ctx) {
-    ctx.addAction({
-      id: `${LEGACY_ADDON_ID}.ensure-develop-parity`,
-      title: 'Create first-party addon packs',
-      async run() {
-        const result = await ensureFirstPartyPacks()
-        logAction(ctx, 'addon-pack-first-party', result)
-        return result
-      }
-    })
     ctx.addAction({
       id: `${LEGACY_ADDON_ID}.create`,
       title: 'Create addon pack from current setup',

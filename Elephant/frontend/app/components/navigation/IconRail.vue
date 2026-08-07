@@ -124,8 +124,7 @@ const preferences = usePreferencesStore()
 const editingVaultId = ref('')
 const showVaultMenu = ref(false)
 const runtimeRailOrder = ref([])
-const lastRailAction = ref({ id: '', at: 0 })
-const DUPLICATE_ACTION_WINDOW_MS = 420
+const runningRailActions = new Set()
 
 const VAULT_ICON_COMPONENTS = { Database, FileText, GraduationCap, Home, Landmark, Rocket, Star, Terminal, Workflow }
 const ADDON_ICON_COMPONENTS = {
@@ -225,18 +224,15 @@ const layoutSignature = computed(() => JSON.stringify({
 
 const runRailItem = async (item) => {
   const id = item?.id || ''
-  const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
-  const previous = lastRailAction.value
-  const ageMs = now - previous.at
-  if (id && id !== 'sidebar-toggle' && previous.id === id && ageMs >= 0 && ageMs < DUPLICATE_ACTION_WINDOW_MS) {
+  const guardDuplicate = id && id !== 'sidebar-toggle'
+  if (guardDuplicate && runningRailActions.has(id)) {
     pushIconRailLog('action:ignored-duplicate', {
       id,
-      ageMs: Math.round(ageMs),
-      guardMs: DUPLICATE_ACTION_WINDOW_MS
+      reason: 'in-flight'
     })
     return
   }
-  lastRailAction.value = { id, at: now }
+  if (guardDuplicate) runningRailActions.add(id)
 
   pushIconRailLog('action:run', {
     id,
@@ -252,6 +248,8 @@ const runRailItem = async (item) => {
       error: error?.message || String(error)
     })
     throw error
+  } finally {
+    if (guardDuplicate) runningRailActions.delete(id)
   }
 }
 

@@ -24,6 +24,17 @@ const libMin = readText('Elephant/backend/tauri/src/lib_min.rs')
 const addonServices = readText('Elephant/backend/tauri/src/addon_services.rs')
 const desktopAcceptanceWorkflow = readText('.github/workflows/tauri-desktop-acceptance.yml')
 
+const resolveNodeEntrypoint = (command) => {
+  const match = String(command || '').trim().match(/^node\s+([^\s;&|]+\.mjs)(?:\s|$)/)
+  return match?.[1] || null
+}
+
+const tauriWebBuildCommand = packageJson.scripts?.['tauri:web:build']
+const tauriWebBuildEntrypoint = resolveNodeEntrypoint(tauriWebBuildCommand)
+const tauriWebBuildSource = tauriWebBuildEntrypoint && existsSync(absolute(tauriWebBuildEntrypoint))
+  ? readText(tauriWebBuildEntrypoint)
+  : ''
+
 const assertWorkspaceBuildHook = (config, label) => {
   const command = config.build?.beforeBuildCommand
   assert(command && typeof command === 'object', `${label} beforeBuildCommand must use the Tauri object form`)
@@ -61,19 +72,22 @@ assert(
 )
 assertWorkspaceBuildHook(baseConfig, 'Core Tauri build')
 assert(
-  Array.isArray(baseConfig.bundle?.resources) &&
-    baseConfig.bundle.resources.length === 1 &&
-    baseConfig.bundle.resources[0] === 'resources/official-addons',
-  'Core desktop bundle must include only the controlled official addon resource root'
+  !('resources' in (baseConfig.bundle || {})) ||
+    (Array.isArray(baseConfig.bundle.resources) && baseConfig.bundle.resources.length === 0),
+  'Core desktop bundle must not embed official addon resources'
 )
 assert(
-  typeof packageJson.scripts['tauri:web:build'] === 'string' &&
-    packageJson.scripts['tauri:web:build'].includes('prepare-tauri-addon-resources.mjs'),
-  'Tauri production builds must prepare official addon resources before bundling'
+  typeof tauriWebBuildCommand === 'string' && Boolean(tauriWebBuildEntrypoint),
+  'Tauri web build must delegate to an explicit Node .mjs launcher'
 )
 assert(
-  existsSync(absolute('build/scripts/prepare-tauri-addon-resources.mjs')),
-  'The Tauri official addon resource preparation script must exist'
+  Boolean(tauriWebBuildEntrypoint) && existsSync(absolute(tauriWebBuildEntrypoint)),
+  'Tauri web build launcher must exist'
+)
+assert(
+  !tauriWebBuildSource.includes('sync-elephant-addons') &&
+    !tauriWebBuildSource.includes('prepare-tauri-addon-resources'),
+  'Tauri production build launcher must remain independent from the addon repository'
 )
 for (const platform of ['linux-x86_64', 'windows-x86_64', 'macos-x86_64', 'macos-aarch64']) {
   assert(
@@ -165,29 +179,6 @@ assert(
   'Android build must not carry obsolete bundled-llama switches'
 )
 
-for (const addon of ['open-models', 'codex-connection', 'sync']) {
-  const manifest = readJson(`addons/official/${addon}/manifest.json`)
-  const sidecarPlatforms = Object.keys(manifest.native?.sidecars || {})
-  assert(manifest.native?.runner === 'service', `${manifest.id} must use the persistent service runner`)
-  assert(
-    manifest.native?.protocol === 'elephant-addon-service-v1',
-    `${manifest.id} must use the versioned addon service protocol`
-  )
-  assert(sidecarPlatforms.length > 0, `${manifest.id} must publish desktop sidecars`)
-  assert(
-    sidecarPlatforms.every((platform) => !/^(android|ios)-/.test(platform)),
-    `${manifest.id} must not publish process sidecars for Android or iOS`
-  )
-  assert(
-    manifest.native?.mobile?.android?.supported === false,
-    `${manifest.id} must explicitly reject Android until it has a native mobile adapter`
-  )
-  assert(
-    manifest.native?.mobile?.ios?.supported === false,
-    `${manifest.id} must explicitly reject iOS until it has a native mobile adapter`
-  )
-}
-
 assert(
   addonServices.includes('Persistent process services require a desktop addon package'),
   'Generic native service host must reject downloaded process services on mobile'
@@ -233,4 +224,4 @@ if (errors.length > 0) {
   process.exit(1)
 }
 
-console.log('[tauri-platforms] macOS/Linux/Android physical-addon compatibility guard passed')
+console.log('[tauri-platforms] macOS/Linux/Android core and addon boundary guard passed')

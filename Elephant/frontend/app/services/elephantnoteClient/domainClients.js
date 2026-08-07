@@ -98,6 +98,7 @@ export const createDomainClients = (call, requireAtomicFeatureApi) => ({
   entries: {
     rename: (payload) => call(API.ENTRIES_RENAME, payload),
     move: (payload) => call(API.ENTRIES_MOVE, payload),
+    importExternalFile: (payload) => call(API.ENTRIES_IMPORT_EXTERNAL_FILE, payload),
     delete: (relativePath) => call(API.ENTRIES_DELETE, { relativePath })
   },
   search: {

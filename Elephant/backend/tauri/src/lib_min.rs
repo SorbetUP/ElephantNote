@@ -24,10 +24,12 @@ pub mod vault;
 pub mod vault_layout;
 
 mod android_vault_commands;
+mod atomic_note_write;
 mod debug_commands;
 mod acceptance_server;
 #[cfg(mobile)]
 mod embedded_addon_services;
+mod external_file_import;
 mod official_addon_catalog;
 #[path = "core_commands.rs"]
 mod tauri_extra_commands;
@@ -75,11 +77,12 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_elephant_android_vault::init());
 
     #[cfg(not(mobile))]
-    let builder = builder.plugin(tauri_plugin_window_state::Builder::default().build());
+    let builder = builder
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_window_state::Builder::default().build());
 
     builder
         .setup(|app| {
@@ -160,7 +163,6 @@ pub fn run() {
             watcher::tauri_watcher_unwatch_file,
             watcher::tauri_watcher_unwatch_directory,
             watcher::tauri_watcher_unwatch_all,
-            watcher::tauri_watcher_ignore_next,
             state::tauri_recents_list,
             state::tauri_recents_add,
             state::tauri_recents_clear,
@@ -172,6 +174,7 @@ pub fn run() {
             state::tauri_atomic_features_set,
             vault::commands::tauri_vaults_get,
             vault::commands::tauri_vaults_select_path,
+            vault::commands::tauri_vaults_create_local,
             vault::commands::tauri_vaults_set_active,
             vault::commands::tauri_vaults_set_icon,
             vault::commands::tauri_vaults_set_name,
@@ -183,6 +186,7 @@ pub fn run() {
             vault::commands::tauri_sidebar_detach,
             vault::commands::tauri_entries_rename,
             vault::commands::tauri_entries_move,
+            external_file_import::tauri_entries_import_external_file,
             vault::commands::tauri_entries_delete,
             vault::commands::tauri_sources_list,
             vault::commands::tauri_search_query,
@@ -228,8 +232,9 @@ pub fn run() {
             markdown::muya_session::tauri_muya_session_close,
             tauri_extra_commands::shell_exec,
             tauri_extra_commands::tauri_notes_read,
-            tauri_extra_commands::tauri_notes_write,
+            atomic_note_write::tauri_notes_write,
             tauri_extra_commands::tauri_marktext_write_file,
+            atomic_note_write::tauri_marktext_write_file_atomic,
             tauri_extra_commands::tauri_attachments_list,
             tauri_extra_commands::tauri_attachments_write_text,
             tauri_extra_commands::tauri_drawings_list,
@@ -255,6 +260,23 @@ mod tests {
         assert_eq!(
             info.get("desktop").and_then(|value| value.as_bool()),
             Some(!cfg!(mobile))
+        );
+    }
+
+    #[test]
+    fn notification_plugin_is_registered_only_in_the_desktop_builder() {
+        let source = include_str!("lib_min.rs");
+        let (mobile_builder, desktop_builder) = source
+            .split_once("#[cfg(not(mobile))]")
+            .expect("the desktop-only Tauri builder must remain explicit");
+
+        assert!(
+            !mobile_builder.contains("tauri_plugin_notification::init()"),
+            "Android/iOS must not initialize the notification plugin during the about:blank relaunch phase"
+        );
+        assert!(
+            desktop_builder.contains(".plugin(tauri_plugin_notification::init())"),
+            "desktop builds must retain notification support"
         );
     }
 }

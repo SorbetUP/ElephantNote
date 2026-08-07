@@ -41,6 +41,7 @@ import { useNotificationStore } from '@/store/notification'
 import AppShell from 'elephant-front/components/shell/AppShell.vue'
 
 const isTauriRuntime = Boolean(window.__TAURI__ || window.__MARKTEXT_RUNTIME__)
+const TAURI_BUFFERED_STATE_KEY = 'elephantnote:tauri:buffer-state'
 const mainStore = useMainStore()
 const editorStore = useEditorStore()
 const preferencesStore = usePreferencesStore()
@@ -69,6 +70,28 @@ watch(customCss, (value, oldValue) => {
 watch(zoom, (zoomValue) => {
   bus.emit('mt::window-zoom', zoomValue)
 })
+
+const restoreBufferedTauriState = () => {
+  if (!isTauriRuntime) return false
+
+  const rawState = window.localStorage?.getItem(TAURI_BUFFERED_STATE_KEY)
+  if (!rawState) return false
+
+  try {
+    const state = JSON.parse(rawState)
+    editorStore.RESTORE_BUFFERED_STATE(state)
+    console.info('[elephantnote:recovery] checkpoint:restored', {
+      currentFileId: state?.currentFileId || null,
+      tabCount: Array.isArray(state?.tabs) ? state.tabs.length : 0
+    })
+    return true
+  } catch (error) {
+    console.error('[elephantnote:recovery] checkpoint:restore-failed', {
+      error: error?.message || String(error)
+    })
+    return false
+  }
+}
 
 const hideImportDialogSoon = () => {
   if (importDialogHideTimer) window.clearTimeout(importDialogHideTimer)
@@ -114,6 +137,11 @@ const cleanupDragDropHandler = () => {
 }
 
 onMounted(async () => {
+  // Tauri does not have the legacy Electron bootstrap event. Mark the shell
+  // ready before awaiting optional command/listener setup so a restart cannot
+  // leave the mounted route on the placeholder forever.
+  if (isTauriRuntime) mainStore.SET_INITIALIZED()
+
   if (global.marktext.initialState) {
     preferencesStore.SET_USER_PREFERENCE(global.marktext.initialState)
   }
@@ -154,15 +182,10 @@ onMounted(async () => {
   editorStore.LISTEN_FOR_RELOAD_IMAGES()
   editorStore.LISTEN_FOR_CONTEXT_MENU()
   editorStore.LISTEN_FOR_STATE_REPLACE()
+  restoreBufferedTauriState()
   notificationStore.listenForNotification()
 
   setupDragDropHandler()
-
-  if (isTauriRuntime) {
-    window.setTimeout(() => {
-      if (!mainStore.init) mainStore.SET_INITIALIZED()
-    }, 250)
-  }
 
   nextTick(() => {
     addStyles(global.marktext.initialState || DEFAULT_STYLE)

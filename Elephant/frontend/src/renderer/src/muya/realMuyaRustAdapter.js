@@ -366,19 +366,18 @@ export default class RustOwnedMuya extends Muya {
 
   __drop (event) {
     const files = Array.from(event?.dataTransfer?.files || [])
-    const images = files.filter((file) => String(file.type || '').startsWith('image/'))
+    // File drops are owned by the editor host so it can persist attachments
+    // through the vault boundary and update the Markdown document. Leave the
+    // event available for that handler instead of consuming it here.
+    if (files.length) return
     event.preventDefault()
     event.stopImmediatePropagation()
-    if (images.length) {
-      Promise.all(images.map((file) => this.__persistImage(file))).catch(this.__reportRustError)
-      return
-    }
     const text = String(event?.dataTransfer?.getData?.('text/plain') || '')
     if (!text) return
     this.__applyRust('drop', (engine) => {
       const selection = this.__selection().selection
       return engine.replaceRange(selection.anchor, selection.focus, text)
-    }).catch(() => {})
+    }).catch(this.__reportRustError)
   }
 
   async __refreshClipboard () {
@@ -401,7 +400,7 @@ export default class RustOwnedMuya extends Muya {
     if (selection.anchor === selection.focus) return
     this.__applyRust('cut', (engine) => (
       engine.replaceRange(selection.anchor, selection.focus, '')
-    )).catch(() => {})
+    )).catch(this.__reportRustError)
   }
 
   __compositionStart () {
@@ -416,7 +415,7 @@ export default class RustOwnedMuya extends Muya {
     this.__rustComposition = null
     this.__applyRust('composition', (engine) => (
       engine.commitComposition(composition.selection, String(event?.data || ''))
-    )).catch(() => {})
+    )).catch(this.__reportRustError)
   }
 
   __tableContext (data, key) {

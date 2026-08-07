@@ -39,32 +39,23 @@ const ordered = (relativePath, needles, description) => {
   }
 }
 
-const physicalPackages = [
-  ['dashboard', 'elephant.dashboard', 'main.js'],
-  ['ai', 'elephant.ai', 'main.js'],
-  ['ai-chat', 'elephant.ai-chat', 'main.js'],
-  ['ai-search', 'elephant.ai-search', 'main.js'],
-  ['ai-ocr', 'elephant.ai-ocr', 'main.js'],
-  ['wiki', 'elephant.wiki', 'main.v2.js'],
-  ['graph', 'elephant.graph', 'main.js'],
-  ['knowledge', 'elephant.knowledge', 'main.js'],
-  ['open-models', 'elephant.open-models', 'main.js'],
-  ['codex-connection', 'elephant.codex-connection', 'main.js'],
-  ['sync', 'elephant.sync', 'main.service.js'],
-  ['calendar', 'elephant.calendar', 'main.js'],
-  ['sites', 'elephant.sites', 'main.js'],
-  ['code-execution', 'elephant.code-execution', 'main.js'],
-  ['google-keep-import', 'elephant.google-keep-import', 'main.js'],
-  ['recently-edited', 'elephant.recently-edited', 'main.js']
-]
-
 for (const file of [
   'package.json',
   '.github/workflows/ci.yml',
   '.github/workflows/tauri-ci.yml',
-  '.github/workflows/addon-platform-validation.yml',
+  '.github/workflows/e2e.yml',
+  '.github/workflows/test.yml',
   'build/scripts/verify-security-guardrails.mjs',
+  'build/scripts/verify-test-trust.mjs',
+  'build/scripts/verify-three-layer-sensitivity.mjs',
+  'build/scripts/run-backend-contract-trust.mjs',
+  'build/scripts/run-frontend-behavior-trust.mjs',
+  'build/scripts/run-packaged-user-journey-trust.mjs',
+  'build/scripts/lib/real-app-harness.mjs',
+  'tests/trust/test-layers.json',
   'Elephant/frontend/src/renderer/src/main.js',
+  'Elephant/frontend/src/renderer/src/Main.vue',
+  'Elephant/frontend/src/renderer/src/pages/app.vue',
   'Elephant/frontend/src/renderer/src/addons/builtin/index.js',
   'Elephant/frontend/src/renderer/src/addons/externalAddonRuntime.js',
   'Elephant/frontend/src/renderer/src/addons/officialAddonCatalogBridge.js',
@@ -79,9 +70,7 @@ for (const file of [
   'Elephant/backend/tauri/src/addon_services.rs',
   'Elephant/backend/tauri/src/addon_runtime_access.rs',
   'Elephant/backend/tauri/src/addon_http_access.rs',
-  'Elephant/backend/tauri/src/official_addon_catalog.rs',
-  'tests/app/e2e/search-inspect.spec.js',
-  'tests/app/unit/addons/baseOfficialAddonRuntime.spec.js'
+  'Elephant/backend/tauri/src/official_addon_catalog.rs'
 ]) read(file)
 
 missing('Elephant/backend/tauri/src/tauri_extra_commands.rs', 'legacy optional command module')
@@ -90,6 +79,14 @@ missing('Elephant/backend/tauri/src/sync', 'legacy core Iroh runtime directory')
 missing('Elephant/backend/tauri/src/vault/sync_iroh', 'legacy core Sync backend directory')
 missing('Elephant/frontend/app/components/views/DashboardView.vue', 'core Dashboard view')
 
+for (const legacyTestPath of [
+  'tests/app/e2e/playwright.config.js',
+  'tests/app/e2e/search-inspect.spec.js',
+  'tests/app/unit/addons/baseOfficialAddonRuntime.spec.js',
+  'vitest.config.js',
+  'vitest.critical.config.js'
+]) missing(legacyTestPath, 'removed synthetic or legacy JavaScript test surface')
+
 ordered(
   '.github/workflows/ci.yml',
   [
@@ -97,9 +94,10 @@ ordered(
     'run: node build/scripts/verify-critical-flows.mjs',
     '- name: Security guardrails',
     'run: pnpm security:guard',
-    '- name: Unit suite'
+    '- name: Test trust policy',
+    'run: pnpm test:trust:guard'
   ],
-  'main CI guard, security and unit order'
+  'main CI critical, security and real-proof trust order'
 )
 has(
   '.github/workflows/ci.yml',
@@ -111,8 +109,46 @@ has(
   'cargo test --manifest-path Elephant/backend/tauri/Cargo.toml --lib --no-default-features',
   'blocking Tauri library tests'
 )
-has('.github/workflows/addon-platform-validation.yml', 'Package every integrated physical addon', 'physical addon packaging gate')
 has('package.json', '"security:guard": "node build/scripts/verify-security-guardrails.mjs"', 'security guard command')
+has('package.json', '"test:trust:guard": "node build/scripts/verify-test-trust.mjs"', 'real test trust guard command')
+
+for (const [script, runner] of [
+  ['test:backend:raw', 'run-backend-contract-trust.mjs'],
+  ['test:frontend:behavior:raw', 'run-frontend-behavior-trust.mjs'],
+  ['test:user:packaged:raw', 'run-packaged-user-journey-trust.mjs'],
+  ['test:layers:sensitivity', 'verify-three-layer-sensitivity.mjs']
+]) {
+  has('package.json', `"${script}"`, `real proof script ${script}`)
+  has('package.json', runner, `real proof runner ${runner}`)
+}
+
+for (const marker of [
+  '"id": "backend-contract"',
+  '"id": "frontend-behavior"',
+  '"id": "packaged-user-journey"',
+  '"requiredPackagedFormat": "linux-appimage"',
+  '"user-physical-x11-input-rust-disk"',
+  '"user-crash-restart-restores-visible-work"'
+]) has('tests/trust/test-layers.json', marker, `real proof manifest marker ${marker}`)
+
+for (const marker of [
+  'pnpm test:trust:guard',
+  'pnpm test:backend:raw',
+  'pnpm test:frontend:raw',
+  'pnpm test:user:packaged:raw',
+  'pnpm test:layers:sensitivity',
+  'ELEPHANT_PACKAGED_FORMAT=linux-appimage',
+  'bundle/appimage/*.AppImage',
+  'test-results/trusted/packaged-user-journey/**'
+]) has('.github/workflows/e2e.yml', marker, `distributed AppImage proof marker ${marker}`)
+
+has('build/scripts/verify-test-trust.mjs', 'tracked legacy JavaScript test files are forbidden', 'legacy JS test rejection')
+has('build/scripts/verify-test-trust.mjs', "const expectedCategories = ['backend-contract', 'frontend-behavior', 'packaged-user-journey']", 'exact real proof categories')
+has('build/scripts/verify-three-layer-sensitivity.mjs', "payload.status !== 'NOT PROVEN'", 'mutation must force NOT PROVEN')
+has('build/scripts/run-packaged-user-journey-trust.mjs', 'requirePackagedApp: true', 'development launcher rejection')
+has('build/scripts/run-packaged-user-journey-trust.mjs', "status: 'PROVEN'", 'explicit packaged PROVEN artifact')
+has('build/scripts/run-packaged-user-journey-trust.mjs', "status: 'NOT PROVEN'", 'explicit packaged NOT PROVEN artifact')
+has('build/scripts/lib/real-app-harness.mjs', 'ELEPHANT_AUTOMATION_TOKEN', 'authenticated external app API')
 
 ordered(
   'Elephant/frontend/src/renderer/src/main.js',
@@ -127,6 +163,24 @@ ordered(
 )
 has('Elephant/frontend/src/renderer/src/main.js', "const runtime = 'tauri'", 'Tauri-only runtime selection')
 lacks('Elephant/frontend/src/renderer/src/main.js', 'tauri-compatible', 'compatibility runtime fallback')
+ordered(
+  'Elephant/frontend/src/renderer/src/main.js',
+  [
+    'installAcceptanceTestBridge({ pinia })',
+    'installAcceptancePhysicalSurface(globalThis)'
+  ],
+  'acceptance physical surface must only start after the acceptance bridge exists'
+)
+lacks('Elephant/frontend/src/renderer/src/Main.vue', 'automationAcceptancePhysicalSurface', 'unconditional acceptance-only physical surface import')
+ordered(
+  'Elephant/frontend/src/renderer/src/pages/app.vue',
+  [
+    'if (isTauriRuntime) mainStore.SET_INITIALIZED()',
+    'await commandCenterStore.LISTEN_COMMAND_CENTER_BUS()'
+  ],
+  'Tauri shell readiness must not wait for optional listener setup'
+)
+lacks('Elephant/frontend/src/renderer/src/pages/app.vue', 'if (!mainStore.init) mainStore.SET_INITIALIZED()', 'delayed Tauri shell readiness')
 
 has('Elephant/frontend/src/renderer/src/addons/builtin/index.js', 'builtinAddons = Object.freeze([])', 'empty builtin addon catalogue')
 lacks('Elephant/frontend/src/renderer/src/addons/builtin/index.js', 'import(', 'bundled optional addon import')
@@ -208,54 +262,11 @@ for (const leakedCoreImplementation of [
   'tauri-rust://'
 ]) lacks('Elephant/backend/tauri/src/core_commands.rs', leakedCoreImplementation, `optional implementation ${leakedCoreImplementation}`)
 
-for (const [directory, addonId, entry] of physicalPackages) {
-  const base = `addons/official/${directory}`
-  const manifest = `${base}/manifest.json`
-  const main = `${base}/${entry}`
-  has(manifest, `"id": "${addonId}"`, `${addonId} manifest id`)
-  has(manifest, '"runtime"', `${addonId} runtime declaration`)
-  read(main)
-}
-
-has('addons/official/dashboard/main.js', "const DASHBOARD_DIRECTORY = '.elephantnote'", 'hidden Elephant Dashboard directory')
-has('addons/official/dashboard/main.js', "const DASHBOARD_FILENAME = 'Dashboard.md'", 'Dashboard note filename')
-has('addons/official/dashboard/main.js', 'api.workspace.registerSidebarItem', 'package-owned Dashboard rail item')
-has('addons/official/dashboard/main.js', 'api.commands.register', 'package-owned Dashboard command')
-has('addons/official/dashboard/main.js', 'await store.openNote(note, { record: false })', 'normal Dashboard note opening')
-lacks('addons/official/dashboard/main.js', 'api.workspace.registerView', 'custom Dashboard workspace view')
-lacks('addons/official/dashboard/main.js', 'dashboard.provider', 'custom Dashboard provider')
-lacks('addons/official/dashboard/main.js', 'Recently edited', 'custom Dashboard recent-note surface')
-has('addons/catalog.json', '"id": "elephant.dashboard"', 'downloadable Dashboard package')
-has('packs/base.enaddonpack', '"id": "elephant.dashboard"', 'Dashboard in base pack')
-
-has('addons/official/ai/main.js', "const CONFIG_KEY = 'provider-config'", 'package-owned AI configuration')
-has('addons/official/ai/main.js', 'this.api.storage.get(CONFIG_KEY)', 'AI configuration storage read')
-has('addons/official/ai/main.js', 'this.api.storage.set(CONFIG_KEY, payload)', 'AI configuration storage write')
-has('addons/official/ai/main.js', "api.resources.provide('ai.config'", 'AI configuration resource')
-lacks('addons/official/ai/main.js', 'tauri_ai_config_', 'core AI configuration bridge')
-lacks('addons/official/ai/main.js', 'ollama:', 'implicit local model provider')
-lacks('addons/official/ai/main.js', 'lmstudio:', 'implicit local model provider')
-lacks('addons/official/ai/main.js', 'llamacpp:', 'implicit local model provider')
-
-has('addons/official/ai-search/main.js', "const PROVIDER_RESOURCE = 'search.provider'", 'package-owned search provider')
-has('addons/official/ai-search/main.js', "engine: 'package-owned-bm25'", 'package-owned lexical index')
-has('addons/official/wiki/main.v2.js', 'wiki.provider', 'package-owned Wiki provider')
-has('addons/official/graph/main.js', 'api.workspace.registerView', 'package-owned Graph view')
-has('addons/official/open-models/manifest.json', '"runner": "service"', 'Open Models native service')
-has('addons/official/codex-connection/manifest.json', '"runner": "service"', 'Codex native service')
-has('addons/official/sync/manifest.json', '"protocol": "elephant-addon-service-v1"', 'Sync native service protocol')
-has('addons/official/sync/main.service.js', "this.callNativeService('sync.run'", 'active package Sync path')
-has('addons/official/sync/native/src/main.rs', '"sync.run" => service.run_sync().await', 'package-owned Sync sessions')
-has('addons/official/sync/native/tests/two_endpoint_sync.rs', 'physical_package_pairs_and_synchronizes_two_real_iroh_endpoints', 'real package Iroh validation')
-
-has('Elephant/backend/tauri/src/official_addon_catalog/source.rs', 'collect_local_files', 'complete local official package installation')
-has('Elephant/backend/tauri/src/official_addon_catalog/install.rs', 'collect_remote_files', 'complete remote official package installation')
-has('tests/app/unit/addons/baseOfficialAddonRuntime.spec.js', 'for (const packedAddon of parityPack.addons)', 'all first-party addon runtime probes')
-has('tests/app/unit/addons/baseOfficialAddonRuntime.spec.js', 'view.component.__mount', 'addon view usage probes')
-has('tests/app/unit/addons/baseOfficialAddonRuntime.spec.js', 'command.run({ probe: true })', 'addon command usage probes')
-
-has('tests/app/e2e/search-inspect.spec.js', 'does not expose semantic inspection without the Search addon', 'Search physical absence E2E contract')
-has('tests/app/e2e/search-inspect.spec.js', 'expect(result.ok).toBe(false)', 'unavailable core Search command')
+missing('addons', 'materialized official addon source tree')
+missing('Elephant/backend/tauri/resources/official-addons', 'embedded official addon resources')
+has('build/scripts/run-tauri-web-build.mjs', "runNode('build/scripts/build-muya-wasm.mjs')", 'core-only renderer build')
+lacks('build/scripts/run-tauri-web-build.mjs', 'sync-elephant-addons', 'addon repository checkout from the core build')
+lacks('build/scripts/run-tauri-web-build.mjs', 'prepare-tauri-addon-resources', 'embedded addon preparation from the core build')
 
 ordered(
   'Elephant/frontend/app/components/editor/NoteEditorHost.vue',

@@ -47,9 +47,6 @@ import { elephantnoteClient } from 'elephant-front/services/elephantnoteClient'
 
 const PACK_DIRECTORY = '.elephantnote/addons/packs'
 const DEFAULT_PACK_PATH = `${PACK_DIRECTORY}/default.enaddonpack`
-const BASE_PACK_PATH = `${PACK_DIRECTORY}/base.enaddonpack`
-const DEVELOP_PARITY_PACK_PATH = `${PACK_DIRECTORY}/develop-parity.enaddonpack`
-const PROTECTED_PACK_PATHS = new Set([BASE_PACK_PATH, DEVELOP_PARITY_PACK_PATH])
 const PACK_SEARCH_EVENT = 'elephantnote:addon-packs-search'
 const PACK_REFRESH_EVENT = 'elephantnote:addon-packs-refresh'
 const PACK_IMPORT_EVENT = 'elephantnote:addon-packs-import'
@@ -124,7 +121,7 @@ const readPack = async (path) => {
       enabled: entry?.enabled === true
     })).filter((entry) => entry.id),
     createdAt: String(parsed.createdAt || ''),
-    protected: parsed.protected === true || PROTECTED_PACK_PATHS.has(path)
+    protected: parsed.protected === true
   }
 }
 
@@ -137,7 +134,7 @@ const discoverPackPaths = async () => {
     // The hidden pack directory may not exist yet. Known paths are checked below.
   }
   const paths = []
-  for (const path of [BASE_PACK_PATH, DEVELOP_PARITY_PACK_PATH, DEFAULT_PACK_PATH]) {
+  for (const path of [DEFAULT_PACK_PATH]) {
     try {
       await elephantnoteClient.notes.read(path)
       paths.push(path)
@@ -160,7 +157,6 @@ const isPackInstalled = (pack) => {
 const loadPacks = async () => {
   loading.value = true
   try {
-    await addonsStore.runAction('elephant.addon-packs.ensure-develop-parity')
     const paths = await discoverPackPaths()
     const results = await Promise.allSettled(paths.map(readPack))
     packs.value = results

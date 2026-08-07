@@ -1,0 +1,147 @@
+name: Basic Linux AppImage proof
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [agent/addon-runtime-stabilization]
+
+concurrency:
+  group: basic-linux-proof-runtime-stabilization
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  basic-linux:
+    name: Editor, persistence and recovery
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      CARGO_TERM_COLOR: always
+      FORCE_COLOR: '1'
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: ./.github/actions/setup-tauri-cli
+
+      - name: Install Linux runtime dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            libx11-dev libxkbfile-dev libsecret-1-dev libfontconfig-dev \
+            xvfb xdotool libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
+            libdrm2 libgtk-3-0 libgbm1 libasound2t64 unzip \
+            libayatana-appindicator3-dev librsvg2-dev libwebkit2gtk-4.1-dev \
+            patchelf xdg-utils
+
+      - uses: ./.github/actions/setup
+
+      - name: Prepare production resources
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          npm_config_user_agent: pnpm
+          USE_ELECTRON_CLANG: '0'
+        run: node build/scripts/postinstall.js
+
+      - name: Verify recovered contracts
+        shell: bash
+        run: |
+          set -euxo pipefail
+          node build/scripts/verify-rust-canonical-readiness.mjs
+
+      - name: Build exact Linux AppImage
+        shell: bash
+        run: |
+          set -euxo pipefail
+          pnpm build:linux 2>&1 | tee basic-linux-build.txt
+          APPIMAGE_PATH="$(compgen -G 'Elephant/backend/tauri/target/release/bundle/appimage/*.AppImage' | head -n 1)"
+          test -f "$APPIMAGE_PATH"
+          chmod +x "$APPIMAGE_PATH"
+          APPIMAGE_PATH="$(realpath "$APPIMAGE_PATH")"
+          echo "ELEPHANT_PACKAGED_APP=$APPIMAGE_PATH" >> "$GITHUB_ENV"
+          echo 'ELEPHANT_PACKAGED_FORMAT=linux-appimage' >> "$GITHUB_ENV"
+          echo 'APPIMAGE_EXTRACT_AND_RUN=1' >> "$GITHUB_ENV"
+          sha256sum "$APPIMAGE_PATH" | tee packaged-appimage.sha256
+
+      - name: Upload exact AppImage immediately
+        uses: actions/upload-artifact@v7
+        with:
+          name: elephant-bazzite-test-${{ github.sha }}
+          path: |
+            ${{ env.ELEPHANT_PACKAGED_APP }}
+            packaged-appimage.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
+
+      - name: Reject fake tests
+        run: pnpm test:trust:guard
+
+      - name: Prove backend on the packaged app
+        shell: bash
+        run: |
+          set -euxo pipefail
+          xvfb-run --auto-servernum env \
+            ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
+            ELEPHANT_ACCEPTANCE_APP_PATH="$ELEPHANT_PACKAGED_APP" \
+            pnpm test:backend:raw 2>&1 | tee backend-contract.txt
+
+      - name: Prove visible editor behavior
+        shell: bash
+        run: |
+          set -euxo pipefail
+          xvfb-run --auto-servernum env \
+            ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
+            ELEPHANT_ACCEPTANCE_APP_PATH="$ELEPHANT_PACKAGED_APP" \
+            pnpm test:frontend:raw 2>&1 | tee frontend-behavior.txt
+
+      - name: Prove persistence and crash recovery
+        shell: bash
+        run: |
+          set -euxo pipefail
+          xvfb-run --auto-servernum env \
+            ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
+            ELEPHANT_ACCEPTANCE_APP_PATH="$ELEPHANT_PACKAGED_APP" \
+            pnpm test:user:packaged:raw 2>&1 | tee packaged-user-journey.txt
+
+      - name: Verify the three core evidence files
+        shell: bash
+        run: |
+          set -euxo pipefail
+          node - <<'NODE'
+          const fs = require('fs')
+          const manifest = JSON.parse(fs.readFileSync('tests/trust/test-layers.json', 'utf8'))
+          for (const category of manifest.categories) {
+            const evidence = JSON.parse(fs.readFileSync(category.artifact, 'utf8'))
+            if (evidence.status !== 'PROVEN') throw new Error(`${category.id}: ${JSON.stringify(evidence)}`)
+            const scenarios = new Map((evidence.scenarios || []).map((scenario) => [scenario.id, scenario]))
+            for (const id of category.requiredScenarios) {
+              if (scenarios.get(id)?.ok !== true) throw new Error(`${category.id} missing ${id}`)
+            }
+            if (evidence.appPath !== process.env.ELEPHANT_PACKAGED_APP) {
+              throw new Error(`${category.id} used another executable`)
+            }
+          }
+          NODE
+
+      - name: Upload compact proof
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: elephant-linux-basic-proof-${{ github.sha }}
+          path: |
+            basic-linux-build.txt
+            backend-contract.txt
+            frontend-behavior.txt
+            packaged-user-journey.txt
+            packaged-appimage.sha256
+            test-results/trusted/**
+          if-no-files-found: warn
+          retention-days: 3

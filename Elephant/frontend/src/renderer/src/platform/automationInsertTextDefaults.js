@@ -1,0 +1,275 @@
+const PATCH_FLAG = '__elephantCanonicalInsertTextPreflightInstalled'
+const EDITOR_INPUT_FLAG = '__elephantEditorInputDefaultsInstalled'
+const DURABILITY_FLAG = '__elephantEditorDurabilityAutomationFenceInstalled'
+
+const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
+
+const browserSelectionFor = (target, element) => target.getSelection?.() ||
+  target.window?.getSelection?.() ||
+  element?.ownerDocument?.defaultView?.getSelection?.()
+
+const selectionOffsetsWithin = (target, element) => {
+  const selection = browserSelectionFor(target, element)
+  if (!selection?.anchorNode || !selection?.focusNode) return null
+  if (
+    (selection.anchorNode !== element && !element.contains?.(selection.anchorNode)) ||
+    (selection.focusNode !== element && !element.contains?.(selection.focusNode))
+  ) return null
+
+  const offsetOf = (node, offset) => {
+    const range = element.ownerDocument.createRange()
+    range.selectNodeContents(element)
+    range.setEnd(node, offset)
+    return range.toString().length
+  }
+
+  try {
+    return {
+      anchor: offsetOf(selection.anchorNode, selection.anchorOffset),
+      focus: offsetOf(selection.focusNode, selection.focusOffset),
+      textLength: String(element.textContent || '').length
+    }
+  } catch {
+    return null
+  }
+}
+
+const textPointAt = (element, requestedOffset) => {
+  const document = element.ownerDocument
+  const showText = document.defaultView?.NodeFilter?.SHOW_TEXT ?? 4
+  const walker = document.createTreeWalker(element, showText)
+  let remaining = Math.max(0, Number(requestedOffset) || 0)
+  let node = walker.nextNode()
+  let last = null
+
+  while (node) {
+    last = node
+    const length = String(node.data || '').length
+    if (remaining <= length) return { node, offset: remaining }
+    remaining -= length
+    node = walker.nextNode()
+  }
+
+  if (last) return { node: last, offset: String(last.data || '').length }
+  return { node: element, offset: element.childNodes?.length || 0 }
+}
+
+const restoreSelection = (target, element, savedSelection) => {
+  if (!savedSelection) return false
+  const selection = browserSelectionFor(target, element)
+  if (!selection) throw new Error('Unable to restore the visible Rust selection: Selection API is unavailable')
+
+  const anchor = textPointAt(element, savedSelection.anchor)
+  const focus = textPointAt(element, savedSelection.focus)
+  try {
+    if (typeof selection.setBaseAndExtent === 'function') {
+      selection.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset)
+    } else {
+      const range = element.ownerDocument.createRange()
+      const start = savedSelection.anchor <= savedSelection.focus ? anchor : focus
+      const end = savedSelection.anchor <= savedSelection.focus ? focus : anchor
+      range.setStart(start.node, start.offset)
+      range.setEnd(end.node, end.offset)
+      selection.removeAllRanges()
+      selection.addRange(range)
+      if (savedSelection.anchor > savedSelection.focus && typeof selection.extend === 'function') {
+        selection.collapse(anchor.node, anchor.offset)
+        selection.extend(focus.node, focus.offset)
+      }
+    }
+  } catch (error) {
+    throw new Error(`Unable to restore the visible Rust selection: ${error?.name || 'Error'}: ${error?.message || String(error)}`)
+  }
+  return true
+}
+
+const terminalLineEndingEquivalent = (exported, canonical) => {
+  const exportedMatch = String(exported).match(/^(.*?)(\n*)$/s)
+  const canonicalMatch = String(canonical).match(/^(.*?)(\n*)$/s)
+  if (!exportedMatch || !canonicalMatch) return false
+  const [, exportedBody, exportedTerminalLineEndings] = exportedMatch
+  const [, canonicalBody, canonicalTerminalLineEndings] = canonicalMatch
+  if (exportedBody !== canonicalBody) return false
+  return exportedTerminalLineEndings.length > 0 || canonicalTerminalLineEndings.length > 0
+}
+
+const publishedMirrorMatchesCanonical = (published, canonicalState) => {
+  if (!published || !canonicalState || published.phase !== 'ready') return false
+  if (published.renderedMatchesCanonical !== true) return false
+  const canonicalRevision = Number(canonicalState.revision || 0)
+  const publishedRevision = Number(published.canonicalRevision ?? published.revision ?? 0)
+  const canonicalLength = String(canonicalState.markdown || '').length
+  const publishedLength = Number(published.canonicalMarkdownLength ?? published.markdownLength ?? -1)
+  return publishedRevision === canonicalRevision && publishedLength === canonicalLength
+}
+
+const canonicalSurfaceIsSynchronized = (activeMuya, canonicalState, published) => {
+  if (publishedMirrorMatchesCanonical(published, canonicalState)) return true
+  if (!canonicalState || typeof activeMuya?.getMarkdown !== 'function') return false
+  try {
+    const exported = String(activeMuya.getMarkdown() ?? '')
+    const canonical = String(canonicalState.markdown ?? '')
+    return exported === canonical || terminalLineEndingEquivalent(exported, canonical)
+  } catch {
+    return false
+  }
+}
+
+const waitForLiveRustEditor = async(target, selector, timeoutMs = 10_000) => {
+  const deadline = Date.now() + timeoutMs
+  let last = null
+
+  while (Date.now() <= deadline) {
+    const element = target.document?.querySelector?.(selector)
+    const activeMuya = target.__ELEPHANT_ACTIVE_MUYA__
+    const published = target.__ELEPHANT_MUYA_RUST_MIRROR__
+    const canonical = activeMuya?.__rustMirror?.state
+    const sameSurface = Boolean(element && activeMuya?.container === element)
+    const synchronized = canonicalSurfaceIsSynchronized(activeMuya, canonical, published)
+    const idle = Number(activeMuya?.__rustMutationGate?.pending || 0) === 0
+
+    last = {
+      element: Boolean(element),
+      activeMuya: Boolean(activeMuya),
+      sameSurface,
+      phase: published?.phase || null,
+      revision: Number(published?.revision || 0),
+      canonicalRevision: Number(canonical?.revision || 0),
+      renderedMatchesCanonical: published?.renderedMatchesCanonical === true,
+      synchronized,
+      idle
+    }
+
+    if (published?.phase === 'error') {
+      throw new Error(`Rust editor failed before visible text input: ${published.error || published.reason || 'unknown error'}`)
+    }
+    if (sameSurface && published?.phase === 'ready' && synchronized && idle) return { element, activeMuya }
+    await wait(20)
+  }
+
+  throw new Error(`The visible Rust editor did not become ready before text input: ${JSON.stringify(last)}`)
+}
+
+const liveBeforeInputTarget = (target, root) => {
+  const selection = browserSelectionFor(target, root)
+  const anchorNode = selection?.anchorNode
+  const anchorElement = anchorNode?.nodeType === 1 ? anchorNode : anchorNode?.parentElement
+  const editable = anchorElement?.closest?.('[contenteditable="true"]')
+  if (editable && (editable === root || root.contains?.(editable))) return editable
+
+  const active = root.ownerDocument?.activeElement
+  if (active && (active === root || root.contains?.(active)) && active.isContentEditable) return active
+  if (root.isContentEditable || root.getAttribute?.('contenteditable') === 'true') return root
+
+  throw new Error('The visible Rust selection is not inside a live contenteditable surface')
+}
+
+const dispatchVisibleCharacter = async(target, selector, character) => {
+  const { element, activeMuya } = await waitForLiveRustEditor(target, selector)
+  const before = activeMuya?.__rustMirror?.state
+  const beforeRevision = Number(before?.revision || 0)
+  const beforeMarkdown = String(before?.markdown || '')
+
+  element.focus?.()
+  const eventTarget = liveBeforeInputTarget(target, element)
+  const InputEventConstructor = eventTarget.ownerDocument?.defaultView?.InputEvent || target.InputEvent || target.window?.InputEvent
+  if (typeof InputEventConstructor !== 'function') throw new Error('Visible Rust text input requires InputEvent support')
+
+  const event = new InputEventConstructor('beforeinput', {
+    inputType: 'insertText',
+    data: character,
+    bubbles: true,
+    cancelable: true,
+    composed: true
+  })
+  if (event.inputType !== 'insertText') Object.defineProperty(event, 'inputType', { configurable: true, enumerable: true, value: 'insertText' })
+  if (event.data !== character) Object.defineProperty(event, 'data', { configurable: true, enumerable: true, value: character })
+
+  eventTarget.dispatchEvent(event)
+  if (!event.defaultPrevented) throw new Error('The visible Rust editor did not claim the insertText beforeinput event')
+
+  const deadline = Date.now() + 10_000
+  let last = null
+  while (Date.now() <= deadline) {
+    const live = target.__ELEPHANT_ACTIVE_MUYA__
+    const state = live?.__rustMirror?.state
+    const published = target.__ELEPHANT_MUYA_RUST_MIRROR__
+    const idle = Number(live?.__rustMutationGate?.pending || 0) === 0
+    const synchronized = canonicalSurfaceIsSynchronized(live, state, published)
+    last = {
+      revision: Number(state?.revision || 0),
+      markdownLength: String(state?.markdown || '').length,
+      phase: published?.phase || null,
+      renderedMatchesCanonical: published?.renderedMatchesCanonical === true,
+      idle,
+      synchronized
+    }
+    if (published?.phase === 'error') throw new Error(`Rust editor failed while applying visible text: ${published.error || published.reason || 'unknown error'}`)
+    if (
+      Number(state?.revision || 0) > beforeRevision &&
+      String(state?.markdown || '') !== beforeMarkdown &&
+      published?.phase === 'ready' &&
+      synchronized &&
+      idle
+    ) return state
+    await wait(20)
+  }
+
+  throw new Error(`The visible insertText event did not complete a Rust mutation: ${JSON.stringify({ beforeRevision, character, last })}`)
+}
+
+const install = (target = globalThis) => {
+  const api = target.__ELEPHANT_ACCEPTANCE_TEST__ || target.__ELEPHANT_AUTOMATION__
+  if (!api || api[PATCH_FLAG]) return false
+  if (!api[EDITOR_INPUT_FLAG] || !api[DURABILITY_FLAG] || typeof api.insertText !== 'function') return false
+
+  const originalInsertText = api.insertText.bind(api)
+  api.insertText = async(selector, value) => {
+    if (!selector || typeof selector !== 'string') throw new TypeError('insertText requires a CSS selector')
+    if (typeof value !== 'string') throw new TypeError('insertText requires a string value')
+
+    const initialElement = target.document?.querySelector?.(selector)
+    const isRustTarget = Boolean(
+      initialElement?.closest?.('[data-testid="muya-rust-runtime-editor"]') ||
+      initialElement?.querySelector?.('[data-testid="muya-rust-runtime-editor"]')
+    )
+    if (!isRustTarget) return originalInsertText(selector, value)
+
+    const savedSelection = selectionOffsetsWithin(target, initialElement)
+    const { element } = await waitForLiveRustEditor(target, selector)
+    const liveSelection = selectionOffsetsWithin(target, element)
+    if (element !== initialElement || !liveSelection) restoreSelection(target, element, savedSelection)
+
+    let characterIndex = 0
+    for (const character of value) {
+      characterIndex += 1
+      try {
+        await dispatchVisibleCharacter(target, selector, character)
+      } catch (error) {
+        const message = `Visible Rust insertText failed at character ${characterIndex}/${value.length} ${JSON.stringify(character)}: ${error?.message || String(error)}; stack=${error?.stack || 'none'}`
+        const wrappedError = new Error(message)
+        const stack = String(wrappedError.stack || '')
+        if (!stack.includes(message)) wrappedError.stack = `${wrappedError.name}: ${message}${stack ? `\n${stack}` : ''}`
+        throw wrappedError
+      }
+    }
+    return api.readDom(selector)
+  }
+
+  Object.defineProperty(api, PATCH_FLAG, { value: true, enumerable: false })
+  console.info('[automation-api] installed live Rust editor text-input preflight')
+  return true
+}
+
+const installWhenReady = async(target = globalThis) => {
+  for (let attempt = 0; attempt < 1000; attempt += 1) {
+    if (install(target)) return true
+    await wait(20)
+  }
+  console.error('[automation-api] live Rust editor text-input preflight was not installed')
+  return false
+}
+
+void installWhenReady()
+
+export { install as installCanonicalAutomationInsertText }

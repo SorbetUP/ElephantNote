@@ -325,6 +325,17 @@ const selectionBelongsToEditor = (selection, editorHost) => {
   return !!anchorElement && !!focusElement && editorHost.contains(anchorElement) && editorHost.contains(focusElement)
 }
 
+const selectionText = (selection) => {
+  if (!selection || selection.rangeCount === 0) return ''
+  const directText = selection.toString()
+  if (directText) return directText
+  try {
+    return selection.getRangeAt(0).cloneContents().textContent || ''
+  } catch {
+    return ''
+  }
+}
+
 const createCitationButton = (copyCitation, windowObject) => {
   const button = windowObject.document.createElement('button')
   button.type = 'button'
@@ -468,8 +479,9 @@ export const installNoteCitationRuntime = ({
     const noteTitle = target.document.querySelector('.en-note-title-input')?.value ||
       notePath.split('/').pop()?.replace(/\.md$/i, '') ||
       'Source'
+    const selectedText = selectionText(selection)
     const citation = buildNoteCitationMarkdown({
-      text: selection.toString(),
+      text: selectedText,
       notePath,
       noteTitle
     })
@@ -483,7 +495,7 @@ export const installNoteCitationRuntime = ({
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         path: notePath,
         title: noteTitle,
-        text: normalizeCitationText(selection.toString()),
+        text: normalizeCitationText(selectedText),
         markdown: citation,
         createdAt: new Date().toISOString()
       }
@@ -496,7 +508,7 @@ export const installNoteCitationRuntime = ({
       createFeedback('Citation copiée et ajoutée au tampon. Cliquez-la dans une autre note pour la coller.', target)
       appendDebugLog(target, 'info', '[elephantnote:citation] copied selected note text', {
         notePath,
-        selectedLength: normalizeCitationText(selection.toString()).length,
+        selectedLength: normalizeCitationText(selectedText).length,
         citationLength: citation.length,
         bufferSize: buffer.length
       })

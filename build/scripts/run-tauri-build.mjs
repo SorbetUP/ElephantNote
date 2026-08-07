@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync, mkdirSync, readdirSync, rmSync, cpSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, rmSync, cpSync, lstatSync, realpathSync } from 'node:fs'
 import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
@@ -9,19 +9,11 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const args = process.argv.slice(2)
 const configIndex = args.indexOf('--config')
 const config = configIndex >= 0 ? args[configIndex + 1] : null
+const passthroughArgs = args.filter((_, index) => index !== configIndex && index !== configIndex + 1)
 const tauriArgs = ['tauri', 'build']
+tauriArgs.push(...passthroughArgs)
 if (config) {
-  tauriArgs.push('--config', resolve(root, config))
-}
-
-const llamaResult = spawnSync('node', ['build/scripts/ensure-tauri-llama-server.mjs'], {
-  cwd: root,
-  stdio: 'inherit',
-  shell: process.platform === 'win32'
-})
-
-if (llamaResult.status !== 0) {
-  process.exit(llamaResult.status ?? 1)
+  tauriArgs.splice(2, 0, '--config', resolve(root, config))
 }
 
 const result = spawnSync('cargo', tauriArgs, {
@@ -34,10 +26,16 @@ if (result.status !== 0) {
   process.exit(result.status ?? 1)
 }
 
-const bundleRoot = join(root, 'Elephant/backend/tauri', 'target', 'release', 'bundle')
+const targetIndex = args.indexOf('--target')
+const targetTriple = targetIndex >= 0 ? args[targetIndex + 1] : process.env.TAURI_BUILD_TARGET
+const targetRoots = [
+  targetTriple ? join(root, 'Elephant/backend/tauri', 'target', targetTriple, 'release', 'bundle') : null,
+  join(root, 'Elephant/backend/tauri', 'target', 'release', 'bundle')
+].filter(Boolean)
+const bundleRoot = targetRoots.find(existsSync)
 const distRoot = join(root, 'dist')
 
-if (!existsSync(bundleRoot)) {
+if (!bundleRoot) {
   process.exit(0)
 }
 
@@ -51,8 +49,17 @@ const copyFiles = (dir) => {
       copyFiles(source)
       continue
     }
-    if (!statSync(source).isFile()) continue
-    cpSync(source, join(distRoot, entry.name), { force: true })
+
+    // Tauri's AppImage staging tree contains symlinks, including links that can
+    // resolve back into the repository dist directory. Following those links
+    // turns the flattening pass into a self-copy and makes a successful package
+    // build fail after the AppImage has already been produced.
+    const metadata = lstatSync(source)
+    if (!metadata.isFile()) continue
+
+    const destination = join(distRoot, entry.name)
+    if (existsSync(destination) && realpathSync(source) === realpathSync(destination)) continue
+    cpSync(source, destination, { force: true, dereference: false })
   }
 }
 

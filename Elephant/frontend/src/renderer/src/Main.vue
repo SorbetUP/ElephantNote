@@ -1,4 +1,5 @@
 <script setup>
+import './platform/shellKeyboardShortcuts.js'
 </script>
 
 <template>

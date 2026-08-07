@@ -259,26 +259,6 @@ pub fn tauri_notes_read(app: AppHandle, relative_path: String) -> R<Value> {
 }
 
 #[tauri::command]
-pub fn tauri_notes_write(
-    app: AppHandle,
-    relative_path: String,
-    content: Option<String>,
-    markdown: Option<String>,
-) -> R<Value> {
-    let root = active_vault_root(&app)?;
-    let path = writable_relative_path(&root, &relative_path)?;
-    let content = content.or(markdown).unwrap_or_default();
-    let changed = write_text_if_changed(&path, &content)?;
-    Ok(json!({
-      "ok": true,
-      "changed": changed,
-      "path": normalize_relative_path(&relative_path),
-      "fullPath": path.to_string_lossy(),
-      "updatedAt": now()
-    }))
-}
-
-#[tauri::command]
 pub fn tauri_marktext_write_file(app: AppHandle, pathname: String, content: String) -> R<Value> {
     if pathname.trim().is_empty() {
         return Err("Cannot save MarkText file without a pathname.".to_string());
@@ -373,7 +353,12 @@ pub fn tauri_drawings_create(app: AppHandle, title: Option<String>) -> R<Value> 
         .unwrap_or_else(|| path.strip_prefix(&root).unwrap_or(&path).to_path_buf())
         .to_string_lossy()
         .replace('\\', "/");
-    Ok(json!({ "path": public_path, "fullPath": path.to_string_lossy(), "scene": scene }))
+    Ok(json!({
+        "path": public_path,
+        "relativePath": public_path,
+        "fullPath": path.to_string_lossy(),
+        "scene": scene
+    }))
 }
 
 #[tauri::command]

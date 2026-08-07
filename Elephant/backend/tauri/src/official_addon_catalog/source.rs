@@ -34,64 +34,35 @@ fn package_prefix(item: &CatalogAddon) -> R<String> {
     .ok_or_else(|| format!("Official addon has no package directory: {}", item.id))
 }
 
-fn local_package_directory(item: &CatalogAddon) -> R<PathBuf> {
-  let prefix = package_prefix(item)?;
-  Ok(PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    .join("../../../addons")
-    .join(prefix))
-}
-
-fn bundled_package_directory(item: &CatalogAddon, addons_root: &Path) -> R<PathBuf> {
-  Ok(addons_root.join(package_prefix(item)?))
-}
-
-fn collect_local_files(root: &Path, current: &Path, files: &mut BTreeMap<String, Vec<u8>>) -> R<()> {
-  for entry in fs::read_dir(current).map_err(|error| error.to_string())? {
-    let entry = entry.map_err(|error| error.to_string())?;
-    let path = entry.path();
-    let metadata = fs::symlink_metadata(&path).map_err(|error| error.to_string())?;
-    if metadata.file_type().is_symlink() {
-      continue;
-    }
-    if metadata.is_dir() {
-      if entry.file_name() == "target" || entry.file_name() == "node_modules" || entry.file_name() == "releases" {
-        continue;
-      }
-      collect_local_files(root, &path, files)?;
-      continue;
-    }
-    if !metadata.is_file() {
-      continue;
-    }
-    if metadata.len() > MAX_PACKAGE_FILE_BYTES {
-      return Err(format!("Official addon package file is too large: {}", path.display()));
-    }
-    let relative = path
-      .strip_prefix(root)
-      .map_err(|error| error.to_string())?
-      .to_string_lossy()
-      .replace('\\', "/");
-    files.insert(relative, fs::read(&path).map_err(|error| error.to_string())?);
-  }
-  Ok(())
-}
-
 fn static_relative_imports(source: &str) -> Vec<String> {
   let mut imports = Vec::new();
-  for line in source.lines() {
-    let trimmed = line.trim();
+  let lines = source.lines().collect::<Vec<_>>();
+  let mut index = 0;
+  while index < lines.len() {
+    let trimmed = lines[index].trim();
     if !trimmed.starts_with("import ") {
+      index += 1;
       continue;
     }
+
+    let mut statement = trimmed.to_string();
+    let mut next_index = index + 1;
+    while !statement.contains(['\'', '"']) && next_index < lines.len() {
+      statement.push(' ');
+      statement.push_str(lines[next_index].trim());
+      next_index += 1;
+    }
+
     for quote in ['\'', '"'] {
-      let Some(start) = trimmed.find(quote) else { continue };
-      let rest = &trimmed[start + 1..];
+      let Some(start) = statement.find(quote) else { continue };
+      let rest = &statement[start + 1..];
       let Some(end) = rest.find(quote) else { continue };
       let candidate = &rest[..end];
       if candidate.starts_with('.') {
         imports.push(candidate.to_string());
       }
     }
+    index = next_index;
   }
   imports
 }

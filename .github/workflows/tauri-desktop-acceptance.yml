@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - develop
-      - 'agent/**'
   pull_request:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
@@ -39,7 +38,7 @@ jobs:
             platform: macos
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Linux Tauri dependencies
         if: matrix.platform == 'linux'
@@ -50,17 +49,31 @@ jobs:
           sudo apt-get install -y \
             libayatana-appindicator3-dev librsvg2-dev libwebkit2gtk-4.1-dev \
             libx11-dev libxkbfile-dev libsecret-1-dev libfontconfig-dev \
-            libgtk-3-0 libgbm1 libnss3 libasound2t64 patchelf unzip xvfb
+            libgtk-3-0 libgbm1 libnss3 libasound2t64 patchelf unzip xvfb xdotool
 
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
 
+      - uses: ./.github/actions/setup-tauri-cli
+
       - uses: ./.github/actions/setup
+
+      - name: Verify exact prebuilt wasm-bindgen CLI
+        shell: bash
+        run: |
+          set -euxo pipefail
+          VERSION=$(cargo metadata --manifest-path Elephant/crates/muya-wasm/Cargo.toml --format-version 1 \
+            | python3 -c "import json,sys; data=json.load(sys.stdin); print(next(p['version'] for p in data['packages'] if p['name']=='wasm-bindgen'))")
+          wasm-bindgen --version | grep -F "${VERSION}"
 
       - name: Validate platform contracts
         shell: bash
         run: pnpm tauri:platform:check
+
+      - name: Validate packaged editor readiness regressions
+        shell: bash
+        run: node build/scripts/verify-packaged-editor-readiness.mjs
 
       - name: Build packaged Tauri desktop application
         shell: bash
@@ -82,15 +95,37 @@ jobs:
             pnpm test:desktop:acceptance:packaged 2>&1 | tee tauri-acceptance.txt
           fi
 
-      - name: Upload Tauri acceptance evidence
-        if: always()
-        uses: actions/upload-artifact@v4
+      - name: Prove exact Linux AppImage editor durability
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          APPIMAGE="$(find Elephant/backend/tauri/target/release/bundle dist -type f -name '*.AppImage' -print -quit)"
+          test -n "$APPIMAGE"
+          test -f "$APPIMAGE"
+          chmod +x "$APPIMAGE"
+          sha256sum "$APPIMAGE" | tee appimage-sha256.txt
+          APPIMAGE_EXTRACT_AND_RUN=1 \
+          ELEPHANT_ACCEPTANCE_APP_PATH="$APPIMAGE" \
+          ELEPHANT_PACKAGED_FORMAT=linux-appimage \
+            xvfb-run --auto-servernum pnpm test:user:packaged:raw 2>&1 | tee appimage-editor-durability.txt
+
+      - name: Upload compact Tauri acceptance evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
         with:
           name: tauri-desktop-acceptance-${{ matrix.name }}
           path: |
             tauri-build.txt
             tauri-acceptance.txt
-            test-results/acceptance/**
-            dist/**
+            appimage-sha256.txt
+            appimage-editor-durability.txt
+            test-results/acceptance/**/*.json
+            test-results/acceptance/**/*.log
+            test-results/acceptance/**/*.txt
+            test-results/trusted/**/*.json
+            test-results/trusted/**/*.log
+            test-results/trusted/**/*.txt
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 3
+          compression-level: 9

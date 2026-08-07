@@ -53,9 +53,11 @@ export const createRuntimeImageHandlers = ({
 
   const insert = (image) => {
     const payload = typeof image === 'string' ? { src: image } : image || {}
+    const source = normalizeSource(payload.src || payload.source)
+    if (!String(source || '').trim()) throw new Error('Dropped image source is empty')
     return dispatch('insert-image', {
       ...payload,
-      source: normalizeSource(payload.src || payload.source)
+      source
     })
   }
 
@@ -84,9 +86,11 @@ export const createRuntimeImageHandlers = ({
   const dropped = async (files) => {
     const image = Array.from(files || []).find((file) => /image/.test(file.type || ''))
     if (!image) return false
-    const nativePath = window.tauri?.webUtils?.getPathForFile?.(image)
+    const nativePath = window.tauri?.webUtils?.getPathForFile?.(image) || image?.path || ''
     const source = await imageAction(nativePath || image, null, image.name || '')
-    if (!source) return false
+    if (!String(source || '').trim()) {
+      throw new Error(`Unable to resolve dropped image ${image.name || '<unnamed>'} to a non-empty source`)
+    }
     await insert({ source, alt: image.name || '' })
     return true
   }

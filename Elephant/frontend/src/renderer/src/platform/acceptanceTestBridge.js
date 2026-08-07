@@ -281,6 +281,15 @@ export const installAcceptanceTestBridge = ({
       range.setEnd(rangeEnd.node, rangeEnd.offset)
       const selection = target.getSelection?.() || target.document.defaultView?.getSelection?.()
       if (!selection) throw new Error('selectText requires Selection support')
+      const selectionText = () => {
+        const directText = selection.toString()
+        if (directText || selection.rangeCount === 0) return directText
+        try {
+          return selection.getRangeAt(0).cloneContents().textContent || ''
+        } catch {
+          return ''
+        }
+      }
       selection.removeAllRanges()
       selection.addRange(range)
       target.document.dispatchEvent(new target.Event('selectionchange', { bubbles: true }))
@@ -291,7 +300,7 @@ export const installAcceptanceTestBridge = ({
         log(target, 'muya:selection-sync', {
           start: selectionChanges?.start,
           end: selectionChanges?.end,
-          textLength: selection.toString().length
+          textLength: selectionText().length
         })
         if (selectionChanges?.start && selectionChanges?.end) {
           activeMuya.contentState.cursor = {
@@ -302,7 +311,7 @@ export const installAcceptanceTestBridge = ({
         }
         activeMuya.dispatchSelectionChange?.(activeMuya.contentState.cursor)
       }
-      const result = { selector, start: from, end: to, text: selection.toString() }
+      const result = { selector, start: from, end: to, text: selectionText() }
       log(target, 'dom:select-text', { selector, start: from, end: to, textLength: result.text.length })
       return result
     },
@@ -327,9 +336,10 @@ export const installAcceptanceTestBridge = ({
       return result
     },
 
-    addonState() {
+    async addonState() {
       const manager = target.__ELEPHANT_ADDONS__
       if (!manager) throw new Error('Addon manager is unavailable')
+      if (vaultStore.activeVault?.path) await manager.external?.load?.()
       const resourceNames = manager.host?.list?.() || []
       const resourceMethods = Object.fromEntries(resourceNames.map((name) => {
         const resource = manager.host?.get?.(name)
@@ -406,8 +416,16 @@ export const installAcceptanceTestBridge = ({
 
     async installOfficialAddon(id) {
       if (typeof id !== 'string' || !id.trim()) throw new TypeError('installOfficialAddon requires an addon id')
+      const manager = target.__ELEPHANT_ADDONS__
       const result = await invokeApplicationCommand(target, 'tauri_official_addons_catalog_install', { addonId: id.trim() })
-      await target.__ELEPHANT_ADDONS__?.external?.reload?.()
+      if (!manager?.external?.register || !result?.manifest?.id) throw new Error(`Official addon install returned an invalid record for ${id.trim()}`)
+      const existing = manager.get(result.manifest.id)
+      if (existing) {
+        await manager.disable(result.manifest.id).catch(() => {})
+        manager.unregister(result.manifest.id)
+      }
+      manager.external.register({ ...result, source: 'official' })
+      await manager.external.reload?.()
       log(target, 'addons:official-install:done', { id: id.trim() })
       return result
     },

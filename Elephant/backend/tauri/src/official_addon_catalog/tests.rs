@@ -103,5 +103,14 @@ mod tests {
   fn source_transport_finds_multiline_relative_imports() {
     let source = "import {\n  helper\n} from './agent.js'\n";
     assert_eq!(static_relative_imports(source), vec!["./agent.js"]);
+
+    let site_source = "import { createSitePlan } from './site-builder'\n";
+    assert_eq!(static_relative_imports(site_source), vec!["./site-builder"]);
+    assert_eq!(
+      resolve_remote_module("official/sites", "main.js", "./site-builder"),
+      Ok("official/sites/site-builder.js".to_string())
+    );
+    let css = "export const CSS = `font-family: \"Segoe UI\"; .site-main {}`";
+    assert!(static_relative_imports(css).is_empty());
   }
 }

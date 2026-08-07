@@ -40,7 +40,7 @@ fn static_relative_imports(source: &str) -> Vec<String> {
   let mut index = 0;
   while index < lines.len() {
     let trimmed = lines[index].trim();
-    if !trimmed.starts_with("import ") && !trimmed.starts_with("export ") {
+    if !trimmed.starts_with("import ") {
       index += 1;
       continue;
     }

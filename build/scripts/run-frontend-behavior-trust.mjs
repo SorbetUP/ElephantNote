@@ -188,15 +188,49 @@ try {
     await harness.action(layer, 'click', '.en-rail-icon[aria-label="Search"]')
     await harness.action(layer, 'waitFor', '.en-search-bar-input', 10_000)
     await harness.action(layer, 'fill', '.en-search-bar-input', uniqueSearchText)
-    await harness.action(layer, 'press', '.en-search-bar-input', 'Enter')
     const results = await waitForDom('.en-search-results', (value) => value?.visible && value.text.includes('Search target'), 'frontend-search-matching-result')
-    await harness.action(layer, 'fill', '.en-search-bar-input', 'no-such-frontend-result-9173')
     await harness.action(layer, 'press', '.en-search-bar-input', 'Enter')
+    await harness.action(layer, 'waitUntilGone', '.en-search-bar-input', 10_000)
+    const openedTarget = await waitForDom(
+      editorSelector,
+      (value) => value?.visible && value.text.includes(uniqueSearchText),
+      'frontend-search-open-target'
+    )
+
+    await harness.action(layer, 'click', '.en-rail-icon[aria-label="Search"]')
+    await harness.action(layer, 'waitFor', '.en-search-bar-input', 10_000)
+    await harness.action(layer, 'fill', '.en-search-bar-input', 'no-such-frontend-result-9173')
     const empty = await waitForDom('.en-search-empty', (value) => value?.visible && Boolean(value.text.trim()), 'frontend-search-empty-result')
     await harness.action(layer, 'press', '.en-search-bar-input', 'Escape')
     await harness.action(layer, 'press', '.en-search-bar-input', 'Escape')
     await harness.action(layer, 'waitUntilGone', '.en-search-bar-input', 10_000)
-    return { resultText: results.text, emptyText: empty.text }
+
+    // Search intentionally switched the active note to Search target.md. Restore the
+    // original note through the same visible Search UI instead of silently using a
+    // setup/internal open command, so the following scenarios start from a proven state.
+    await harness.action(layer, 'click', '.en-rail-icon[aria-label="Search"]')
+    await harness.action(layer, 'waitFor', '.en-search-bar-input', 10_000)
+    await harness.action(layer, 'fill', '.en-search-bar-input', 'Frontend acceptance')
+    const restoreResults = await waitForDom(
+      '.en-search-results',
+      (value) => value?.visible && value.text.includes('Frontend acceptance'),
+      'frontend-search-restore-result'
+    )
+    await harness.action(layer, 'press', '.en-search-bar-input', 'Enter')
+    await harness.action(layer, 'waitUntilGone', '.en-search-bar-input', 10_000)
+    const restoredEditor = await waitForDom(
+      editorSelector,
+      (value) => value?.visible && value.text.includes('frontend line one') && value.text.includes('frontend line two'),
+      'frontend-search-restore-original-note'
+    )
+
+    return {
+      resultText: results.text,
+      emptyText: empty.text,
+      openedTargetTextBytes: openedTarget.text.length,
+      restoreResultText: restoreResults.text,
+      restoredTextBytes: restoredEditor.text.length
+    }
   })
 
   await harness.runScenario('frontend-settings-visible-state', layer, async() => {

@@ -227,7 +227,7 @@ export const installAcceptancePhysicalSurface = async (target = globalThis) => {
           clientX: rect.left + (Math.abs(Number(point.x)) <= 1 ? Number(point.x) * rect.width : Number(point.x)),
           clientY: rect.top + (Math.abs(Number(point.y)) <= 1 ? Number(point.y) * rect.height : Number(point.y))
         }))
-        const dispatch = (name, point, buttons) => {
+        const dispatchPointer = (name, point, buttons) => {
           const init = {
             ...point,
             bubbles: true,
@@ -243,13 +243,26 @@ export const installAcceptancePhysicalSurface = async (target = globalThis) => {
           const PointerEventConstructor = target.PointerEvent || target.MouseEvent
           element.dispatchEvent(new PointerEventConstructor(name, init))
         }
+        const dispatchMouse = (name, point, buttons) => {
+          element.dispatchEvent(new target.MouseEvent(name, {
+            ...point,
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+            button: 0,
+            buttons
+          }))
+        }
         element.focus?.()
-        dispatch('pointerdown', coordinates[0], 1)
+        dispatchPointer('pointerdown', coordinates[0], 1)
+        dispatchMouse('mousedown', coordinates[0], 1)
         for (const point of coordinates.slice(1)) {
-          dispatch('pointermove', point, 1)
+          dispatchPointer('pointermove', point, 1)
+          dispatchMouse('mousemove', point, 1)
           await wait(16)
         }
-        dispatch('pointerup', coordinates.at(-1), 0)
+        dispatchPointer('pointerup', coordinates.at(-1), 0)
+        dispatchMouse('mouseup', coordinates.at(-1), 0)
         await wait(100)
         return api.readDom(selector)
       }

@@ -7,6 +7,7 @@ import { useLayoutStore } from './layout'
 
 const BUFFERED_STATE_DEBOUNCE_MS = 1000
 const BUFFERED_STATE_VERSION = 1
+const RECOVERY_BUFFER_WINDOW_ID = 'renderer-recovery'
 
 let stores = {
   editorStore: null,
@@ -60,12 +61,36 @@ const checkpointDiagnostics = {
 
 globalThis.__ELEPHANT_BUFFERED_STATE_CHECKPOINT__ = checkpointDiagnostics
 
+const persistDurableCheckpoint = async(snapshot) => {
+  const plainSnapshot = toPlainObject(snapshot)
+  const coreInvoke = window.__TAURI__?.core?.invoke
+  if (typeof coreInvoke !== 'function') {
+    throw new Error('Tauri core invoke is unavailable for durable recovery checkpoint persistence')
+  }
+
+  // The packaged desktop recovery contract requires a real durability boundary before
+  // input acknowledgement. BufferStore uses write_json_atomically(), which fsyncs the
+  // temporary file and parent directory before this command resolves.
+  await coreInvoke('tauri_buffer_save', {
+    windowId: RECOVERY_BUFFER_WINDOW_ID,
+    buffer: {
+      open_tabs: [],
+      unsaved_markdown: {},
+      window_state: plainSnapshot
+    }
+  })
+
+  // Keep the existing WebKit/localStorage mirror for migration and older installs, but
+  // never treat that mirror as the durability proof for crash recovery.
+  await window.tauri.ipcRenderer.invoke('update-buffer-state', plainSnapshot)
+}
+
 const drainCheckpoints = async() => {
   while (queuedCheckpoint) {
     const checkpoint = queuedCheckpoint
     queuedCheckpoint = null
     try {
-      await window.tauri.ipcRenderer.invoke('update-buffer-state', toPlainObject(checkpoint.snapshot))
+      await persistDurableCheckpoint(checkpoint.snapshot)
       persistedRevision = Math.max(persistedRevision, checkpoint.revision)
       checkpointError = null
       console.info('[elephantnote:recovery] checkpoint:persisted', {

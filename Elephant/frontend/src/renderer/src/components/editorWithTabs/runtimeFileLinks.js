@@ -20,6 +20,17 @@ const markDroppedUserMutation = (target = globalThis, reason = 'drop:file') => {
   target.__ELEPHANT_ACTIVE_MUYA__?.__onUserMutation?.(reason)
 }
 
+const insertDroppedMarkdown = async (markdown, dispatch, target = globalThis) => {
+  const muya = target.__ELEPHANT_ACTIVE_MUYA__
+  if (typeof muya?.__applyRust === 'function' && typeof muya?.__selection === 'function') {
+    return muya.__applyRust('drop-file-attachment', (engine) => {
+      const selection = muya.__selection().selection
+      return engine.replaceRange(selection.anchor, selection.focus, String(markdown || ''))
+    })
+  }
+  return dispatch('insert-text', markdown)
+}
+
 const escapeLabel = (value) => String(value || 'file')
   .replace(/\\/g, '\\\\')
   .replace(/([\[\]])/g, '\\$1')
@@ -100,7 +111,7 @@ export const createRuntimeFileHandlers = ({
       projectRoot: projectTree.value,
       target
     })
-    await dispatch('insert-text', attachment.markdown)
+    await insertDroppedMarkdown(attachment.markdown, dispatch, target)
     return attachment
   }
 })

@@ -61,4 +61,8 @@ export const persistPortableUserData = (key, value) => {
 }
 
 export const isPortableRuntime = () =>
-  Boolean(globalThis.__MARKTEXT_RUNTIME__ || globalThis.__TAURI__)
+  Boolean(
+    globalThis.__MARKTEXT_RUNTIME__ ||
+    globalThis.__TAURI__ ||
+    globalThis.__TAURI_INTERNALS__
+  )

@@ -43,6 +43,7 @@ import AppShell from 'elephant-front/components/shell/AppShell.vue'
 
 const isTauriRuntime = Boolean(window.__TAURI__ || window.__MARKTEXT_RUNTIME__)
 const TAURI_BUFFERED_STATE_KEY = 'elephantnote:tauri:buffer-state'
+const RECOVERY_BUFFER_WINDOW_ID = 'renderer-recovery'
 const mainStore = useMainStore()
 const editorStore = useEditorStore()
 const preferencesStore = usePreferencesStore()
@@ -74,14 +75,41 @@ watch(zoom, (zoomValue) => {
   bus.emit('mt::window-zoom', zoomValue)
 })
 
-const restoreBufferedTauriState = () => {
-  if (!isTauriRuntime) return false
-
-  const rawState = window.localStorage?.getItem(TAURI_BUFFERED_STATE_KEY)
-  if (!rawState) return false
+const readDurableBufferedTauriState = async() => {
+  const coreInvoke = window.__TAURI__?.core?.invoke
+  if (typeof coreInvoke !== 'function') return null
 
   try {
-    const state = JSON.parse(rawState)
+    const buffer = await coreInvoke('tauri_buffer_load', {
+      windowId: RECOVERY_BUFFER_WINDOW_ID
+    })
+    return buffer?.window_state || buffer?.windowState || null
+  } catch (error) {
+    console.error('[elephantnote:recovery] durable-checkpoint:load-failed', {
+      error: error?.message || String(error)
+    })
+    return null
+  }
+}
+
+const restoreBufferedTauriState = async() => {
+  if (!isTauriRuntime) return false
+
+  let state = await readDurableBufferedTauriState()
+  if (!state) {
+    const rawState = window.localStorage?.getItem(TAURI_BUFFERED_STATE_KEY)
+    if (!rawState) return false
+    try {
+      state = JSON.parse(rawState)
+    } catch (error) {
+      console.error('[elephantnote:recovery] checkpoint:restore-failed', {
+        error: error?.message || String(error)
+      })
+      return false
+    }
+  }
+
+  try {
     editorStore.RESTORE_BUFFERED_STATE(state)
     console.info('[elephantnote:recovery] checkpoint:restored', {
       currentFileId: state?.currentFileId || null,
@@ -207,7 +235,7 @@ onMounted(async () => {
   editorStore.LISTEN_FOR_RELOAD_IMAGES()
   editorStore.LISTEN_FOR_CONTEXT_MENU()
   editorStore.LISTEN_FOR_STATE_REPLACE()
-  const restoredBufferedState = restoreBufferedTauriState()
+  const restoredBufferedState = await restoreBufferedTauriState()
   if (restoredBufferedState) {
     stopRecoveredNoteVisibilityWatch = watch(
       () => [vaultStore.activeVault?.path, editorStore.currentFile?.pathname],

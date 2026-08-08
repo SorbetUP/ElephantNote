@@ -43,8 +43,7 @@ let mountGeneration = 0
 let syncTimer = null
 let syncRequested = false
 let syncInFlight = null
-let internalPropUpdatePending = false
-let internalPropResetTimer = null
+let internalPropEchoes = []
 let userMutationObserved = false
 let disposeUserMutationBoundary = () => {}
 
@@ -52,6 +51,16 @@ const markUserMutation = (reason) => {
   if (userMutationObserved) return
   userMutationObserved = true
   console.info('[elephantnote:rust-editor] user-mutation-boundary:opened', { reason })
+}
+
+const handleFileDrop = (...args) => {
+  markUserMutation('drop:file-callback')
+  return props.onFileDrop?.(...args)
+}
+
+const handleUriDrop = (...args) => {
+  markUserMutation('drop:uri-callback')
+  return props.onUriDrop?.(...args)
 }
 
 const isMutatingBeforeInput = (event) => {
@@ -62,18 +71,29 @@ const isMutatingBeforeInput = (event) => {
     inputType.startsWith('format')
 }
 
-const installUserMutationBoundary = () => {
-  const root = rootRef.value
+const isMutatingKeyDown = (event) => {
+  if (event?.isComposing) return false
+  const key = String(event?.key || '')
+  if (key === 'Enter' || key === 'Backspace' || key === 'Delete') return true
+  return key.length === 1 && !event?.ctrlKey && !event?.metaKey && !event?.altKey
+}
+
+const installUserMutationBoundary = (root = rootRef.value) => {
   if (!root) return () => {}
   const beforeInput = (event) => {
     if (isMutatingBeforeInput(event)) markUserMutation(`beforeinput:${event.inputType}`)
   }
+  const keyDown = (event) => {
+    if (isMutatingKeyDown(event)) markUserMutation(`keydown:${event.key}`)
+  }
   const paste = () => markUserMutation('paste')
   const drop = () => markUserMutation('drop')
+  root.addEventListener('keydown', keyDown, true)
   root.addEventListener('beforeinput', beforeInput, true)
   root.addEventListener('paste', paste, true)
   root.addEventListener('drop', drop, true)
   return () => {
+    root.removeEventListener('keydown', keyDown, true)
     root.removeEventListener('beforeinput', beforeInput, true)
     root.removeEventListener('paste', paste, true)
     root.removeEventListener('drop', drop, true)
@@ -115,13 +135,14 @@ const readRuntimeMarkdown = async () => {
   return runtimeMarkdown
 }
 
-const markInternalPropUpdate = () => {
-  internalPropUpdatePending = true
-  if (internalPropResetTimer) window.clearTimeout(internalPropResetTimer)
-  internalPropResetTimer = window.setTimeout(() => {
-    internalPropResetTimer = null
-    internalPropUpdatePending = false
-  }, 0)
+const markInternalPropUpdate = (markdown) => {
+  internalPropEchoes.push(String(markdown || ''))
+  if (internalPropEchoes.length > 32) internalPropEchoes.splice(0, internalPropEchoes.length - 32)
+}
+
+const equivalentTrailingParagraph = (left, right) => {
+  const normalize = (value) => String(value || '').replace(/\n+$/, '')
+  return normalize(left) === normalize(right)
 }
 
 const flushMarkdownSync = () => {
@@ -146,7 +167,7 @@ const flushMarkdownSync = () => {
             if (!syncRequested) break
             continue
           }
-          markInternalPropUpdate()
+          markInternalPropUpdate(next)
           emit('update:modelValue', next)
           emit('change', next)
         }
@@ -182,11 +203,7 @@ const destroyRuntime = () => {
     window.clearTimeout(syncTimer)
     syncTimer = null
   }
-  if (internalPropResetTimer) {
-    window.clearTimeout(internalPropResetTimer)
-    internalPropResetTimer = null
-  }
-  internalPropUpdatePending = false
+  internalPropEchoes = []
   userMutationObserved = false
   disposeUserMutationBoundary()
   disposeUserMutationBoundary = () => {}
@@ -234,6 +251,7 @@ const createCompatBridge = (muya) => {
 
 const mountRuntime = async (markdown) => {
   const generation = ++mountGeneration
+  const hostElement = rootRef.value
   console.info('[elephantnote:rust-editor] mount:start', {
     generation,
     markdownLength: String(markdown || '').length,
@@ -243,39 +261,47 @@ const mountRuntime = async (markdown) => {
   destroyRuntime()
   errorMessage.value = ''
   runtimeMarkdown = String(markdown || '')
-  rootRef.value?.replaceChildren()
-  disposeUserMutationBoundary()
-  disposeUserMutationBoundary = installUserMutationBoundary()
+  if (!hostElement || rootRef.value !== hostElement || !hostElement.isConnected) {
+    if (generation === mountGeneration) reportError(new Error('Rust Muya runtime host is unavailable.'))
+    return
+  }
+
+  // Muya replaces the element passed to its constructor. Mount it through a
+  // disposable child so Vue retains ownership of one stable connected host
+  // across programmatic document replacements and asynchronous remounts.
+  hostElement.replaceChildren()
+  const mountElement = document.createElement('div')
+  mountElement.className = 'muya-rust-runtime-mount'
+  hostElement.append(mountElement)
 
   try {
     let nextRuntime
+    let activeMuya = null
     if (typeof props.factory === 'function') {
       nextRuntime = await initializeExperimentalRustRuntime(
         { markdown: runtimeMarkdown },
         {
           factory: props.factory,
-          domContainer: rootRef.value,
+          domContainer: mountElement,
           captureInput: true,
           applyPatches: scheduleMarkdownSync,
-          onFileDrop: props.onFileDrop,
-          onUriDrop: props.onUriDrop,
+          onFileDrop: handleFileDrop,
+          onUriDrop: handleUriDrop,
           onImageClick: props.onImageClick
         },
         reportError
       )
     } else {
-      const muya = new StableCompleteMuyaWithRustCore(rootRef.value, {
+      const muya = new StableCompleteMuyaWithRustCore(mountElement, {
         markdown: runtimeMarkdown,
         t: (key) => key,
-        onFileDrop: props.onFileDrop,
-        onUriDrop: props.onUriDrop,
+        onFileDrop: handleFileDrop,
+        onUriDrop: handleUriDrop,
         onImageClick: props.onImageClick
       })
-      // The compatibility adapter starts the Rust session asynchronously in its
-      // constructor. Do not expose the editor or let Vue reconcile a canonical
-      // change until that session exists on the Tauri side.
       await muya.__rustMirror?.ready
       await muya.__rustCanonicalReady
+      activeMuya = muya
       nextRuntime = {
         muya,
         bridge: createCompatBridge(muya),
@@ -288,7 +314,6 @@ const mountRuntime = async (markdown) => {
           if (globalThis.__ELEPHANT_ACTIVE_MUYA__ === muya) delete globalThis.__ELEPHANT_ACTIVE_MUYA__
         }
       }
-      globalThis.__ELEPHANT_ACTIVE_MUYA__ = muya
       muya.__onUserMutation = markUserMutation
       muya.on('change', (detail = {}) => {
         runtimeMarkdown = String(detail.markdown ?? muya.getMarkdown() ?? '')
@@ -301,20 +326,26 @@ const mountRuntime = async (markdown) => {
           })
           return
         }
-        // The parent receives this value from the active Rust/Muya instance.
-        // Mark it before emitting so Vue does not interpret its own echo as an
-        // external document replacement and remount the editor mid-selection.
-        markInternalPropUpdate()
+        markInternalPropUpdate(runtimeMarkdown)
         emit('update:modelValue', runtimeMarkdown)
         emit('change', runtimeMarkdown)
       })
       muya.on('crashed', () => reportError(new Error('Muya JS/Rust editor crashed.')))
     }
-    if (generation !== mountGeneration) {
-      nextRuntime.destroy()
+    const mountedElement = nextRuntime?.domContainer || mountElement
+    if (
+      generation !== mountGeneration ||
+      rootRef.value !== hostElement ||
+      !hostElement.isConnected ||
+      !mountedElement?.isConnected ||
+      !hostElement.contains(mountedElement)
+    ) {
+      nextRuntime?.destroy?.()
       return
     }
+    disposeUserMutationBoundary = installUserMutationBoundary(mountedElement)
     runtime = nextRuntime
+    if (activeMuya) globalThis.__ELEPHANT_ACTIVE_MUYA__ = activeMuya
     console.info('[elephantnote:rust-editor] mount:ready', {
       generation,
       revision: runtime.bridge.revision,
@@ -347,12 +378,21 @@ watch(
       runtimeLength: runtimeMarkdown.length,
       revision: runtime?.bridge?.revision ?? null
     })
-    if (internalPropUpdatePending) {
-      internalPropUpdatePending = false
-      if (internalPropResetTimer) {
-        window.clearTimeout(internalPropResetTimer)
-        internalPropResetTimer = null
-      }
+    const echoIndex = internalPropEchoes.indexOf(normalized)
+    if (echoIndex >= 0) {
+      // Vue and the parent document adapter can deliver internally emitted values
+      // out of order while Rust is accepting rapid physical keystrokes. Remove only
+      // the observed echo; dropping all earlier entries makes a late older echo look
+      // external and remounts the live contenteditable in the middle of typing.
+      internalPropEchoes.splice(echoIndex, 1)
+      return
+    }
+    if (!userMutationObserved && equivalentTrailingParagraph(normalized, runtimeMarkdown)) {
+      console.info('[elephantnote:rust-editor] retained active runtime for equivalent pre-interaction trailing paragraph', {
+        generation: mountGeneration,
+        nextLength: normalized.length,
+        runtimeLength: runtimeMarkdown.length
+      })
       return
     }
     if (normalized !== runtimeMarkdown) void mountRuntime(normalized)
@@ -361,15 +401,15 @@ watch(
 
 watch(
   () => props.onFileDrop,
-  (callback) => {
-    if (runtime?.inputController) runtime.inputController.onFileDrop = callback || null
+  () => {
+    if (runtime?.inputController) runtime.inputController.onFileDrop = handleFileDrop
   }
 )
 
 watch(
   () => props.onUriDrop,
-  (callback) => {
-    if (runtime?.inputController) runtime.inputController.onUriDrop = callback || null
+  () => {
+    if (runtime?.inputController) runtime.inputController.onUriDrop = handleUriDrop
   }
 )
 
@@ -402,6 +442,10 @@ onBeforeUnmount(() => {
   min-height: 100%;
   outline: none;
   white-space: pre-wrap;
+}
+
+.muya-rust-runtime-mount {
+  min-height: 100%;
 }
 
 .muya-rust-runtime-error {

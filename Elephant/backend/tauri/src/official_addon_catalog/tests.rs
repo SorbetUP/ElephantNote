@@ -15,6 +15,14 @@ mod tests {
     .unwrap()
   }
 
+  fn temporary_bundle_root(name: &str) -> PathBuf {
+    let nanos = std::time::SystemTime::now()
+      .duration_since(std::time::UNIX_EPOCH)
+      .map(|duration| duration.as_nanos())
+      .unwrap_or(0);
+    std::env::temp_dir().join(format!("elephant-{name}-{}-{nanos}", std::process::id()))
+  }
+
   #[test]
   fn integrated_catalog_contains_dashboard_and_mobile_code_execution() {
     let addons = catalog().unwrap();
@@ -97,6 +105,46 @@ mod tests {
     let item = sync_item("1.3.0");
     assert!(!uses_legacy_sync_package(&item));
     assert!(!available_for_platform(&item, "macos-aarch64"));
+  }
+
+  #[test]
+  fn bundled_sync_is_packaged_without_a_remote_release() {
+    let item = sync_item("1.3.0");
+    let root = temporary_bundle_root("bundled-sync");
+    let package_root = root.join("official/sync");
+    let platform = platform_key();
+    let executable = if platform.starts_with("windows-") {
+      "elephant-sync-service.exe"
+    } else {
+      "elephant-sync-service"
+    };
+    let sidecar = format!("native/{platform}/{executable}");
+    fs::create_dir_all(package_root.join(format!("native/{platform}"))).unwrap();
+    fs::write(
+      package_root.join("manifest.json"),
+      serde_json::to_vec_pretty(&serde_json::json!({
+        "id": item.id,
+        "name": item.name,
+        "version": item.version,
+        "runtime": { "type": "javascript-worker", "entry": "main.service.js", "mode": "trusted" },
+        "permissions": { "native": true },
+        "native": {
+          "runner": "service",
+          "sidecars": { (platform): sidecar.clone() }
+        }
+      }))
+      .unwrap(),
+    )
+    .unwrap();
+    fs::write(package_root.join("main.service.js"), b"export default {};").unwrap();
+    fs::write(package_root.join(&sidecar), b"real bundled service fixture").unwrap();
+
+    let archive = temporary_package(&item, Some(&root)).expect("bundle must be packaged without a download");
+    let bytes = fs::read(&archive).unwrap();
+    validate_prebuilt_package(&item, &bytes).expect("bundled archive contains its declared service");
+
+    let _ = fs::remove_file(archive);
+    let _ = fs::remove_dir_all(root);
   }
 
   #[test]

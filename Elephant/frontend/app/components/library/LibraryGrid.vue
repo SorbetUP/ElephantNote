@@ -48,6 +48,7 @@
 
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
+import bus from '@/bus'
 import log from '@/platform/runtimeLogShim'
 import { useVaultStore } from '../../stores/vaultStore'
 import { useNavigationStore } from '../../stores/navigationStore'
@@ -76,6 +77,7 @@ const directoryGeneration = ref(0)
 
 const normalizeSlashPath = (value = '') => String(value || '').split(String.fromCharCode(92)).join('/')
 const isMarkdownNotePath = (path = '') => /[.]md$/i.test(String(path || ''))
+const isExcalidrawPath = (path = '') => /[.]excalidraw(?:[.]png)?$/i.test(String(path || ''))
 const entryArray = (value) => Array.isArray(value) ? value : []
 
 const isCompatibilityRootWikiEntry = (entry) => {
@@ -236,7 +238,15 @@ const openEntry = async (entry) => {
     store.openNote(entry)
     return
   }
-  log.warn('[library] ignored non-markdown entry open request', {
+  if (isExcalidrawPath(entry?.path)) {
+    const source = store.activeVault?.path
+      ? window.path.join(store.activeVault.path, entry.path)
+      : entry.path
+    bus.emit('open-excalidraw-from-image', source)
+    log.info('[library] opened Excalidraw entry', { path: entry.path, source })
+    return
+  }
+  log.warn('[library] ignored unsupported entry open request', {
     path: entry?.path || '',
     type: entry?.type || '',
     kind

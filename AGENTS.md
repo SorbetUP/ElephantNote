@@ -5,13 +5,13 @@ These instructions apply to the entire repository. A more local `AGENTS.md` may 
 ## Repository truth
 
 - `develop` is the current product baseline. Preserve its working editor, vault, navigation, settings, rendering, persistence, desktop and mobile behavior unless the user explicitly requests a change.
-- The official add-on migration is not presumed correct merely because packages build or unit tests pass. Treat every migrated add-on as unverified until its real user path is proven.
+- The official add-on migration is not presumed correct merely because packages build or static/Rust contract checks pass. Treat every migrated add-on as unverified until its real user path is proven.
 - Historical working branches, commits and pull requests are source material. When a working implementation exists, integrate that implementation. Do not recreate an approximation from memory.
-- The application, not the test suite, is the final source of truth.
+- The application, not a test count or a static check, is the final source of truth.
 
 ## Prime directive
 
-Preserve known-working behavior and make the smallest correct change. It is better to stop with a precise `BLOCKED` or `NOT PROVEN` report than to invent an implementation, weaken a test, hide an error, fake a runtime, or claim success without evidence.
+Preserve known-working behavior and make the smallest correct change. It is better to stop with a precise `BLOCKED` or `NOT PROVEN` report than to invent an implementation, weaken a product scenario, hide an error, fake a runtime, or claim success without evidence.
 
 ## Mandatory workflow before editing
 
@@ -35,7 +35,7 @@ When an earlier branch, commit or PR contains a working implementation:
 
 - inspect its full diff and dependencies;
 - merge, cherry-pick or transplant the actual implementation with traceable provenance;
-- preserve its UI, state model, API contracts, tests and runtime wiring;
+- preserve its UI, state model, API contracts, runtime wiring and real acceptance scenarios;
 - resolve conflicts deliberately, file by file;
 - document the source branch and commit SHA in the delivery report.
 
@@ -64,7 +64,7 @@ Unless the user explicitly requests a redesign, preserve:
 - loading, empty, success and error states;
 - accessibility behavior.
 
-Before an extraction, capture the baseline with screenshots, DOM/selector checks and persisted-state fixtures. After the extraction, compare against that baseline.
+Before an extraction, capture the baseline with screenshots, semantic UI snapshots and persisted-state fixtures. After the extraction, compare against that baseline through the real application.
 
 Do not introduce replacement interfaces, generic settings cards, duplicate pages, extra wrappers, temporary panels or new navigation merely because they are easier to implement.
 
@@ -90,7 +90,7 @@ A core-to-add-on migration is complete only when all of the following are proven
 
 ### Lifecycle
 
-Test the complete lifecycle from a clean profile and clean vault:
+Exercise the complete lifecycle from a clean profile and clean vault:
 
 1. app starts without the add-on;
 2. add-on installs from its real package;
@@ -115,18 +115,18 @@ Packaging or registration alone is not functional validation.
 
 ### Official add-on proof
 
-For official add-on changes, run the existing focused tests and the real Tauri acceptance scenario. At minimum, use the relevant commands among:
+For official add-on changes, run the trust guard and the real Tauri acceptance scenarios. Use the relevant commands among:
 
 ```bash
 node build/scripts/verify-agent-governance.mjs
-pnpm test:unit
+pnpm test:trust:guard
 pnpm test:official-addons:e2e
 pnpm test:desktop:acceptance
 pnpm test:desktop:acceptance:packaged
 pnpm prod:check
 ```
 
-The exact command set depends on the changed surface, but unit-only proof is never enough for a user-visible add-on claim.
+Static checks, package creation and Rust contract tests are useful diagnostics but are never enough for a user-visible add-on claim.
 
 ## AI and runtime engines, including Marvin
 
@@ -169,7 +169,7 @@ Use a modular, explicit architecture instead of accumulating patches.
 - Validate data at boundaries.
 - Make ownership and lifecycle cleanup obvious.
 - Use typed or schema-checked contracts where the codebase supports them.
-- Keep functions small enough to understand and test.
+- Keep functions small enough to understand and validate.
 - Remove dead compatibility code only after parity is proven.
 
 Forbidden without explicit justification:
@@ -195,7 +195,7 @@ For every affected user action, capture the applicable events across renderer, h
 - correlation/request ID;
 - add-on ID, command/resource/service name;
 - sanitized paths and selected runtime executable;
-- relevant payload shape, never credentials or private note content unless the test fixture is synthetic;
+- relevant payload shape, never credentials or private note content unless the fixture is synthetic;
 - state transition;
 - duration;
 - exit code, signal and stderr summary for subprocesses;
@@ -206,58 +206,73 @@ Errors must be both visible to the user and present in retrievable logs. Do not 
 
 When a task asks for logs, prove the log entries by running the failing or successful scenario and include the resulting log path or captured artifact. Merely adding logging statements is not runtime proof.
 
-## Test integrity rules
+## Test trust rules
 
 Read and obey:
 
-- `agent/skill/test-integrity/SKILL.md`
+- `tests/AGENTS.md`
+- `tests/TEST_TRUST_POLICY.md`
 - `agent/skill/truthful-delivery/SKILL.md`
 - `agent/skill/real-implementation/SKILL.md`
 - `agent/skill/completion-audit/SKILL.md`
 - `agent/skill/elephant-change-safety/SKILL.md`
+
+### Removed legacy JavaScript test system
+
+The following are forbidden from returning anywhere in the repository:
+
+- JavaScript or TypeScript `.spec` or `.test` files;
+- Vitest, jsdom and their configuration;
+- generated or loop-inflated test counts;
+- source-text assertions presented as behavior proof;
+- helpers or mocks that replace the subsystem being claimed;
+- workflows that invoke deleted unit-test paths;
+- the obsolete scripts that merely counted `it()` and `expect()` calls.
+
+Static architectural invariants must be explicit executable guards under `build/scripts/`. They are not behavior tests and must never be reported as product proof.
 
 ### Red-before-green requirement
 
 For every bug fix or regression:
 
 1. reproduce the broken behavior on the pre-fix revision;
-2. add or identify a test that fails for that exact behavior;
+2. add or identify the real application scenario or Rust contract that fails for that exact behavior;
 3. retain the failure output;
 4. apply the smallest fix;
-5. show the same test passing afterward;
-6. run the broader relevant suites;
-7. run the real application scenario.
+5. show the same scenario or contract passing afterward;
+6. run the broader relevant real application scenarios;
+7. retain UI, state, disk and log evidence.
 
-When practical, temporarily break the implementation after writing a new test to demonstrate that the test turns red, then restore the implementation. A test that remains green when the behavior is removed is not evidence.
+Every new product-proof suite must also demonstrate mutation sensitivity: temporarily break the protected behavior, confirm the scenario becomes red, restore the implementation, then confirm the unmodified application becomes green. A suite that remains green under the mutation is defective.
 
-### Tests may not redefine success
+### Validation may not redefine success
 
 Do not:
 
 - weaken or delete an assertion to accommodate a regression;
-- update snapshots without manually inspecting the behavioral change;
-- change expected UI or API output unless the task explicitly changes the contract;
+- update expected UI/API output unless the task explicitly changes the contract;
 - mock the implementation being claimed;
 - test a reduced helper and claim the complete product path works;
 - accept any truthy value when a precise effect can be asserted;
-- catch the tested error and ignore it;
-- skip a failing test without an explicit user-approved reason;
+- catch the expected error and ignore it;
+- skip a failing scenario without an explicit user-approved reason;
 - mark flaky or platform-dependent behavior as passing without evidence.
 
-Every changed test must state which product behavior it protects and which concrete defect makes it fail.
+Every changed scenario must state which product behavior it protects and which concrete defect makes it fail.
 
 ## Real application validation
 
-Compilation, linting, unit tests, package creation and mocked browser tests are separate evidence classes. None alone proves that Elephant works.
+Compilation, linting, Cargo contracts, package creation and static guards are separate evidence classes. None alone proves that Elephant works.
 
 For desktop behavior, use the real Tauri application and, when the claim concerns distributable behavior, the packaged application:
 
 ```bash
+pnpm test
 pnpm test:desktop:acceptance
 pnpm test:desktop:acceptance:packaged
 ```
 
-The acceptance run must use a clean temporary profile/vault and retain renderer, Tauri and add-on logs plus generated artifacts.
+The acceptance run must use a clean temporary profile/vault and retain semantic UI snapshots, renderer/Tauri/add-on logs, application state and persisted artifacts.
 
 For Android behavior, build and install the new APK on an emulator or physical device, clear prior app state when appropriate, exercise the real permission and document-provider flow, kill and relaunch the process, and retain `adb logcat` plus screenshots/video. Desktop simulation does not prove Android behavior.
 
@@ -270,24 +285,24 @@ Before final delivery:
 - validate from the exact final commit;
 - use a clean checkout or equivalent clean CI workspace;
 - remove stale build outputs when they could affect the result;
-- use a fresh test vault/profile for lifecycle tests;
+- use a fresh test vault/profile for lifecycle scenarios;
 - verify that no unrelated feature regressed;
-- inspect the final diff for accidental generated files, duplicate code, test weakening and missing cleanup.
+- inspect the final diff for accidental generated files, duplicate code, weakened evidence and missing cleanup.
 
 ## Scope control
 
 - One bug or bounded migration at a time.
 - No opportunistic redesign.
-- No mass refactor bundled with a fix.
-- No new framework, abstraction or custom language unless the existing acceptance harness cannot express the required scenario and the limitation is demonstrated.
-- Extend the existing observable Tauri acceptance runner before inventing a second automation system.
-- Keep commits reviewable and attributable.
+- No mass refactor bundled with a fix unless the user explicitly orders removal of the affected system.
+- No new framework, abstraction or custom language unless the existing automation API cannot express the required scenario and the limitation is demonstrated.
+- Extend the existing observable Tauri automation API before inventing a second automation system.
+- Keep commits reviewable and attributable on one task branch.
 
 ## Delivery and claim policy
 
 Every final claim must use one of these states:
 
-- `PROVEN`: exact runtime/test evidence from the final commit exists.
+- `PROVEN`: exact runtime evidence from the final commit exists.
 - `PARTIALLY PROVEN`: some evidence exists, but a required platform/runtime check is missing.
 - `NOT PROVEN`: implementation or static inspection exists without sufficient execution evidence.
 - `BLOCKED`: a named blocker prevents proof or completion.
@@ -299,25 +314,26 @@ A delivery report must include:
 - source branch/commit provenance when code was integrated;
 - files and behavior changed;
 - exact commands executed;
-- pre-fix failure evidence;
+- pre-fix or mutation failure evidence;
 - post-fix evidence;
 - runtime environment and platform;
 - log and artifact paths;
-- tests changed and why;
+- scenarios or Rust contracts changed and why;
 - what remains unproven or broken.
 
 Forbidden unsupported phrases include:
 
 - `everything works`;
-- `all tests pass` without exact command and final result;
+- `all tests pass`;
 - `fully validated` without real runtime proof;
 - `the engine works` after only a status probe;
 - `logs were added` without an executed log artifact;
 - `merged the branch` when the feature was manually recreated;
-- `production-ready` without packaged and platform-appropriate validation.
+- `production-ready` without packaged and platform-appropriate validation;
+- any legacy test count presented as evidence.
 
 ## Definition of done
 
-A task is done only when the requested product behavior is implemented through the real production path, the original regression is proven, meaningful tests fail before and pass after, the real application scenario succeeds on the required platform, logs and artifacts are retained, the final diff is clean, and every remaining limitation is reported honestly.
+A task is done only when the requested product behavior is implemented through the real production path, the original regression is reproduced or a relevant mutation is proven red, the unmodified real application scenario succeeds on the required platform, logs and artifacts are retained, the final diff is clean, and every remaining limitation is reported honestly.
 
 When any required item is missing, the task is not done. State the missing proof instead of pretending otherwise.

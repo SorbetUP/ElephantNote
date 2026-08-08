@@ -19,6 +19,16 @@
         <FolderPlus class="en-create-icon" />
         <span>{{ busyAction === 'folder' ? 'Creating…' : 'New folder' }}</span>
       </button>
+      <button
+        class="en-create-button en-create-excalidraw-button"
+        type="button"
+        :disabled="isBusy || !store.hasVault"
+        aria-label="New Excalidraw"
+        @click="isExcalidrawOpen = true"
+      >
+        <PenTool class="en-create-icon" />
+        <span>New Excalidraw</span>
+      </button>
       <span
         v-if="actionError"
         class="en-library-action-error"
@@ -65,17 +75,28 @@
       </div>
     </div>
   </div>
+
+  <ExcalidrawDialog
+    v-if="isExcalidrawOpen"
+    file-name="drawing.excalidraw.png"
+    :theme="theme"
+    @close="isExcalidrawOpen = false"
+    @save="handleExcalidrawSave"
+  />
 </template>
 
 <script setup>
 import { computed, ref } from 'vue'
-import { FilePlus2, FolderPlus, Grid3x3, List } from '@lucide/vue'
+import { FilePlus2, FolderPlus, Grid3x3, List, PenTool } from '@lucide/vue'
 import { useVaultStore } from '../../stores/vaultStore'
+import ExcalidrawDialog from '../editor/ExcalidrawDialog.vue'
 
 const store = useVaultStore()
 const busyAction = ref('')
 const actionError = ref('')
+const isExcalidrawOpen = ref(false)
 const isBusy = computed(() => !!busyAction.value)
+const theme = computed(() => window.localStorage.getItem('elephantnote:theme') || 'light')
 
 const runCreateAction = async (action, callback) => {
   if (isBusy.value || !store.hasVault) return
@@ -93,6 +114,40 @@ const runCreateAction = async (action, callback) => {
 
 const createNote = () => runCreateAction('note', () => store.createNote())
 const createFolder = () => runCreateAction('folder', () => store.createFolder())
+const handleExcalidrawSave = async (payload) => {
+  if (!payload?.imageBlob || !store.activeVault?.path) return
+  actionError.value = ''
+  try {
+    const created = await window.elephantnote?.drawings?.create?.({ title: payload.baseName || 'drawing' })
+    const relativePath = created?.relativePath || created?.path
+    if (!relativePath) throw new Error('The drawing backend did not return a path.')
+
+    let scene
+    try {
+      scene = JSON.parse(payload.sceneBlob || '{}')
+    } catch (error) {
+      throw new Error(`The Excalidraw scene is not valid JSON: ${error?.message || String(error)}`)
+    }
+
+    await window.elephantnote?.drawings?.write?.({
+      relativePath,
+      scene
+    })
+
+    const previewRelativePath = `${relativePath}.png`
+    const previewPath = window.path?.join?.(store.activeVault.path, previewRelativePath)
+    if (!previewPath || typeof window.fileUtils?.writeFile !== 'function') {
+      throw new Error('The desktop file service cannot persist the Excalidraw PNG preview.')
+    }
+    await window.fileUtils.writeFile(previewPath, payload.imageBlob, 'binary')
+
+    isExcalidrawOpen.value = false
+    await store.openDirectory(store.currentPath || '', { record: false })
+  } catch (error) {
+    actionError.value = error?.message || 'Unable to save Excalidraw.'
+    console.error('[library] save Excalidraw failed', error)
+  }
+}
 </script>
 
 <style scoped>
@@ -220,7 +275,7 @@ const createFolder = () => runCreateAction('folder', () => store.createFolder())
   height: 22px;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1120px) {
   .en-library-toolbar {
     min-height: 132px;
     align-items: flex-start;

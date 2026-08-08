@@ -4,10 +4,19 @@
     class="en-note-topbar"
     @click.stop
   >
+    <label
+      class="en-visually-hidden"
+      for="elephant-note-title"
+    >
+      Note title
+    </label>
     <input
+      id="elephant-note-title"
       class="en-note-title-input"
+      name="note-title"
       type="text"
       :value="title"
+      placeholder="Note title"
       aria-label="Note title"
       @change="$emit('update-title', $event.target.value)"
     >
@@ -297,6 +306,18 @@ watch(
   height: 1px;
   background: color-mix(in srgb, var(--en-border) 42%, transparent);
   pointer-events: none;
+}
+
+.en-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .en-note-title-input {

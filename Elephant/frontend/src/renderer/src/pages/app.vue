@@ -38,14 +38,18 @@ import { useCommandCenterStore } from '@/store/commandCenter'
 import { useProjectStore } from '@/store/project'
 import { useAutoUpdatesStore } from '@/store/autoUpdates'
 import { useNotificationStore } from '@/store/notification'
+import { useVaultStore } from 'elephant-front/stores/vaultStore'
 import AppShell from 'elephant-front/components/shell/AppShell.vue'
 
 const isTauriRuntime = Boolean(window.__TAURI__ || window.__MARKTEXT_RUNTIME__)
+const TAURI_BUFFERED_STATE_KEY = 'elephantnote:tauri:buffer-state'
+const RECOVERY_BUFFER_WINDOW_ID = 'renderer-recovery'
 const mainStore = useMainStore()
 const editorStore = useEditorStore()
 const preferencesStore = usePreferencesStore()
 const layoutStore = useLayoutStore()
 const projectStore = useProjectStore()
+const vaultStore = useVaultStore()
 const tweetStore = useTweetStore()
 const listenForMainStore = useListenForMainStore()
 const autoUpdateStore = useAutoUpdatesStore()
@@ -54,6 +58,7 @@ const notificationStore = useNotificationStore()
 
 let importDialogHideTimer = null
 let dragOverHandler = null
+let stopRecoveredNoteVisibilityWatch = null
 
 const { init } = storeToRefs(mainStore)
 const { theme, customCss, zoom } = storeToRefs(preferencesStore)
@@ -69,6 +74,78 @@ watch(customCss, (value, oldValue) => {
 watch(zoom, (zoomValue) => {
   bus.emit('mt::window-zoom', zoomValue)
 })
+
+const readDurableBufferedTauriState = async() => {
+  const coreInvoke = window.__TAURI__?.core?.invoke
+  if (typeof coreInvoke !== 'function') return null
+
+  try {
+    const buffer = await coreInvoke('tauri_buffer_load', {
+      windowId: RECOVERY_BUFFER_WINDOW_ID
+    })
+    return buffer?.window_state || buffer?.windowState || null
+  } catch (error) {
+    console.error('[elephantnote:recovery] durable-checkpoint:load-failed', {
+      error: error?.message || String(error)
+    })
+    return null
+  }
+}
+
+const restoreBufferedTauriState = async() => {
+  if (!isTauriRuntime) return false
+
+  let state = await readDurableBufferedTauriState()
+  if (!state) {
+    const rawState = window.localStorage?.getItem(TAURI_BUFFERED_STATE_KEY)
+    if (!rawState) return false
+    try {
+      state = JSON.parse(rawState)
+    } catch (error) {
+      console.error('[elephantnote:recovery] checkpoint:restore-failed', {
+        error: error?.message || String(error)
+      })
+      return false
+    }
+  }
+
+  try {
+    editorStore.RESTORE_BUFFERED_STATE(state)
+    console.info('[elephantnote:recovery] checkpoint:restored', {
+      currentFileId: state?.currentFileId || null,
+      tabCount: Array.isArray(state?.tabs) ? state.tabs.length : 0
+    })
+    return true
+  } catch (error) {
+    console.error('[elephantnote:recovery] checkpoint:restore-failed', {
+      error: error?.message || String(error)
+    })
+    return false
+  }
+}
+
+const restoreRecoveredNoteVisibility = () => {
+  const vaultRoot = String(vaultStore.activeVault?.path || '')
+  const recoveredPath = String(editorStore.currentFile?.pathname || '')
+  if (!vaultRoot || !recoveredPath) return false
+
+  const normalizedRoot = vaultRoot.replace(/\\/g, '/').replace(/\/$/, '')
+  const normalizedRecoveredPath = recoveredPath.replace(/\\/g, '/')
+  if (normalizedRecoveredPath !== normalizedRoot && !normalizedRecoveredPath.startsWith(`${normalizedRoot}/`)) {
+    return false
+  }
+
+  const relativePath = normalizedRecoveredPath.slice(normalizedRoot.length).replace(/^\/+/, '')
+  if (!relativePath) return false
+
+  vaultStore.openedNotePath = relativePath
+  vaultStore.activeWorkspaceView = 'notes'
+  console.info('[elephantnote:recovery] checkpoint:visible-note-restored', {
+    currentFileId: editorStore.currentFile?.id || null,
+    relativePath
+  })
+  return true
+}
 
 const hideImportDialogSoon = () => {
   if (importDialogHideTimer) window.clearTimeout(importDialogHideTimer)
@@ -103,6 +180,10 @@ const setupDragDropHandler = () => {
 }
 
 const cleanupDragDropHandler = () => {
+  if (stopRecoveredNoteVisibilityWatch) {
+    stopRecoveredNoteVisibilityWatch()
+    stopRecoveredNoteVisibilityWatch = null
+  }
   if (dragOverHandler) {
     window.removeEventListener('dragover', dragOverHandler, false)
     dragOverHandler = null
@@ -130,7 +211,7 @@ onMounted(async () => {
   projectStore.LISTEN_FOR_LOAD_PROJECT()
   projectStore.LISTEN_FOR_SIDEBAR_CONTEXT_MENU()
   autoUpdateStore.LISTEN_FOR_UPDATE()
-  preferencesStore.ASK_FOR_USER_PREFERENCE()
+  await preferencesStore.ASK_FOR_USER_PREFERENCE()
   preferencesStore.LISTEN_TOGGLE_VIEW()
   editorStore.LISTEN_SCREEN_SHOT()
   editorStore.LISTEN_FOR_CLOSE()
@@ -154,6 +235,21 @@ onMounted(async () => {
   editorStore.LISTEN_FOR_RELOAD_IMAGES()
   editorStore.LISTEN_FOR_CONTEXT_MENU()
   editorStore.LISTEN_FOR_STATE_REPLACE()
+  const restoredBufferedState = await restoreBufferedTauriState()
+  if (restoredBufferedState) {
+    stopRecoveredNoteVisibilityWatch = watch(
+      () => [vaultStore.activeVault?.path, editorStore.currentFile?.pathname],
+      () => {
+        if (!restoreRecoveredNoteVisibility()) return
+        stopRecoveredNoteVisibilityWatch?.()
+        stopRecoveredNoteVisibilityWatch = null
+      }
+    )
+    if (restoreRecoveredNoteVisibility()) {
+      stopRecoveredNoteVisibilityWatch?.()
+      stopRecoveredNoteVisibilityWatch = null
+    }
+  }
   notificationStore.listenForNotification()
 
   setupDragDropHandler()

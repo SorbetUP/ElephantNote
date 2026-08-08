@@ -42,6 +42,8 @@ export const rustBusCommand = (event, payload) => {
       return rustFormatCommand(payload)
     case 'paragraph':
       return rustParagraphCommand(payload)
+    case 'insert-text':
+      return editorCommands.insertText(String(payload || ''))
     case 'duplicate':
       return editorCommands.duplicateBlock()
     case 'deleteParagraph':

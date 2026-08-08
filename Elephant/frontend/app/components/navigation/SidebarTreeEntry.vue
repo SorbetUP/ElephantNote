@@ -23,6 +23,8 @@
         class="en-sidebar-tree-toggle"
         type="button"
         :aria-label="expanded ? `Collapse ${entry.title}` : `Expand ${entry.title}`"
+        :aria-expanded="expanded"
+        :aria-busy="loading"
         @click.stop="toggleExpanded"
       >
         <component
@@ -35,6 +37,7 @@
         class="en-sidebar-tree-label"
         type="button"
         :title="entry.title"
+        :aria-label="`Open folder ${entry.title}`"
         @click.stop="openFolder"
       >
         {{ entry.title }}
@@ -68,6 +71,7 @@
       <button
         class="en-sidebar-tree-label"
         type="button"
+        :aria-label="`Open note ${entry.title}`"
         @click.stop="openNote(entry)"
       >
         {{ entry.title }}
@@ -92,6 +96,9 @@
     <div
       v-if="expanded"
       class="en-sidebar-tree-children"
+      role="group"
+      :aria-label="`${entry.title} contents`"
+      :aria-busy="loading"
     >
       <SidebarTreeEntry
         v-for="child in children"
@@ -113,6 +120,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { ChevronDown, ChevronRight, X } from '@lucide/vue'
+import { elephantnoteClient } from '../../services/elephantnoteClient'
 import { useVaultStore } from '../../stores/vaultStore'
 import {
   canDropEntryOnDirectory,
@@ -177,18 +185,44 @@ const isFolderActive = computed(() => {
   return !!entryPath && (props.activePath === entryPath || props.activePath.startsWith(`${entryPath}/`))
 })
 
+const getExternalFiles = (event) => Array.from(event?.dataTransfer?.files || [])
+
+const getNativeFilePath = (file) => {
+  const fromTauri = window.tauri?.webUtils?.getPathForFile?.(file)
+  const pathname = String(fromTauri || file?.path || '').trim()
+  if (!pathname || pathname === file?.name) {
+    throw new Error(`Unable to resolve the filesystem path for ${file?.name || 'dropped file'}.`)
+  }
+  return pathname
+}
+
 const ensureChildren = async () => {
   if (loaded.value || loading.value) return
   loading.value = true
   try {
-    children.value = await props.loadDirectory(props.entry.path)
+    const result = await props.loadDirectory(props.entry.path)
+    children.value = Array.isArray(result) ? result : []
     loaded.value = true
+    console.info('[sidebar-tree] directory loaded', {
+      path: props.entry.path,
+      childCount: children.value.length,
+      childPaths: children.value.map((child) => child?.path || '').filter(Boolean)
+    })
   } catch (err) {
-    console.warn('Unable to load sidebar folder:', err)
+    console.warn('[sidebar-tree] unable to load sidebar folder', {
+      path: props.entry.path,
+      error: err?.message || String(err)
+    })
     children.value = []
   } finally {
     loading.value = false
   }
+}
+
+const refreshChildren = async () => {
+  loaded.value = false
+  expanded.value = true
+  await ensureChildren()
 }
 
 const toggleExpanded = async () => {
@@ -220,6 +254,14 @@ const handleDragEnd = () => {
 }
 
 const handleFolderDragOver = (event) => {
+  const externalFiles = getExternalFiles(event)
+  if (externalFiles.length) {
+    isDropTarget.value = true
+    isDropDisabled.value = false
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+    return
+  }
+
   const draggedEntry = parseDraggedEntry(event)
   const canDrop = canDropEntryOnDirectory(draggedEntry, props.entry.path)
   isDropTarget.value = canDrop
@@ -234,16 +276,45 @@ const handleDragLeave = () => {
   isDropDisabled.value = false
 }
 
+const importExternalFiles = async (files) => {
+  const imported = []
+  for (const file of files) {
+    imported.push(await elephantnoteClient.entries.importExternalFile({
+      sourcePath: getNativeFilePath(file),
+      targetDirectoryPath: props.entry.path,
+      filename: file.name
+    }))
+  }
+  await refreshChildren()
+  console.info('[sidebar-tree] external files imported', {
+    targetDirectoryPath: props.entry.path,
+    imported: imported.map((entry) => entry?.path).filter(Boolean)
+  })
+  return imported
+}
+
 const handleFolderDrop = async (event) => {
-  const draggedEntry = parseDraggedEntry(event)
-  const canDrop = canDropEntryOnDirectory(draggedEntry, props.entry.path)
   isDropTarget.value = false
   isDropDisabled.value = false
+
+  const externalFiles = getExternalFiles(event)
+  if (externalFiles.length) {
+    try {
+      await importExternalFiles(externalFiles)
+    } catch (error) {
+      console.error('[sidebar-tree] external file import failed', {
+        targetDirectoryPath: props.entry.path,
+        error: error?.message || String(error)
+      })
+    }
+    return
+  }
+
+  const draggedEntry = parseDraggedEntry(event)
+  const canDrop = canDropEntryOnDirectory(draggedEntry, props.entry.path)
   if (!canDrop) return
   await store.moveEntry(draggedEntry, props.entry.path)
-  loaded.value = false
-  expanded.value = true
-  await ensureChildren()
+  await refreshChildren()
 }
 
 watch(isFolderActive, async (active) => {

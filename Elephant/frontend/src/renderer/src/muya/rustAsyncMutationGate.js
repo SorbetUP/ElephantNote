@@ -7,10 +7,12 @@ export const createRustAsyncMutationGate = ({ dispatch, onSuppressed = () => {} 
   }
 
   let pending = 0
+  let replayRequested = false
   let tail = Promise.resolve()
 
   const guardedDispatch = (...args) => {
     if (pending > 0) {
+      replayRequested = true
       onSuppressed(...args)
       return undefined
     }
@@ -29,8 +31,27 @@ export const createRustAsyncMutationGate = ({ dispatch, onSuppressed = () => {} 
     const result = tail
       .catch(() => undefined)
       .then(operation)
+      .then((transaction) => {
+        // Document-capture keyboard handling intentionally prevents Muya's legacy
+        // key handler from running, so there may be no immediate dispatchChange to
+        // suppress. A completed Rust document mutation still must publish exactly
+        // one canonical change after rendering, otherwise the parent model and
+        // autosave retain the pre-keyboard Markdown.
+        if (transaction?.documentChanged) replayRequested = true
+        return transaction
+      })
     const settled = result.finally(() => {
       pending = Math.max(0, pending - 1)
+
+      // The immediate Muya change notification was intentionally suppressed while
+      // Rust owned the mutation. Replay it exactly once after the final queued
+      // Rust command has rendered the canonical document. Without this replay the
+      // parent model and autosave continue to hold the pre-keyboard Markdown and
+      // can remount that stale document before the next visible keystroke.
+      if (pending === 0 && replayRequested) {
+        replayRequested = false
+        dispatch()
+      }
     })
 
     // A failed command must not poison the ordering of later commands.
@@ -38,12 +59,20 @@ export const createRustAsyncMutationGate = ({ dispatch, onSuppressed = () => {} 
     return settled
   }
 
+  const flush = async() => {
+    await tail
+    // A completion callback can synchronously enqueue another operation while
+    // the previous tail is settling. Repeat until the visible editor queue is
+    // genuinely empty rather than merely observing one completed promise.
+    if (pending > 0) return flush()
+  }
+
   return {
     dispatch: guardedDispatch,
     enqueue,
+    flush,
     get pending () {
       return pending
     }
   }
 }
-

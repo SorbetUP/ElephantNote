@@ -27,13 +27,16 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
+          package-manager-cache: false
 
-      - name: Materialize official addons
+      - name: Materialize official addon sources
+        env:
+          ELEPHANT_SKIP_NATIVE_ADDON_BUILD: '1'
         run: node build/scripts/sync-elephant-addons.mjs
 
       - name: Setup Rust
@@ -51,14 +54,13 @@ jobs:
           cargo test \
             --manifest-path addons/official/sync/native/Cargo.toml \
             --test two_endpoint_sync \
-            physical_package_pairs_and_synchronizes_two_real_iroh_endpoints \
             -- --nocapture 2>&1 | tee "$log_file"
           test_status=${PIPESTATUS[0]}
           set -e
           if [ "$test_status" -ne 0 ]; then
             exit "$test_status"
           fi
-          grep -Eq 'test result: ok\. 1 passed; 0 failed' "$log_file"
+          grep -Eq 'test result: ok\. 2 passed; 0 failed' "$log_file"
 
       - name: Verify structured package synchronization diagnostics
         shell: bash
@@ -74,10 +76,15 @@ jobs:
           grep -F '[Sync] verify:manifest equal=true' "$log_file"
           grep -F '[Sync] baseline:saved peers=2' "$log_file"
           grep -F '[Sync] run:complete' "$log_file"
+          grep -F '[Sync] restart-conflict:start owner=elephant.sync transport=iroh' "$log_file"
+          grep -F '[Sync] restart:stable-identities equal=true' "$log_file"
+          grep -F '[Sync] conflict:preserved files=1 both_vaults=true' "$log_file"
+          grep -F '[Sync] restart:resync files=0 conflicts=0' "$log_file"
+          grep -F '[Sync] restart-conflict:complete' "$log_file"
 
       - name: Upload Iroh failure diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: iroh-smoke-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: iroh-smoke-output.txt
@@ -85,29 +92,5 @@ jobs:
           retention-days: 1
           compression-level: 9
 
-  sync-toolbar-contracts:
-    name: Active-vault toolbar states
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
-
-      - name: Run focused synchronization UI tests
-        shell: bash
-        run: |
-          set -o pipefail
-          NODE_PATH=Elephant/node_modules Elephant/node_modules/.bin/vitest run \
-            tests/app/unit/specs/main/elephantnote/navigationIrohSync.spec.js \
-            tests/app/unit/specs/main/elephantnote/syncSettingsPanel.spec.js \
-            2>&1 | tee iroh-toolbar-vitest.txt
-
-      - name: Upload focused UI failure diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: iroh-toolbar-failure-${{ github.run_id }}-${{ github.run_attempt }}
-          path: iroh-toolbar-vitest.txt
-          if-no-files-found: ignore
-          retention-days: 1
-          compression-level: 9
+      # The visible toolbar and settings behavior is validated in the real packaged
+      # Elephant automation suite, not through a simulated DOM test.

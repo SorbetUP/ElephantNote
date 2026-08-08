@@ -3,11 +3,17 @@ import bus from '../bus'
 import { setLanguage } from '../i18n'
 import {
   hydratePortablePreferences,
+  hydrateDurablePreferences,
   hydratePortableUserData,
+  hydrateDurableUserData,
   persistPortablePreference,
   persistPortableUserData,
   isPortableRuntime
 } from '../platform/preferenceStorage'
+
+const reportDurablePreferenceError = (operation, error) => {
+  console.error(`[elephantnote:preferences] ${operation} failed`, error)
+}
 
 export const usePreferencesStore = defineStore('preferences', {
   state: () => ({
@@ -151,13 +157,26 @@ export const usePreferencesStore = defineStore('preferences', {
     TOGGLE_VIEW_MODE(entryName) {
       this[entryName] = !this[entryName]
     },
-    ASK_FOR_USER_PREFERENCE() {
+    async ASK_FOR_USER_PREFERENCE() {
       if (isPortableRuntime()) {
+        // Hydrate the synchronous WebView cache immediately, then let the
+        // atomic Tauri preference store authoritatively override it. The Tauri
+        // store survives abrupt process termination; localStorage alone does
+        // not provide that crash-durability guarantee on WebKitGTK.
         this.SET_USER_PREFERENCE(hydratePortablePreferences(this.$state))
         const portableUserData = hydratePortableUserData(this.$state)
         Object.entries(portableUserData).forEach(([type, value]) => {
-          this.SET_USER_DATA({ type, value })
+          this.SET_USER_DATA({ type, value, persist: false })
         })
+        try {
+          this.SET_USER_PREFERENCE(await hydrateDurablePreferences(this.$state))
+          const durableUserData = await hydrateDurableUserData(this.$state)
+          Object.entries(durableUserData).forEach(([type, value]) => {
+            this.SET_USER_DATA({ type, value, persist: false })
+          })
+        } catch (error) {
+          reportDurablePreferenceError('hydrate durable state', error)
+        }
         return
       }
       window.tauri.ipcRenderer.send('mt::ask-for-user-preference')
@@ -177,17 +196,24 @@ export const usePreferencesStore = defineStore('preferences', {
         setLanguage(value)
       }
 
-      // Persist to the runtime-backed preference store.
-      persistPortablePreference(type, value)
+      // Persist to both the synchronous WebView cache and the atomic Tauri
+      // store. The latter is the crash-durable source of truth.
+      persistPortablePreference(type, value).catch((error) => {
+        reportDurablePreferenceError(`persist ${type}`, error)
+      })
       if (isPortableRuntime()) {
         return
       }
       window.tauri.ipcRenderer.send('mt::set-user-preference', { [type]: value })
     },
 
-    SET_USER_DATA({ type, value }) {
+    SET_USER_DATA({ type, value, persist = true }) {
       this[type] = value
-      persistPortableUserData(type, value)
+      if (persist) {
+        persistPortableUserData(type, value).catch((error) => {
+          reportDurablePreferenceError(`persist user data ${type}`, error)
+        })
+      }
       if (isPortableRuntime()) {
         return
       }
@@ -197,7 +223,9 @@ export const usePreferencesStore = defineStore('preferences', {
     SET_IMAGE_FOLDER_PATH(value) {
       if (isPortableRuntime()) {
         this.imageFolderPath = value
-        persistPortableUserData('imageFolderPath', value)
+        persistPortableUserData('imageFolderPath', value).catch((error) => {
+          reportDurablePreferenceError('persist image folder', error)
+        })
         return
       }
       window.tauri.ipcRenderer.send('mt::ask-for-modify-image-folder-path', value)

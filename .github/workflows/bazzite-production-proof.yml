@@ -1,0 +1,181 @@
+name: Bazzite Wayland production proof
+
+on:
+  push:
+    paths:
+      - '.github/workflows/bazzite-production-proof.yml'
+      - 'build/scripts/run-bazzite-packaged-user-journey.mjs'
+      - 'build/scripts/run-bazzite-production-proof.mjs'
+      - 'build/scripts/run-packaged-feature-matrix.mjs'
+      - 'build/scripts/verify-bazzite-proof.mjs'
+      - 'tests/trust/bazzite-proof.json'
+      - 'tests/trust/packaged-feature-matrix.json'
+      - 'Elephant/frontend/src/renderer/src/platform/automationAcceptancePhysicalSurface.js'
+  pull_request:
+    paths:
+      - '.github/workflows/bazzite-production-proof.yml'
+      - 'build/scripts/run-bazzite-packaged-user-journey.mjs'
+      - 'build/scripts/run-bazzite-production-proof.mjs'
+      - 'build/scripts/run-packaged-feature-matrix.mjs'
+      - 'build/scripts/verify-bazzite-proof.mjs'
+      - 'tests/trust/bazzite-proof.json'
+      - 'tests/trust/packaged-feature-matrix.json'
+      - 'Elephant/frontend/src/renderer/src/platform/automationAcceptancePhysicalSurface.js'
+  workflow_dispatch:
+    inputs:
+      appimage_path:
+        description: 'Absolute path to the exact AppImage already present on the Bazzite runner'
+        required: true
+        type: string
+      expected_sha256:
+        description: 'Expected SHA-256 of that exact AppImage'
+        required: true
+        type: string
+      quick:
+        description: 'Skip the exhaustive official addon acceptance suite'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: Bazzite proof contract guard
+    runs-on: ubuntu-24.04
+    env:
+      PROOF_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.PROOF_HEAD_SHA }}
+      - name: Bind the contract guard to the exact branch commit
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$PROOF_HEAD_SHA"
+      - name: Reject incomplete or X11-only Bazzite proof wiring
+        run: node build/scripts/verify-bazzite-proof.mjs
+
+  production-proof:
+    needs: contract
+    name: Exact AppImage on real Bazzite Wayland
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && vars.ELEPHANT_BAZZITE_PROOF_ENABLED == '1')
+    runs-on: [self-hosted, linux, x64, bazzite, gnome, wayland]
+    timeout-minutes: 240
+    env:
+      PROOF_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      ELEPHANT_ACCEPTANCE_APP_PATH: ${{ inputs.appimage_path || vars.ELEPHANT_BAZZITE_APPIMAGE_PATH }}
+      ELEPHANT_EXPECTED_APPIMAGE_SHA256: ${{ inputs.expected_sha256 || vars.ELEPHANT_BAZZITE_APPIMAGE_SHA256 }}
+      ELEPHANT_BAZZITE_QUICK: ${{ inputs.quick && '1' || vars.ELEPHANT_BAZZITE_QUICK || '0' }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.PROOF_HEAD_SHA }}
+      - name: Bind the hardware proof to the exact branch commit
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$PROOF_HEAD_SHA"
+      - uses: ./.github/actions/setup
+      - name: Verify host and execute the exact AppImage with Wayland-native automation only
+        shell: bash
+        run: |
+          set -euxo pipefail
+          test -f "$ELEPHANT_ACCEPTANCE_APP_PATH"
+          test "${#ELEPHANT_EXPECTED_APPIMAGE_SHA256}" -eq 64
+          node build/scripts/run-bazzite-production-proof.mjs "$ELEPHANT_ACCEPTANCE_APP_PATH"
+      - name: Run twenty isolated features on the same Bazzite AppImage
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
+          ELEPHANT_PACKAGED_APP="$ELEPHANT_ACCEPTANCE_APP_PATH" \
+          ELEPHANT_PACKAGED_FORMAT=linux-appimage \
+          APPIMAGE_EXTRACT_AND_RUN=1 \
+            node build/scripts/run-packaged-feature-matrix.mjs
+      - name: Upload compact Bazzite proof evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bazzite-wayland-exact-appimage-proof
+          path: |
+            test-results/trusted/bazzite-production/**/*.json
+            test-results/trusted/bazzite-production/**/*.log
+            test-results/trusted/bazzite-packaged-user-journey/**/*.json
+            test-results/trusted/bazzite-packaged-user-journey/**/*.log
+            test-results/trusted/packaged-feature-matrix/latest.json
+            test-results/trusted/packaged-feature-*/**
+            test-results/trusted/backend-contract/**/*.json
+            test-results/trusted/frontend-behavior/**/*.json
+            test-results/acceptance/latest.json
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 9
+
+  proof-status:
+    name: Bazzite proof status (fail closed)
+    needs: [contract, production-proof]
+    if: always()
+    runs-on: ubuntu-24.04
+    env:
+      CONTRACT_RESULT: ${{ needs.contract.result }}
+      PRODUCTION_RESULT: ${{ needs.production-proof.result }}
+      PROOF_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Write explicit Bazzite proof availability
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test-results/trusted/bazzite-production
+          node <<'NODE'
+          const fs = require('fs')
+          const path = 'test-results/trusted/bazzite-production/workflow-status.json'
+          const resultEntry = (id, result) => ({
+            id,
+            result,
+            availability: result === 'skipped'
+              ? 'SKIPPED'
+              : result === 'cancelled'
+                ? 'BLOCKED'
+                : result ? 'PRESENT' : 'MISSING',
+            status: result === 'success' ? 'PROVEN' : 'NOT PROVEN'
+          })
+          const contract = resultEntry('contract', process.env.CONTRACT_RESULT)
+          const production = resultEntry('production-proof', process.env.PRODUCTION_RESULT)
+          const proven = contract.status === 'PROVEN' && production.status === 'PROVEN'
+          const evidence = {
+            at: new Date().toISOString(),
+            status: proven ? 'PROVEN' : 'NOT PROVEN',
+            headSha: process.env.PROOF_HEAD_SHA || null,
+            categories: [contract, production],
+            reason: proven
+              ? null
+              : `Real Bazzite Wayland proof unavailable: ${production.availability}/${production.result || 'missing'}`
+          }
+          fs.writeFileSync(path, `${JSON.stringify(evidence, null, 2)}\n`)
+          console.log(`[bazzite-proof-status] ${evidence.status}: ${evidence.reason || 'all required jobs passed'}`)
+          NODE
+
+      - name: Upload explicit Bazzite workflow status
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bazzite-wayland-proof-status
+          path: test-results/trusted/bazzite-production/workflow-status.json
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 9
+
+      - name: Reject missing, skipped, blocked or failed hardware proof
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs')
+          const path = 'test-results/trusted/bazzite-production/workflow-status.json'
+          if (!fs.existsSync(path)) throw new Error('Bazzite workflow status is MISSING')
+          const evidence = JSON.parse(fs.readFileSync(path, 'utf8'))
+          if (evidence.status !== 'PROVEN') {
+            console.error(JSON.stringify(evidence, null, 2))
+            process.exit(1)
+          }
+          NODE

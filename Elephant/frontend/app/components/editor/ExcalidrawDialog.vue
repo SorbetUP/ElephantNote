@@ -78,7 +78,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import React from 'react'
 import { createRoot } from 'react-dom/client'
@@ -122,13 +122,15 @@ const props = defineProps({
 const emit = defineEmits(['close', 'save'])
 const { t } = useI18n()
 const mountEl = ref(null)
-const apiRef = ref(null)
-const root = ref(null)
-const excalidrawModule = ref(null)
+const apiRef = shallowRef(null)
+const root = shallowRef(null)
+const excalidrawModule = shallowRef(null)
 const isSaving = ref(false)
-const initialData = ref(null)
+const initialData = shallowRef(null)
 const errorMessage = ref('')
 const isMacOS = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(`${navigator.platform || ''} ${navigator.userAgent || ''}`)
+let disposed = false
+let renderGeneration = 0
 
 const logDialogError = (event, error) => {
   const details = {
@@ -150,8 +152,6 @@ const logDialogError = (event, error) => {
   console.error(`[excalidraw-dialog] ${event}`, details)
 }
 
-// Elephant themes expose full palettes while Excalidraw accepts only its
-// canonical light/dark modes. Keep the surrounding shell on the full palette.
 const excalidrawTheme = computed(() => getThemeMode(props.theme))
 const themeTokens = computed(() => getThemeTokens(props.theme))
 
@@ -172,18 +172,18 @@ const normalizedBaseName = computed(() => {
 const resolvedFileName = computed(() => ensurePngName(normalizedBaseName.value))
 
 const handleClose = () => {
-  emit('close')
+  if (!disposed) emit('close')
 }
 
 const renderExcalidraw = () => {
-  if (!root.value || !excalidrawModule.value) return
+  if (disposed || !root.value || !excalidrawModule.value) return
   root.value.render(
     React.createElement(excalidrawModule.value.Excalidraw, {
       initialData: initialData.value,
       theme: excalidrawTheme.value,
       name: normalizedBaseName.value,
       excalidrawAPI: (api) => {
-        apiRef.value = api
+        if (!disposed) apiRef.value = api
       },
       UIOptions: {
         canvasActions: {
@@ -199,7 +199,7 @@ const renderExcalidraw = () => {
 }
 
 const applyExcalidrawTheme = (theme) => {
-  renderExcalidraw()
+  if (disposed) return
   const api = apiRef.value
   if (!api?.updateScene) return
   api.updateScene({
@@ -212,23 +212,29 @@ const applyExcalidrawTheme = (theme) => {
 }
 
 const renderCanvas = async () => {
-  excalidrawModule.value = await loadExcalidrawModule()
-  initialData.value = await createInitialExcalidrawData({
+  const generation = ++renderGeneration
+  const loadedModule = await loadExcalidrawModule()
+  if (disposed || generation !== renderGeneration) return
+
+  const loadedInitialData = await createInitialExcalidrawData({
     blob: props.initialBlob,
     theme: excalidrawTheme.value
   })
-
+  if (disposed || generation !== renderGeneration) return
   if (!mountEl.value) throw new Error('Excalidraw mount element is missing.')
+
+  excalidrawModule.value = loadedModule
+  initialData.value = loadedInitialData
   root.value = createRoot(mountEl.value)
   renderExcalidraw()
 }
 
-watch(excalidrawTheme, (theme) => {
+const stopThemeWatch = watch(excalidrawTheme, (theme) => {
   applyExcalidrawTheme(theme)
 }, { flush: 'post' })
 
 const handleSave = async () => {
-  if (!apiRef.value || isSaving.value) return
+  if (disposed || !apiRef.value || isSaving.value) return
   isSaving.value = true
   errorMessage.value = ''
   try {
@@ -240,6 +246,7 @@ const handleSave = async () => {
       api: apiRef.value,
       theme: excalidrawTheme.value
     })
+    if (disposed) return
     emit('save', {
       blob,
       imageBlob: await blobToBytes(blob),
@@ -248,14 +255,17 @@ const handleSave = async () => {
       sceneBlob: await sceneBlob.text()
     })
   } catch (error) {
-    logDialogError('save failed', error)
-    errorMessage.value = error?.message || t('excalidraw.failedSave')
+    if (!disposed) {
+      logDialogError('save failed', error)
+      errorMessage.value = error?.message || t('excalidraw.failedSave')
+    }
   } finally {
-    isSaving.value = false
+    if (!disposed) isSaving.value = false
   }
 }
 
 const handleKeyboard = (event) => {
+  if (disposed) return
   if (event.key === 'Escape') {
     event.preventDefault()
     handleClose()
@@ -268,18 +278,26 @@ const handleKeyboard = (event) => {
 }
 
 onMounted(() => {
+  disposed = false
   document.body.classList.add('en-excalidraw-open')
   window.addEventListener('keydown', handleKeyboard, true)
   renderCanvas().catch((error) => {
+    if (disposed) return
     logDialogError('initialization failed', error)
     errorMessage.value = error?.message || t('excalidraw.failedInitialize')
   })
 })
 
 onBeforeUnmount(() => {
+  disposed = true
+  renderGeneration += 1
+  stopThemeWatch()
   document.body.classList.remove('en-excalidraw-open')
   window.removeEventListener('keydown', handleKeyboard, true)
-  root.value?.unmount?.()
+  apiRef.value = null
+  const reactRoot = root.value
+  root.value = null
+  reactRoot?.unmount?.()
 })
 </script>
 

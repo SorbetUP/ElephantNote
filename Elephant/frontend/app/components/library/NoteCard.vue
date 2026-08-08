@@ -1,6 +1,7 @@
 <template>
   <article
     class="en-card en-note-card"
+    :data-entry-path="entry.path"
     :class="{
       'is-featured': featured,
       'is-pinned': isPinned,

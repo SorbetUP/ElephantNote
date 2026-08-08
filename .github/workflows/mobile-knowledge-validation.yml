@@ -16,7 +16,6 @@ on:
       - 'addons/official/knowledge/**'
       - 'addons/catalog.json'
       - 'packs/*.enaddonpack'
-      - 'tests/app/unit/addons/knowledgePhysicalAddon.spec.js'
   workflow_dispatch:
 
 permissions:
@@ -27,11 +26,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
+          package-manager-cache: false
 
       - name: Materialize official addons
         run: node build/scripts/sync-elephant-addons.mjs
@@ -52,9 +52,28 @@ jobs:
             addons/official/knowledge/native/knowledge-core/src/wiki_discovery.rs
 
       - name: Verify committed Tauri lockfile
+        id: tauri-lockfile
+        shell: bash
         run: |
-          cargo generate-lockfile --manifest-path Elephant/backend/tauri/Cargo.toml
+          set -euxo pipefail
+          cargo metadata --locked \
+            --manifest-path Elephant/backend/tauri/Cargo.toml \
+            --format-version 1 \
+            > tauri-cargo-metadata.json
           git diff --exit-code -- Elephant/backend/tauri/Cargo.lock
+
+      - name: Upload Tauri lockfile verification failure
+        if: failure() && steps.tauri-lockfile.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: tauri-lockfile-verification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            Elephant/backend/tauri/Cargo.toml
+            Elephant/backend/tauri/Cargo.lock
+            tauri-cargo-metadata.json
+          if-no-files-found: warn
+          retention-days: 1
+          compression-level: 9
 
       - name: Test reusable Knowledge service
         run: cargo test --manifest-path addons/official/knowledge/native/knowledge-core/Cargo.toml
@@ -62,5 +81,5 @@ jobs:
       - name: Check desktop sidecar adapter
         run: cargo check --manifest-path addons/official/knowledge/native/Cargo.toml --all-targets
 
-      # Full Tauri integration is validated by the cross-platform PR Build.
+      # Full Tauri integration is validated by the packaged app automation.
       # The Android target, bundled SQLite and APK are validated by android-apk.yml.

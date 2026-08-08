@@ -1,9 +1,16 @@
+import { invoke as nativeTauriInvoke } from '@tauri-apps/api/core'
+
 const requireInvoke = (target = globalThis) => {
-  const ipcRenderer = target?.tauri?.ipcRenderer
-  if (typeof ipcRenderer?.invoke === 'function') return ipcRenderer.invoke.bind(ipcRenderer)
+  if (target?.__TAURI_INTERNALS__) {
+    console.info('[elephantnote:muya-rust] using official Tauri core invoke')
+    return nativeTauriInvoke
+  }
 
   const core = target?.__TAURI__?.core
   if (typeof core?.invoke === 'function') return core.invoke.bind(core)
+
+  const ipcRenderer = target?.tauri?.ipcRenderer
+  if (typeof ipcRenderer?.invoke === 'function') return ipcRenderer.invoke.bind(ipcRenderer)
 
   throw new Error('Muya Rust engine requires the Tauri invoke bridge.')
 }
@@ -308,7 +315,7 @@ export const createRustMuyaEngineClient = ({
 }
 
 export const isRustMuyaEngineAvailable = (target = globalThis) => (
-  typeof target?.tauri?.ipcRenderer?.invoke === 'function' ||
-  typeof target?.__TAURI__?.core?.invoke === 'function'
+  Boolean(target?.__TAURI_INTERNALS__) ||
+  typeof target?.__TAURI__?.core?.invoke === 'function' ||
+  typeof target?.tauri?.ipcRenderer?.invoke === 'function'
 )
-

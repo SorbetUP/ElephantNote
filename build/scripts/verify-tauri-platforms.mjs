@@ -24,6 +24,48 @@ const libMin = readText('Elephant/backend/tauri/src/lib_min.rs')
 const addonServices = readText('Elephant/backend/tauri/src/addon_services.rs')
 const desktopAcceptanceWorkflow = readText('.github/workflows/tauri-desktop-acceptance.yml')
 
+const addonPreparationCall = "runNode('build/scripts/prepare-tauri-addon-resources.mjs')"
+const rendererBuildCall = "runNode('Elephant/node_modules/vite/bin/vite.js'"
+
+const resolveNodeEntrypoint = (command) => {
+  const match = String(command || '').trim().match(/^node\s+([^\s;&|]+\.mjs)(?:\s|$)/)
+  return match?.[1] || null
+}
+
+const preparesAddonsBeforeRenderer = (source) => {
+  const addonPreparationIndex = String(source || '').indexOf(addonPreparationCall)
+  const rendererBuildIndex = String(source || '').indexOf(rendererBuildCall)
+  return addonPreparationIndex >= 0 && rendererBuildIndex > addonPreparationIndex
+}
+
+const assertBuildLauncherGuardSensitivity = () => {
+  const misleadingViteDeclaration = "const viteCli = resolve(nodeModules, 'vite/bin/vite.js')"
+  const valid = [misleadingViteDeclaration, addonPreparationCall, rendererBuildCall].join('\n')
+  const missingPreparation = [misleadingViteDeclaration, rendererBuildCall].join('\n')
+  const reversed = [misleadingViteDeclaration, rendererBuildCall, addonPreparationCall].join('\n')
+
+  assert(
+    preparesAddonsBeforeRenderer(valid),
+    'Tauri build launcher guard self-test must accept preparation before the executed Vite call'
+  )
+  assert(
+    !preparesAddonsBeforeRenderer(missingPreparation),
+    'Tauri build launcher guard self-test must reject a missing addon preparation call'
+  )
+  assert(
+    !preparesAddonsBeforeRenderer(reversed),
+    'Tauri build launcher guard self-test must reject addon preparation after the executed Vite call'
+  )
+}
+
+assertBuildLauncherGuardSensitivity()
+
+const tauriWebBuildCommand = packageJson.scripts?.['tauri:web:build']
+const tauriWebBuildEntrypoint = resolveNodeEntrypoint(tauriWebBuildCommand)
+const tauriWebBuildSource = tauriWebBuildEntrypoint && existsSync(absolute(tauriWebBuildEntrypoint))
+  ? readText(tauriWebBuildEntrypoint)
+  : ''
+
 const assertWorkspaceBuildHook = (config, label) => {
   const command = config.build?.beforeBuildCommand
   assert(command && typeof command === 'object', `${label} beforeBuildCommand must use the Tauri object form`)
@@ -67,9 +109,16 @@ assert(
   'Core desktop bundle must include only the controlled official addon resource root'
 )
 assert(
-  typeof packageJson.scripts['tauri:web:build'] === 'string' &&
-    packageJson.scripts['tauri:web:build'].includes('prepare-tauri-addon-resources.mjs'),
-  'Tauri production builds must prepare official addon resources before bundling'
+  typeof tauriWebBuildCommand === 'string' && Boolean(tauriWebBuildEntrypoint),
+  'Tauri web build must delegate to an explicit Node .mjs launcher'
+)
+assert(
+  Boolean(tauriWebBuildEntrypoint) && existsSync(absolute(tauriWebBuildEntrypoint)),
+  'Tauri web build launcher must exist'
+)
+assert(
+  preparesAddonsBeforeRenderer(tauriWebBuildSource),
+  'Tauri production build launcher must prepare official addon resources before invoking the renderer build'
 )
 assert(
   existsSync(absolute('build/scripts/prepare-tauri-addon-resources.mjs')),

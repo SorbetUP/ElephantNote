@@ -15,7 +15,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup
 
       - name: Run ESLint
@@ -26,10 +26,89 @@ jobs:
 
       - name: Upload ESLint failure output
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: eslint-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: eslint-output.txt
           if-no-files-found: ignore
           retention-days: 1
+          compression-level: 9
+
+  packaged-feature-matrix:
+    name: Twenty isolated features on exact AppImage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      CARGO_TERM_COLOR: always
+      FORCE_COLOR: '1'
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: ./.github/actions/setup-tauri-cli
+
+      - name: Install Linux runtime dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            libx11-dev libxkbfile-dev libsecret-1-dev libfontconfig-dev \
+            xvfb libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
+            libdrm2 libgtk-3-0 libgbm1 libasound2t64 unzip xdg-utils \
+            libayatana-appindicator3-dev librsvg2-dev libwebkit2gtk-4.1-dev \
+            patchelf
+
+      - uses: ./.github/actions/setup
+
+      - name: Reject incomplete or merged feature tests
+        run: node build/scripts/verify-packaged-feature-matrix.mjs
+
+      - name: Run postinstall
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          npm_config_user_agent: pnpm
+          USE_ELECTRON_CLANG: '0'
+        run: node build/scripts/postinstall.js
+
+      - name: Build and select exact AppImage
+        shell: bash
+        run: |
+          set -euxo pipefail
+          pnpm build:linux 2>&1 | tee packaged-feature-build.log
+          APPIMAGE_PATH="$(find Elephant/backend/tauri/target/release/bundle/appimage -maxdepth 1 -type f -name '*.AppImage' -print -quit)"
+          test -f "$APPIMAGE_PATH"
+          chmod +x "$APPIMAGE_PATH"
+          APPIMAGE_PATH="$(realpath "$APPIMAGE_PATH")"
+          echo "ELEPHANT_ACCEPTANCE_APP_PATH=$APPIMAGE_PATH" >> "$GITHUB_ENV"
+          echo 'ELEPHANT_PACKAGED_FORMAT=linux-appimage' >> "$GITHUB_ENV"
+          echo 'APPIMAGE_EXTRACT_AND_RUN=1' >> "$GITHUB_ENV"
+          sha256sum "$APPIMAGE_PATH" | tee packaged-feature-appimage.sha256
+
+      - name: Run every feature independently
+        shell: bash
+        run: |
+          set -o pipefail
+          xvfb-run --auto-servernum env \
+            ELEPHANT_ACCEPTANCE_SKIP_BUILD=1 \
+            node build/scripts/run-packaged-feature-matrix.mjs \
+            2>&1 | tee packaged-feature-matrix.log
+
+      - name: Upload every independent verdict
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: exact-appimage-independent-feature-matrix
+          path: |
+            packaged-feature-build.log
+            packaged-feature-appimage.sha256
+            packaged-feature-matrix.log
+            test-results/trusted/packaged-feature-matrix/latest.json
+            test-results/trusted/packaged-feature-*/**
+          if-no-files-found: error
+          retention-days: 7
           compression-level: 9

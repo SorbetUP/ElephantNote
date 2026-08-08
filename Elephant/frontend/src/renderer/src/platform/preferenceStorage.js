@@ -3,6 +3,7 @@ const DATA_PREFIX = 'elephantnote:data:'
 const TRANSIENT_KEYS = new Set(['typewriter', 'focus', 'sourceCode'])
 
 const hasStorage = () => typeof window !== 'undefined' && window.localStorage
+const tauriInvoke = () => globalThis.__TAURI__?.core?.invoke
 
 const parseStoredValue = (value) => {
   if (typeof value !== 'string') return value
@@ -24,6 +25,19 @@ const writePrefEntry = (prefix, key, value) => {
   window.localStorage.setItem(`${prefix}${key}`, JSON.stringify(value))
 }
 
+const readDurableObject = async (command) => {
+  const invoke = tauriInvoke()
+  if (typeof invoke !== 'function') return {}
+  const value = await invoke(command)
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+}
+
+const persistDurableValue = async (command, key, value) => {
+  const invoke = tauriInvoke()
+  if (typeof invoke !== 'function') return value
+  return invoke(command, { key, value })
+}
+
 export const hydratePortablePreferences = (state = {}) => {
   const preferences = {}
   for (const key of Object.keys(state)) {
@@ -36,11 +50,25 @@ export const hydratePortablePreferences = (state = {}) => {
   return preferences
 }
 
+export const hydrateDurablePreferences = async (state = {}) => {
+  const durable = await readDurableObject('tauri_prefs_all')
+  const preferences = {}
+  for (const key of Object.keys(state)) {
+    if (TRANSIENT_KEYS.has(key)) continue
+    if (Object.prototype.hasOwnProperty.call(durable, key)) {
+      preferences[key] = durable[key]
+      writePrefEntry(PREF_PREFIX, key, durable[key])
+    }
+  }
+  return preferences
+}
+
 export const readPortablePreference = (key) => readPrefEntry(PREF_PREFIX, key)
 
 export const persistPortablePreference = (key, value) => {
-  if (TRANSIENT_KEYS.has(key)) return
+  if (TRANSIENT_KEYS.has(key)) return Promise.resolve(value)
   writePrefEntry(PREF_PREFIX, key, value)
+  return persistDurableValue('tauri_prefs_set', key, value)
 }
 
 export const hydratePortableUserData = (state = {}) => {
@@ -54,10 +82,23 @@ export const hydratePortableUserData = (state = {}) => {
   return userData
 }
 
+export const hydrateDurableUserData = async (state = {}) => {
+  const durable = await readDurableObject('tauri_user_data_all')
+  const userData = {}
+  for (const key of Object.keys(state)) {
+    if (Object.prototype.hasOwnProperty.call(durable, key)) {
+      userData[key] = durable[key]
+      writePrefEntry(DATA_PREFIX, key, durable[key])
+    }
+  }
+  return userData
+}
+
 export const readPortableUserData = (key) => readPrefEntry(DATA_PREFIX, key)
 
 export const persistPortableUserData = (key, value) => {
   writePrefEntry(DATA_PREFIX, key, value)
+  return persistDurableValue('tauri_user_data_set', key, value)
 }
 
 export const isPortableRuntime = () =>

@@ -89,7 +89,7 @@ export const createRealMuyaRustMirror = ({
 
   const client = createRustMuyaEngineClient({ invoke, target, sessionId: createSessionId() })
   let destroyed = false
-  let initializationPromise = null
+  let initializationPromise = Promise.resolve()
   let pending = null
   let draining = null
   let commandQueue = Promise.resolve()

@@ -53,6 +53,16 @@ const markUserMutation = (reason) => {
   console.info('[elephantnote:rust-editor] user-mutation-boundary:opened', { reason })
 }
 
+const handleFileDrop = (...args) => {
+  markUserMutation('drop:file-callback')
+  return props.onFileDrop?.(...args)
+}
+
+const handleUriDrop = (...args) => {
+  markUserMutation('drop:uri-callback')
+  return props.onUriDrop?.(...args)
+}
+
 const isMutatingBeforeInput = (event) => {
   const inputType = String(event?.inputType || '')
   return inputType.startsWith('insert') ||
@@ -275,8 +285,8 @@ const mountRuntime = async (markdown) => {
           domContainer: mountElement,
           captureInput: true,
           applyPatches: scheduleMarkdownSync,
-          onFileDrop: props.onFileDrop,
-          onUriDrop: props.onUriDrop,
+          onFileDrop: handleFileDrop,
+          onUriDrop: handleUriDrop,
           onImageClick: props.onImageClick
         },
         reportError
@@ -285,8 +295,8 @@ const mountRuntime = async (markdown) => {
       const muya = new StableCompleteMuyaWithRustCore(mountElement, {
         markdown: runtimeMarkdown,
         t: (key) => key,
-        onFileDrop: props.onFileDrop,
-        onUriDrop: props.onUriDrop,
+        onFileDrop: handleFileDrop,
+        onUriDrop: handleUriDrop,
         onImageClick: props.onImageClick
       })
       await muya.__rustMirror?.ready
@@ -391,15 +401,15 @@ watch(
 
 watch(
   () => props.onFileDrop,
-  (callback) => {
-    if (runtime?.inputController) runtime.inputController.onFileDrop = callback || null
+  () => {
+    if (runtime?.inputController) runtime.inputController.onFileDrop = handleFileDrop
   }
 )
 
 watch(
   () => props.onUriDrop,
-  (callback) => {
-    if (runtime?.inputController) runtime.inputController.onUriDrop = callback || null
+  () => {
+    if (runtime?.inputController) runtime.inputController.onUriDrop = handleUriDrop
   }
 )
 

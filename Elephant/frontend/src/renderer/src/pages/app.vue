@@ -38,6 +38,7 @@ import { useCommandCenterStore } from '@/store/commandCenter'
 import { useProjectStore } from '@/store/project'
 import { useAutoUpdatesStore } from '@/store/autoUpdates'
 import { useNotificationStore } from '@/store/notification'
+import { useVaultStore } from 'elephant-front/stores/vaultStore'
 import AppShell from 'elephant-front/components/shell/AppShell.vue'
 
 const isTauriRuntime = Boolean(window.__TAURI__ || window.__MARKTEXT_RUNTIME__)
@@ -47,6 +48,7 @@ const editorStore = useEditorStore()
 const preferencesStore = usePreferencesStore()
 const layoutStore = useLayoutStore()
 const projectStore = useProjectStore()
+const vaultStore = useVaultStore()
 const tweetStore = useTweetStore()
 const listenForMainStore = useListenForMainStore()
 const autoUpdateStore = useAutoUpdatesStore()
@@ -55,6 +57,7 @@ const notificationStore = useNotificationStore()
 
 let importDialogHideTimer = null
 let dragOverHandler = null
+let stopRecoveredNoteVisibilityWatch = null
 
 const { init } = storeToRefs(mainStore)
 const { theme, customCss, zoom } = storeToRefs(preferencesStore)
@@ -93,6 +96,29 @@ const restoreBufferedTauriState = () => {
   }
 }
 
+const restoreRecoveredNoteVisibility = () => {
+  const vaultRoot = String(vaultStore.activeVault?.path || '')
+  const recoveredPath = String(editorStore.currentFile?.pathname || '')
+  if (!vaultRoot || !recoveredPath) return false
+
+  const normalizedRoot = vaultRoot.replace(/\\/g, '/').replace(/\/$/, '')
+  const normalizedRecoveredPath = recoveredPath.replace(/\\/g, '/')
+  if (normalizedRecoveredPath !== normalizedRoot && !normalizedRecoveredPath.startsWith(`${normalizedRoot}/`)) {
+    return false
+  }
+
+  const relativePath = normalizedRecoveredPath.slice(normalizedRoot.length).replace(/^\/+/, '')
+  if (!relativePath) return false
+
+  vaultStore.openedNotePath = relativePath
+  vaultStore.activeWorkspaceView = 'notes'
+  console.info('[elephantnote:recovery] checkpoint:visible-note-restored', {
+    currentFileId: editorStore.currentFile?.id || null,
+    relativePath
+  })
+  return true
+}
+
 const hideImportDialogSoon = () => {
   if (importDialogHideTimer) window.clearTimeout(importDialogHideTimer)
   importDialogHideTimer = window.setTimeout(() => {
@@ -126,6 +152,10 @@ const setupDragDropHandler = () => {
 }
 
 const cleanupDragDropHandler = () => {
+  if (stopRecoveredNoteVisibilityWatch) {
+    stopRecoveredNoteVisibilityWatch()
+    stopRecoveredNoteVisibilityWatch = null
+  }
   if (dragOverHandler) {
     window.removeEventListener('dragover', dragOverHandler, false)
     dragOverHandler = null
@@ -177,7 +207,21 @@ onMounted(async () => {
   editorStore.LISTEN_FOR_RELOAD_IMAGES()
   editorStore.LISTEN_FOR_CONTEXT_MENU()
   editorStore.LISTEN_FOR_STATE_REPLACE()
-  restoreBufferedTauriState()
+  const restoredBufferedState = restoreBufferedTauriState()
+  if (restoredBufferedState) {
+    stopRecoveredNoteVisibilityWatch = watch(
+      () => [vaultStore.activeVault?.path, editorStore.currentFile?.pathname],
+      () => {
+        if (!restoreRecoveredNoteVisibility()) return
+        stopRecoveredNoteVisibilityWatch?.()
+        stopRecoveredNoteVisibilityWatch = null
+      }
+    )
+    if (restoreRecoveredNoteVisibility()) {
+      stopRecoveredNoteVisibilityWatch?.()
+      stopRecoveredNoteVisibilityWatch = null
+    }
+  }
   notificationStore.listenForNotification()
 
   setupDragDropHandler()

@@ -294,6 +294,7 @@ export default class CompleteMuyaWithRustCore extends RustOwnedMuya {
   }
 
   __drop (event) {
+    this.__onUserMutation?.('drop')
     const uri = String(event?.dataTransfer?.getData?.('text/uri-list') || '')
       .split('\n')
       .map((line) => line.trim())

@@ -211,7 +211,7 @@ onMounted(async () => {
   projectStore.LISTEN_FOR_LOAD_PROJECT()
   projectStore.LISTEN_FOR_SIDEBAR_CONTEXT_MENU()
   autoUpdateStore.LISTEN_FOR_UPDATE()
-  preferencesStore.ASK_FOR_USER_PREFERENCE()
+  await preferencesStore.ASK_FOR_USER_PREFERENCE()
   preferencesStore.LISTEN_TOGGLE_VIEW()
   editorStore.LISTEN_SCREEN_SHOT()
   editorStore.LISTEN_FOR_CLOSE()
